@@ -1098,12 +1098,13 @@ const DynamicQBRankings = () => {
       'BUF': 23,  // Von Miller, great secondary
       'SF': 22,   // Elite when healthy
       'PIT': 21,  // Watt, Fitzpatrick, always solid
+      'KC': 21,   // Elite defense creates turnovers, short fields for Mahomes
       'MIA': 20,  // Improved significantly
       'DET': 20,  // Hutchinson, improving unit
       'PHI': 19,  // Inconsistent but talented
       'DAL': 19,  // Parsons elite, secondary issues
+      'TB': 18,   // Todd Bowles defense creates turnovers, helps Brady/offense
       'HOU': 18,  // Young defense improving
-      'KC': 18,   // Spagnuolo system works
       'MIN': 17,  // Decent but not elite
       'DEN': 17,  // Surtain good, rest average
       'CIN': 16,  // Pass rush improved
@@ -1111,7 +1112,6 @@ const DynamicQBRankings = () => {
       'SEA': 16,  // Leonard Williams trade helped
       'CLE': 15,  // Garrett elite, rest struggling
       'IND': 15,  // Richardson development helped
-      'TB': 14,   // Winfield Jr. good, others average
       'LAR': 14,  // Donald gone, rebuilding
       'NO': 13,   // Cap casualties hurt
       'WSH': 13,  // Young defense developing
@@ -1152,14 +1152,22 @@ const DynamicQBRankings = () => {
       totalSupportQuality / gamesWeightedSum : 
       (offensiveLineGrades[currentTeam] || 15) + (weaponsGrades[currentTeam] || 20) + (defenseGrades[currentTeam] || 12);
      
-     // INVERT THE LOGIC: Poor supporting cast = Higher difficulty adjustment score
+     // CORRECT LOGIC: Poor supporting cast = Higher difficulty adjustment score
      // Scale from 0-100 where higher score = more "extra credit" for difficult situation
-     const difficultyAdjustment = Math.max(0, Math.min(100, 100 - rawSupportQuality));
+     // Teams with GOOD support (high rawSupportQuality) should get LOW scores
+     // Teams with POOR support (low rawSupportQuality) should get HIGH scores
+     
+     // Calculate max possible support quality (35 + 40 + 25 = 100)
+     const maxSupportQuality = 100;
+     
+     // Invert and scale: excellent support = low score, poor support = high score
+     const difficultyAdjustment = Math.max(0, Math.min(100, (maxSupportQuality - rawSupportQuality) * (100 / maxSupportQuality)));
      
      // Debug for major teams or multi-team QBs
-     if (['KC', 'BUF', 'CIN', 'BAL', 'CAR', 'NYG', 'MIN'].includes(currentTeam) || teamsPlayed.length > 1) {
+     if (['KC', 'BUF', 'CIN', 'BAL', 'CAR', 'NYG', 'MIN', 'TB'].includes(currentTeam) || teamsPlayed.length > 1) {
        const teamsText = teamsPlayed.length > 1 ? `Teams: ${teamsPlayed.join(', ')}` : `Team: ${currentTeam}`;
-       console.log(`🔍 SUPPORT ${teamsText}: Raw Quality(${rawSupportQuality.toFixed(1)}) -> Difficulty Adjustment(${difficultyAdjustment}) [Higher = More Extra Credit]`);
+       const supportLevel = rawSupportQuality >= 80 ? 'EXCELLENT' : rawSupportQuality >= 60 ? 'GOOD' : rawSupportQuality >= 40 ? 'AVERAGE' : 'POOR';
+       console.log(`🔍 SUPPORT ${teamsText}: Raw Quality(${rawSupportQuality.toFixed(1)}) - ${supportLevel} -> Difficulty Score(${difficultyAdjustment.toFixed(1)}) [Higher = More Extra Credit for Poor Support]`);
      }
      
      return difficultyAdjustment;
