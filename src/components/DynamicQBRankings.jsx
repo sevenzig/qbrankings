@@ -1138,7 +1138,7 @@ const DynamicQBRankings = () => {
      return difficultyAdjustment;
   };
 
-  const calculateQEI = (baseScores) => {
+  const calculateQEI = (baseScores, qb) => {
     // Calculate total weight for normalization
     const totalWeight = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
     
@@ -1159,14 +1159,34 @@ const DynamicQBRankings = () => {
     const dominanceRatio = totalWeight > 0 ? maxWeight / totalWeight : 0;
     const isSpecialized = dominanceRatio >= 0.7; // If one category is 70%+ of total weight
     
+    let finalScore;
     if (isSpecialized) {
       // Apply specialized scaling - boost scores for focused evaluations
       const specialistBoost = 1.2 + (dominanceRatio - 0.7) * 1.0; // 1.2x to 1.5x boost based on dominance
-      return Math.min(100, weightedScore * specialistBoost);
+      finalScore = weightedScore * specialistBoost;
     } else {
       // Standard scaling for balanced evaluations
-      return Math.min(100, weightedScore);
+      finalScore = weightedScore;
     }
+    
+    // Apply experience modifier - slight penalty for inexperienced QBs
+    const experience = qb?.experience || qb?.seasonData?.length || 1;
+    let experienceModifier = 1.0;
+    
+    if (experience === 1) {
+      experienceModifier = 0.95; // 5% penalty for rookies/1-year QBs
+      if (qb?.name && (qb.name.includes('Williams') || qb.name.includes('Daniels') || qb.name.includes('Maye') || qb.name.includes('Nix'))) {
+        console.log(`👶 ROOKIE PENALTY: ${qb.name} (${experience} yr) - 5% reduction applied`);
+      }
+    } else if (experience === 2) {
+      experienceModifier = 0.98; // 2% penalty for second-year QBs
+      if (qb?.name && (qb.name.includes('Young') || qb.name.includes('Stroud') || qb.name.includes('Richardson'))) {
+        console.log(`🧑 SECOND-YEAR PENALTY: ${qb.name} (${experience} yrs) - 2% reduction applied`);
+      }
+    }
+    // 3+ years: no penalty (1.0x modifier)
+    
+    return Math.min(100, finalScore * experienceModifier);
   };
 
   const updateWeight = (category, value) => {
@@ -1240,7 +1260,7 @@ const DynamicQBRankings = () => {
   const rankedQBs = qbData
     .map(qb => ({
       ...qb,
-      qei: calculateQEI(qb.baseScores)
+      qei: calculateQEI(qb.baseScores, qb)
     }))
     .sort((a, b) => b.qei - a.qei);
 
