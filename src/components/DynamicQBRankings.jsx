@@ -215,7 +215,7 @@ const DynamicQBRankings = () => {
         
         // Debug Patrick Mahomes specifically (simplified)
         if (playerName.includes('Mahomes')) {
-          console.log(`✅ MAHOMES ${year}: ${parseInt(qb.PassingYds) || 0} yards, ${parseInt(qb.TD) || 0} TDs`);
+          console.log(`✅ MAHOMES ${year} PASSING: ${parseInt(qb.PassingYds) || 0} yards, ${parseInt(qb.TD) || 0} TDs`);
         }
         
         if (!playerData[playerName]) {
@@ -230,6 +230,7 @@ const DynamicQBRankings = () => {
               passingYards: 0,
               passingTDs: 0,
               interceptions: 0,
+              fumbles: 0,
               completions: 0,
               attempts: 0,
               avgPasserRating: 0,
@@ -240,7 +241,7 @@ const DynamicQBRankings = () => {
         
         const qbRecord = parseQBRecord(qb.QBrec);
         const passerRating = parseFloat(qb.Rate) || 0;
-        const yearYards = parseInt(qb.PassingYds) || 0;  // Use PassingYds instead of Yds
+        const yearYards = parseInt(qb.PassingYds) || 0;  // Use PassingYds which correctly extracts column 12
         const yearTDs = parseInt(qb.TD) || 0;
         
         // Add season data
@@ -279,7 +280,7 @@ const DynamicQBRankings = () => {
         
         // Debug Mahomes career accumulation (simplified)
         if (playerName.includes('Mahomes')) {
-          console.log(`✅ MAHOMES CAREER: ${career.passingYards} total yards, ${career.seasons} seasons`);
+          console.log(`✅ MAHOMES ${year} PASSING: ${yearYards} yards added, career total now: ${career.passingYards}`);
         }
         
         // Track passer rating for averaging (weighted by games started)
@@ -354,8 +355,9 @@ const DynamicQBRankings = () => {
 
     rushingYearsData.forEach(({ year, data }) => {
       data.forEach(qb => {
-        // Only process quarterbacks with valid data
-        if (qb.Pos !== 'QB' || !qb.Player || !qb.Team || qb.Team.length > 3) {
+        // Only process quarterbacks with valid data - rushing CSV uses Pos▲ column
+        const position = qb.Pos || qb['Pos▲'] || '';
+        if (position !== 'QB' || !qb.Player || !qb.Team || qb.Team.length > 3) {
           return;
         }
         
@@ -373,15 +375,20 @@ const DynamicQBRankings = () => {
           season.rushingYards = parseInt(qb.Yds) || 0;
           season.rushingTDs = parseInt(qb.TD) || 0;
           season.rushingAttempts = parseInt(qb.Att) || 0;
+          season.fumbles = parseInt(qb.Fmb) || 0;
           
           // Update career rushing totals
           const career = playerData[playerName].career;
           career.rushingYards = (career.rushingYards || 0) + season.rushingYards;
           career.rushingTDs = (career.rushingTDs || 0) + season.rushingTDs;
+          career.fumbles = (career.fumbles || 0) + season.fumbles;
           
-          // Debug for mobile QBs
-          if (season.rushingYards > 200) {
-            console.log(`🏃 RUSHING ${playerName} ${year}: ${season.rushingYards} yards, ${season.rushingTDs} TDs`);
+          // Debug for mobile QBs and Mahomes
+          if (season.rushingYards > 200 || playerName.includes('Mahomes')) {
+            console.log(`🏃 RUSHING ${playerName} ${year}: ${season.rushingYards} yards, ${season.rushingTDs} TDs, ${season.fumbles} fumbles`);
+            if (playerName.includes('Mahomes')) {
+              console.log(`🏃 MAHOMES ${year} RUSHING: ${season.rushingYards} yards added, career rushing total now: ${career.rushingYards}`);
+            }
           }
         }
       });
@@ -396,8 +403,9 @@ const DynamicQBRankings = () => {
 
     rushingPlayoffYearsData.forEach(({ year, data }) => {
       data.forEach(qb => {
-        // Only process quarterbacks with valid data
-        if (qb.Pos !== 'QB' || !qb.Player || !qb.Team || qb.Team.length > 3) {
+        // Only process quarterbacks with valid data - rushing CSV uses Pos▲ column
+        const position = qb.Pos || qb['Pos▲'] || '';
+        if (position !== 'QB' || !qb.Player || !qb.Team || qb.Team.length > 3) {
           return;
         }
         
@@ -420,6 +428,7 @@ const DynamicQBRankings = () => {
           season.playoffData.rushingYards = parseInt(qb.Yds) || 0;
           season.playoffData.rushingTDs = parseInt(qb.TD) || 0;
           season.playoffData.rushingAttempts = parseInt(qb.Att) || 0;
+          season.playoffData.fumbles = parseInt(qb.Fmb) || 0;
           
           // Debug rushing playoff data for mobile QBs
           if (season.playoffData.rushingYards > 50) {
@@ -446,7 +455,7 @@ const DynamicQBRankings = () => {
       
       // Debug final Mahomes data (simplified)
       if (player.seasons.some(s => s.team === 'KAN')) {
-        console.log(`✅ MAHOMES FINAL: ${career.passingYards} career yards, ${career.passingTDs} TDs`);
+        console.log(`✅ MAHOMES FINAL CAREER: Passing=${career.passingYards}, Rushing=${career.rushingYards || 0}, Total=${career.passingYards + (career.rushingYards || 0)} yards over ${career.gamesStarted} games`);
       }
     });
     
@@ -567,19 +576,36 @@ const DynamicQBRankings = () => {
             combinedRecord: `${data.career.wins}-${data.career.losses} (${data.career.winPercentage.toFixed(3)})`,
             stats: {
               gamesStarted: data.career.gamesStarted,
-              passingYards: data.career.passingYards,
-              passingTDs: data.career.passingTDs,
-              interceptions: data.career.interceptions,
-              completions: data.career.completions,
-              attempts: data.career.attempts,
-              rushingYards: data.career.rushingYards || 0,
-              rushingTDs: data.career.rushingTDs || 0,
+              // Per-game averages - total yards, TDs, and turnovers (pass + rush)
+              yardsPerGame: data.career.gamesStarted > 0 ? 
+                (data.career.passingYards + (data.career.rushingYards || 0)) / data.career.gamesStarted : 0,
+              tdsPerGame: data.career.gamesStarted > 0 ? 
+                (data.career.passingTDs + (data.career.rushingTDs || 0)) / data.career.gamesStarted : 0,
+              turnoversPerGame: data.career.gamesStarted > 0 ? 
+                (data.career.interceptions + (data.career.fumbles || 0)) / data.career.gamesStarted : 0,
+              // Keep some totals for reference
+              totalYards: data.career.passingYards + (data.career.rushingYards || 0),
+              totalTDs: data.career.passingTDs + (data.career.rushingTDs || 0),
+              totalTurnovers: data.career.interceptions + (data.career.fumbles || 0),
               passerRating: data.career.avgPasserRating
             },
             // Add season breakdown for detailed view
             seasonData: data.seasons,
-            stats2024: `3-Year Total: ${data.career.passingYards} pass yds, ${data.career.passingTDs + (data.career.rushingTDs || 0)} total TDs (${data.career.rushingYards || 0} rush yds)`
+            stats2024: `3-Year Avg: ${((data.career.passingYards + (data.career.rushingYards || 0)) / Math.max(1, data.career.gamesStarted)).toFixed(1)} yds/g, ${((data.career.passingTDs + (data.career.rushingTDs || 0)) / Math.max(1, data.career.gamesStarted)).toFixed(2)} TDs/g, ${((data.career.interceptions + (data.career.fumbles || 0)) / Math.max(1, data.career.gamesStarted)).toFixed(2)} TO/g`
           };
+          
+          // Debug Mahomes final calculation
+          if (playerName.includes('Mahomes')) {
+            const totalYards = data.career.passingYards + (data.career.rushingYards || 0);
+            const totalTDs = data.career.passingTDs + (data.career.rushingTDs || 0);
+            const totalTurnovers = data.career.interceptions + (data.career.fumbles || 0);
+            const yardsPerGame = totalYards / data.career.gamesStarted;
+            console.log(`🎯 MAHOMES FINAL CALC: Pass(${data.career.passingYards}) + Rush(${data.career.rushingYards || 0}) = ${totalYards} total yards over ${data.career.gamesStarted} games = ${yardsPerGame.toFixed(1)} yds/g`);
+            console.log(`🎯 MAHOMES FINAL TDs: Pass(${data.career.passingTDs}) + Rush(${data.career.rushingTDs || 0}) = ${totalTDs} total TDs = ${(totalTDs / data.career.gamesStarted).toFixed(2)} TDs/g`);
+            console.log(`🎯 MAHOMES FINAL TOs: Int(${data.career.interceptions}) + Fum(${data.career.fumbles || 0}) = ${totalTurnovers} total TOs = ${(totalTurnovers / data.career.gamesStarted).toFixed(2)} TOs/g`);
+          }
+          
+          return qbObject;
         });
       
       // Calculate QEI metrics
@@ -629,6 +655,7 @@ const DynamicQBRankings = () => {
           // Add rushing data
           RushingYds: season.rushingYards || 0,
           RushingTDs: season.rushingTDs || 0,
+          Fumbles: season.fumbles || 0,
           
           // Add playoff data if available
           playoffData: season.playoffData || null
@@ -817,7 +844,7 @@ const DynamicQBRankings = () => {
       
       // Calculate per-game averages
       const gamesPlayed = Math.max(1, totalGames);
-      const yardsPerGame = (totalPassingYards * 0.75 + totalRushingYards * 0.25) / gamesPlayed;
+      const yardsPerGame = (totalPassingYards * 0.8 + totalRushingYards * 0.2) / gamesPlayed;
       const tdsPerGame = (totalPassingTDs + totalRushingTDs) / gamesPlayed;
       const yardsPerAttempt = (data.Att || 0) > 0 ? totalPassingYards / (data.Att || 1) : 0;
       
@@ -850,8 +877,10 @@ const DynamicQBRankings = () => {
       
       // Turnover Rate - Additional penalty for high-turnover QBs (0-4 points)
       const totalInts = (data.Int || 0) + (data.playoffData?.interceptions || 0);
-      const intPerGame = totalInts / gamesPlayed;
-      ballSecurityScore += Math.max(0, Math.min(4, (1.0 - intPerGame) * 4)); // Heavy penalty for INTs per game
+      const totalFumbles = (data.Fumbles || 0) + (data.playoffData?.fumbles || 0);
+      const totalTurnovers = totalInts + totalFumbles;
+      const turnoversPerGame = totalTurnovers / gamesPlayed;
+      ballSecurityScore += Math.max(0, Math.min(4, (1.5 - turnoversPerGame) * 3)); // Heavy penalty for turnovers per game
       
       // 4. PLAYMAKING (10 points) - Big play ability and versatility
       let playmakingScore = 0;
@@ -862,9 +891,10 @@ const DynamicQBRankings = () => {
       // Y/A - Big play potential (0-4 points)
       playmakingScore += Math.max(0, Math.min(4, (yardsPerAttempt - 6.0) * 2.0));
       
-      // Debug for high-volume or high-turnover QBs
-      if (data.Player && (intPerGame >= 1.0 || tdsPerGame >= 2.0 || data.Player.includes('Mahomes') || data.Player.includes('Allen') || data.Player.includes('Herbert'))) {
-        console.log(`📊 STATS ${data.Player} ${year}: ${yardsPerGame.toFixed(0)} ypg, ${tdsPerGame.toFixed(1)} td/g, ${intPerGame.toFixed(2)} int/g -> Eff:${efficiencyScore.toFixed(1)}, Prod:${productivityScore.toFixed(1)}, Ball:${ballSecurityScore.toFixed(1)}, Play:${playmakingScore.toFixed(1)}`);
+      // Debug for comparison of ball security between QBs
+      if (data.Player && (turnoversPerGame >= 1.0 || tdsPerGame >= 2.0 || data.Player.includes('Mahomes') || data.Player.includes('Allen') || data.Player.includes('Mayfield') || data.Player.includes('Herbert') || data.Player.includes('Burrow'))) {
+        const ballSecurityGrade = turnoversPerGame <= 1.0 ? 'EXCELLENT' : turnoversPerGame <= 1.5 ? 'GOOD' : turnoversPerGame <= 2.0 ? 'AVERAGE' : 'POOR';
+        console.log(`📊 STATS ${data.Player} ${year}: ${yardsPerGame.toFixed(0)} ypg, ${tdsPerGame.toFixed(1)} td/g, ${turnoversPerGame.toFixed(2)} to/g (${ballSecurityGrade}) -> Ball Security: ${ballSecurityScore.toFixed(1)}/25`);
       }
       
       // Apply weight to each component
@@ -945,21 +975,30 @@ const DynamicQBRankings = () => {
     totalPlayoffWins = totalPlayoffWins / weightSum;
     totalPlayoffGames = totalPlayoffGames / weightSum;
     
-    // Game Winning Drives - Primary clutch metric (0-40 points, reduced from 50 to make room for playoff bonus)
-    const gwdScore = Math.min(40, totalGWD * 8); // Adjusted scale
+    // Calculate per-game clutch averages
+    const gwdPerGame = totalGames > 0 ? totalGWD / totalGames : 0;
+    const comebacksPerGame = totalGames > 0 ? totalFourthQC / totalGames : 0;
     
-    // 4th Quarter Comebacks (0-25 points, reduced from 30)
-    const comebackScore = Math.min(25, totalFourthQC * 6); // Adjusted scale
+    // Game Winning Drives per game - Primary clutch metric (0-40 points)
+    const gwdScore = Math.min(40, gwdPerGame * 120); // Scale: 0.33 GWD/game = max points
     
-    // Clutch rate - GWD per game played (0-15 points, reduced from 20)
-    const clutchRate = totalGames > 0 ? totalGWD / totalGames : 0;
-    const clutchRateScore = Math.min(15, clutchRate * 30); // Adjusted scale
+    // 4th Quarter Comebacks per game (0-25 points)
+    const comebackScore = Math.min(25, comebacksPerGame * 100); // Scale: 0.25 comebacks/game = max points
+    
+    // Total clutch opportunities per game (0-15 points)
+    const totalClutchPerGame = gwdPerGame + comebacksPerGame;
+    const clutchRateScore = Math.min(15, totalClutchPerGame * 50); // Combined clutch rate
     
     // NEW: Playoff success bonus (0-20 points)
     let playoffSuccessScore = 0;
     if (totalPlayoffGames > 0) {
       const playoffWinRate = totalPlayoffWins / totalPlayoffGames;
       playoffSuccessScore = Math.min(20, playoffWinRate * 20 + totalPlayoffGames * 2); // Win rate + participation bonus
+    }
+    
+    // Debug for clutch leaders
+    if (gwdPerGame >= 0.15 || comebacksPerGame >= 0.10) {
+      console.log(`🎯 CLUTCH: ${Object.values(qbSeasonData.years)[0]?.Player || 'Unknown'}: ${gwdPerGame.toFixed(3)} GWD/game, ${comebacksPerGame.toFixed(3)} 4QC/game -> Score: ${(gwdScore + comebackScore + clutchRateScore + playoffSuccessScore).toFixed(1)}/100`);
     }
     
     return gwdScore + comebackScore + clutchRateScore + playoffSuccessScore;
@@ -1090,7 +1129,7 @@ const DynamicQBRankings = () => {
       'ARI': 21,  // Harrison Jr. ROY candidate, Marvin, McBride
       'NO': 20,   // Olave solid, Kamara, Thomas limited
       'LV': 19,   // Adams elite (1243 yds) but limited support
-      'BAL': 18,  // Andrews/Flowers, Lamar running ability
+      'BAL': 23,  // Andrews/Flowers, Lamar running ability
       'DEN': 17,  // Sutton solid, Jeudy traded, limited depth
       'GB': 16,   // Watson injured, Dobbs limited, Jacobs added
       'IND': 15,  // Richardson weapons still developing, limited
@@ -1126,7 +1165,7 @@ const DynamicQBRankings = () => {
       'IND': 15,  // Decent overall, helps Richardson
       'WSH': 14,  // Young defense developing quickly
       'LAR': 13,  // Donald gone, rebuilding but talent
-      'CIN': 13,  // Pass rush improved, secondary issues
+      'CIN': 6,  // Pass rush improved, secondary issues
       'NO': 12,   // Cap casualties hurt depth
       'ATL': 12,  // Inconsistent unit, some talent
       'JAX': 11,  // Josh Allen solid, limited overall
@@ -1464,7 +1503,7 @@ const DynamicQBRankings = () => {
                   <th className="px-4 py-3 text-center text-white font-bold">Team</th>
                   <th className="px-4 py-3 text-center text-white font-bold">QEI</th>
                   <th className="px-4 py-3 text-center text-white font-bold">Team Record</th>
-                  <th className="px-4 py-3 text-center text-white font-bold">Career Stats</th>
+                  <th className="px-4 py-3 text-center text-white font-bold">Per-Game Averages</th>
                   <th className="px-4 py-3 text-center text-white font-bold">Seasons</th>
                   <th className="px-4 py-3 text-center text-white font-bold">Avg Rating</th>
                 </tr>
@@ -1507,8 +1546,8 @@ const DynamicQBRankings = () => {
                     </td>
                     <td className="px-4 py-3 text-center text-blue-200">{qb.combinedRecord}</td>
                     <td className="px-4 py-3 text-center text-blue-200">
-                      <div>{qb.stats.passingYards.toLocaleString()} yds</div>
-                      <div className="text-xs">{qb.stats.passingTDs} TD, {qb.stats.interceptions} INT</div>
+                      <div>{qb.stats.yardsPerGame.toFixed(1)} yds/g</div>
+                      <div className="text-xs">{qb.stats.tdsPerGame.toFixed(2)} TD/g, {qb.stats.turnoversPerGame.toFixed(2)} TO/g</div>
                     </td>
                     <td className="px-4 py-3 text-center text-white">
                       <div>{qb.experience}</div>
