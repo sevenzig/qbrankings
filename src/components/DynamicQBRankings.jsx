@@ -4,742 +4,516 @@ const DynamicQBRankings = () => {
   const [qbData, setQbData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lastFetch, setLastFetch] = useState(null);
   const [weights, setWeights] = useState({
-    team: 45,
-    stats: 25,
-    championship: 15,
-    clutch: 10,
+    team: 30,
+    stats: 40,
+    clutch: 15,
+    durability: 10,
     support: 5
   });
+  const [currentPreset, setCurrentPreset] = useState('balanced');
+
+  // Cache duration: 15 minutes
+  const CACHE_DURATION = 15 * 60 * 1000;
+
+  // Statistical Scaling Constants - Based on CSV data analysis
+  const SCALING_RANGES = {
+    // Efficiency Metrics
+    PASSER_RATING: { threshold: 75, scale: 1.8, max: 25 }, // 75+ rating gets points
+    ANY_A: { threshold: 4.5, scale: 7, max: 35 }, // 4.5+ ANY/A gets points
+    Y_A: { threshold: 6.0, scale: 5, max: 15 }, // 6.0+ Y/A gets points
+    
+    // Percentage Metrics  
+    TD_PCT: { threshold: 3.0, scale: 4, max: 20 }, // 3.0%+ TD rate
+    INT_PCT: { threshold: 3.5, scale: -6, max: 15 }, // Lower INT% is better
+    SUCCESS_RATE: { threshold: 40, scale: 0.5, max: 10 }, // 40%+ success rate
+    SACK_PCT: { threshold: 12, scale: -3, max: 30 }, // Lower sack% is better
+    
+    // Volume Metrics
+    PASSING_YARDS: { threshold: 3000, scale: 0.000005, max: 8 }, // 3000+ yards
+    PASSING_TDS: { threshold: 20, scale: 0.3, max: 7 }, // 20+ TDs
+    
+    // Clutch Metrics
+    GWD_TOTAL: { scale: 10, max: 50 }, // 10 points per GWD, max 50
+    FOURTH_QC: { scale: 7.5, max: 30 }, // 7.5 points per 4QC, max 30
+    CLUTCH_RATE: { scale: 50, max: 20 }, // GWD per game rate
+    
+    // Win Percentage
+    WIN_PCT_CURVE: 0.6, // Exponential curve favoring winners
+    AVAILABILITY_WEIGHT: 20 // Games started bonus
+  };
 
   useEffect(() => {
     fetchAllQBData();
   }, []);
 
+  const shouldRefreshData = () => {
+    if (!lastFetch) return true;
+    return Date.now() - lastFetch > CACHE_DURATION;
+  };
+
+  // CSV parsing functions
+  const parseCSV = (csvText) => {
+    if (!csvText || csvText.trim().length === 0) {
+      console.warn('Empty CSV text provided');
+      return [];
+    }
+    
+    const lines = csvText.trim().split('\n').filter(line => line.trim());
+    
+    if (lines.length === 0) {
+      console.warn('No lines found in CSV');
+      return [];
+    }
+    
+    console.log(`🔍 CSV has ${lines.length} lines`);
+    
+    const headers = lines[0].split(',').map(h => h.trim());
+    console.log('🔍 Headers found:', headers);
+    
+    const dataRows = lines.slice(1)
+      .map((line, index) => {
+        const values = line.split(',').map(v => v.trim());
+        const obj = {};
+        headers.forEach((header, headerIndex) => {
+          obj[header] = values[headerIndex] || '';
+        });
+        
+        // IMPORTANT FIX: Handle duplicate 'Yds' columns and extract all missing data
+        // Column 11 = Passing Yards (what we want)
+        // Column 17 = Succ% (Success Rate)
+        // Column 25 = Sack Yards (what we were accidentally getting)  
+        // Column 27 = Sk% (Sack Percentage)
+        // Column 29 = ANY/A (Adjusted Net Yards per Attempt)
+        // Column 30 = 4QC (4th Quarter Comebacks)
+        // Column 31 = GWD (Game Winning Drives)
+        if (values.length > 30) {
+          obj.PassingYds = values[11] || '0';  // Force passing yards
+          obj.SuccessRate = values[17] || '0'; // Success rate (column 18, index 17)
+          obj.SackYds = values[25] || '0';     // Separate sack yards
+          obj.SackPct = values[27] || '0';     // Sack percentage (column 28, index 27)
+          obj.AnyPerAttempt = values[29] || '0'; // ANY/A (column 30, index 29)
+          obj.ClutchFourthQC = values[30] || '0'; // 4th Quarter Comebacks (column 31, index 30)
+          obj.ClutchGWD = values[31] || '0';     // Game Winning Drives (column 32, index 31)
+        }
+        
+        // Debug first few rows
+        if (index < 3) {
+          console.log(`🔍 Row ${index + 1}:`, obj);
+        }
+        
+        return obj;
+      })
+      .filter(obj => {
+        // More lenient filtering - just check if Player field exists and isn't empty
+        const hasPlayer = obj.Player && obj.Player.trim() !== '' && obj.Player !== 'Player';
+        if (!hasPlayer && obj.Player) {
+          console.log('🔍 Filtered out row with Player:', obj.Player);
+        }
+        return hasPlayer;
+      });
+    
+    console.log(`🔍 Parsed ${dataRows.length} valid data rows`);
+    return dataRows;
+  };
+
+  const parseQBRecord = (qbRecord) => {
+    if (!qbRecord || qbRecord === '') {
+      return { wins: 0, losses: 0, winPercentage: 0 };
+    }
+    
+    const parts = qbRecord.split('-');
+    const wins = parseInt(parts[0]) || 0;
+    const losses = parseInt(parts[1]) || 0;
+    const ties = parseInt(parts[2]) || 0;
+    
+    const totalGames = wins + losses + ties;
+    const winPercentage = totalGames > 0 ? wins / totalGames : 0;
+    
+    return { wins, losses, winPercentage };
+  };
+
+  const getTeamInfo = (teamAbbr) => {
+    const teamMap = {
+      'ARI': { id: '22', name: 'Arizona Cardinals', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/ari.png' },
+      'ATL': { id: '1', name: 'Atlanta Falcons', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/atl.png' },
+      'BAL': { id: '33', name: 'Baltimore Ravens', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/bal.png' },
+      'BUF': { id: '2', name: 'Buffalo Bills', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/buf.png' },
+      'CAR': { id: '29', name: 'Carolina Panthers', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/car.png' },
+      'CHI': { id: '3', name: 'Chicago Bears', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/chi.png' },
+      'CIN': { id: '4', name: 'Cincinnati Bengals', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/cin.png' },
+      'CLE': { id: '5', name: 'Cleveland Browns', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/cle.png' },
+      'DAL': { id: '6', name: 'Dallas Cowboys', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/dal.png' },
+      'DEN': { id: '7', name: 'Denver Broncos', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/den.png' },
+      'DET': { id: '8', name: 'Detroit Lions', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/det.png' },
+      'GB': { id: '9', name: 'Green Bay Packers', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/gb.png' },
+      'GNB': { id: '9', name: 'Green Bay Packers', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/gb.png' },
+      'HOU': { id: '34', name: 'Houston Texans', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/hou.png' },
+      'IND': { id: '11', name: 'Indianapolis Colts', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/ind.png' },
+      'JAX': { id: '30', name: 'Jacksonville Jaguars', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/jax.png' },
+      'KC': { id: '12', name: 'Kansas City Chiefs', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/kc.png' },
+      'KAN': { id: '12', name: 'Kansas City Chiefs', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/kc.png' },
+      'LV': { id: '13', name: 'Las Vegas Raiders', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/lv.png' },
+      'LVR': { id: '13', name: 'Las Vegas Raiders', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/lv.png' },
+      'LAC': { id: '24', name: 'Los Angeles Chargers', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/lac.png' },
+      'LAR': { id: '14', name: 'Los Angeles Rams', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/lar.png' },
+      'MIA': { id: '15', name: 'Miami Dolphins', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/mia.png' },
+      'MIN': { id: '16', name: 'Minnesota Vikings', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/min.png' },
+      'NE': { id: '17', name: 'New England Patriots', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/ne.png' },
+      'NWE': { id: '17', name: 'New England Patriots', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/ne.png' },
+      'NO': { id: '18', name: 'New Orleans Saints', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/no.png' },
+      'NOR': { id: '18', name: 'New Orleans Saints', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/no.png' },
+      'NYG': { id: '19', name: 'New York Giants', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/nyg.png' },
+      'NYJ': { id: '20', name: 'New York Jets', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/nyj.png' },
+      'PHI': { id: '21', name: 'Philadelphia Eagles', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/phi.png' },
+      'PIT': { id: '23', name: 'Pittsburgh Steelers', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/pit.png' },
+      'SF': { id: '25', name: 'San Francisco 49ers', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/sf.png' },
+      'SFO': { id: '25', name: 'San Francisco 49ers', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/sf.png' },
+      'SEA': { id: '26', name: 'Seattle Seahawks', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/sea.png' },
+      'TB': { id: '27', name: 'Tampa Bay Buccaneers', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/tb.png' },
+      'TAM': { id: '27', name: 'Tampa Bay Buccaneers', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/tb.png' },
+      'TEN': { id: '10', name: 'Tennessee Titans', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/ten.png' },
+      'WSH': { id: '28', name: 'Washington Commanders', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png' },
+      'WAS': { id: '28', name: 'Washington Commanders', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png' }
+    };
+    
+    return teamMap[teamAbbr] || { id: '0', name: teamAbbr, logo: '' };
+  };
+
+  const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQbs2024, playoffQbs2023, playoffQbs2022) => {
+    const playerData = {};
+    
+    // Process each year of data
+    const yearsData = [
+      { year: 2024, data: qbs2024 },
+      { year: 2023, data: qbs2023 },
+      { year: 2022, data: qbs2022 }
+    ];
+    
+    yearsData.forEach(({ year, data }) => {
+      data.forEach(qb => {
+        // Only process quarterbacks with valid data
+        if (qb.Pos !== 'QB' || !qb.Player || !qb.Team || qb.Team.length > 3) {
+          return;
+        }
+        
+        const playerName = qb.Player.trim();
+        const gamesStarted = parseInt(qb.GS) || 0;
+        
+        // Skip if no meaningful playing time this season
+        if (gamesStarted < 3) return;
+        
+        // Debug Patrick Mahomes specifically (simplified)
+        if (playerName.includes('Mahomes')) {
+          console.log(`✅ MAHOMES ${year}: ${parseInt(qb.PassingYds) || 0} yards, ${parseInt(qb.TD) || 0} TDs`);
+        }
+        
+        if (!playerData[playerName]) {
+          playerData[playerName] = {
+            seasons: [],
+            career: {
+              seasons: 0,
+              gamesStarted: 0,
+              wins: 0,
+              losses: 0,
+              winPercentage: 0,
+              passingYards: 0,
+              passingTDs: 0,
+              interceptions: 0,
+              completions: 0,
+              attempts: 0,
+              avgPasserRating: 0,
+              totalPasserRatingPoints: 0
+            }
+          };
+        }
+        
+        const qbRecord = parseQBRecord(qb.QBrec);
+        const passerRating = parseFloat(qb.Rate) || 0;
+        const yearYards = parseInt(qb.PassingYds) || 0;  // Use PassingYds instead of Yds
+        const yearTDs = parseInt(qb.TD) || 0;
+        
+        // Add season data
+        playerData[playerName].seasons.push({
+          year,
+          team: qb.Team,
+          age: parseInt(qb.Age) || 25,
+          gamesStarted,
+          wins: qbRecord.wins,
+          losses: qbRecord.losses,
+          winPercentage: qbRecord.winPercentage,
+          passingYards: yearYards,
+          passingTDs: yearTDs,
+          interceptions: parseInt(qb.Int) || 0,
+          completions: parseInt(qb.Cmp) || 0,
+          attempts: parseInt(qb.Att) || 0,
+          passerRating,
+          successRate: parseFloat(qb.SuccessRate) || 0,
+          sackPercentage: parseFloat(qb.SackPct) || 0,
+          anyPerAttempt: parseFloat(qb.AnyPerAttempt) || 0,
+          gameWinningDrives: parseInt(qb.ClutchGWD) || 0,
+          fourthQuarterComebacks: parseInt(qb.ClutchFourthQC) || 0
+        });
+        
+        // Update career totals
+        const career = playerData[playerName].career;
+        career.seasons++;
+        career.gamesStarted += gamesStarted;
+        career.wins += qbRecord.wins;
+        career.losses += qbRecord.losses;
+        career.passingYards += yearYards;
+        career.passingTDs += yearTDs;
+        career.interceptions += parseInt(qb.Int) || 0;
+        career.completions += parseInt(qb.Cmp) || 0;
+        career.attempts += parseInt(qb.Att) || 0;
+        
+        // Debug Mahomes career accumulation (simplified)
+        if (playerName.includes('Mahomes')) {
+          console.log(`✅ MAHOMES CAREER: ${career.passingYards} total yards, ${career.seasons} seasons`);
+        }
+        
+        // Track passer rating for averaging (weighted by games started)
+        if (passerRating > 0) {
+          career.totalPasserRatingPoints += passerRating * gamesStarted;
+        }
+      });
+    });
+
+    // Process playoff data separately with higher clutch weighting
+    const playoffYearsData = [
+      { year: 2024, data: playoffQbs2024 },
+      { year: 2023, data: playoffQbs2023 },
+      { year: 2022, data: playoffQbs2022 }
+    ];
+
+    playoffYearsData.forEach(({ year, data }) => {
+      data.forEach(qb => {
+        // Only process quarterbacks with valid data
+        if (qb.Pos !== 'QB' || !qb.Player || !qb.Team || qb.Team.length > 3) {
+          return;
+        }
+        
+        const playerName = qb.Player.trim();
+        
+        // Only add playoff data if the player already exists (played regular season)
+        if (!playerData[playerName]) return;
+        
+        const qbRecord = parseQBRecord(qb.QBrec);
+        const gamesStarted = parseInt(qb.GS) || 0;
+        const gamesPlayed = parseInt(qb.G) || 0;
+        
+        // Add playoff data to the existing regular season data for this year
+        const existingSeasonIndex = playerData[playerName].seasons.findIndex(s => s.year === year);
+        if (existingSeasonIndex >= 0) {
+          const season = playerData[playerName].seasons[existingSeasonIndex];
+          
+                     // Add playoff-specific data
+           season.playoffData = {
+             gamesPlayed: gamesPlayed,
+             gamesStarted: gamesStarted,
+             wins: qbRecord.wins,
+             losses: qbRecord.losses,
+             winPercentage: qbRecord.winPercentage,
+             passingYards: parseInt(qb.PassingYds) || 0,
+             passingTDs: parseInt(qb.TD) || 0,
+             interceptions: parseInt(qb.Int) || 0,
+             attempts: parseInt(qb.Att) || 0,
+             completions: parseInt(qb.Cmp) || 0,
+             passerRating: parseFloat(qb.Rate) || 0,
+             gameWinningDrives: parseInt(qb.ClutchGWD) || 0,
+             fourthQuarterComebacks: parseInt(qb.ClutchFourthQC) || 0,
+             anyPerAttempt: parseFloat(qb.AnyPerAttempt) || 0,
+             successRate: parseFloat(qb.SuccessRate) || 0,
+             sackPercentage: parseFloat(qb.SackPct) || 0
+           };
+          
+          // Debug playoff data for Mahomes
+          if (playerName.includes('Mahomes')) {
+            console.log(`🏆 MAHOMES ${year} PLAYOFFS: ${season.playoffData.gamesPlayed} games, ${season.playoffData.gameWinningDrives} GWD, ${season.playoffData.fourthQuarterComebacks} 4QC`);
+          }
+        }
+      });
+    });
+    
+    // Calculate final career averages
+    Object.values(playerData).forEach(player => {
+      const career = player.career;
+      const totalGames = career.gamesStarted;
+      
+      // Calculate win percentage
+      const totalDecisionGames = career.wins + career.losses;
+      career.winPercentage = totalDecisionGames > 0 ? career.wins / totalDecisionGames : 0;
+      
+      // Calculate weighted average passer rating
+      career.avgPasserRating = totalGames > 0 ? career.totalPasserRatingPoints / totalGames : 0;
+      
+      // Sort seasons by year (most recent first)
+      player.seasons.sort((a, b) => b.year - a.year);
+      
+      // Debug final Mahomes data (simplified)
+      if (player.seasons.some(s => s.team === 'KAN')) {
+        console.log(`✅ MAHOMES FINAL: ${career.passingYards} career yards, ${career.passingTDs} TDs`);
+      }
+    });
+    
+    return playerData;
+  };
+
   const fetchAllQBData = async () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔄 Loading QB data...');
+      console.log('🔄 Loading QB data from CSV files...');
       
-      // Simulate loading time
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Load CSV data files (regular season + playoffs)
+      const response2024 = await fetch('/src/data/2024.csv');
+      const response2023 = await fetch('/src/data/2023.csv');
+      const response2022 = await fetch('/src/data/2022.csv');
+      const responsePlayoffs2024 = await fetch('/src/data/2024playoffs.csv');
+      const responsePlayoffs2023 = await fetch('/src/data/2023playoffs.csv');
+      const responsePlayoffs2022 = await fetch('/src/data/2022playoffs.csv');
       
-      // Comprehensive QB data 2022-2024 (QBs with 10+ games in timeframe)
-      const mockQBs = [
-        // Elite Tier
-        {
-          id: '1',
-          name: 'Josh Allen',
-          team: 'BUF',
-          teamId: '2',
-          teamName: 'Buffalo Bills',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/buf.png',
-          jerseyNumber: '17',
-          experience: 7,
-          age: 28,
-          wins: 13,
-          losses: 4,
-          winPercentage: 0.765,
-          combinedRecord: '13-4 (0.765)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 4306,
-            passingTDs: 29,
-            interceptions: 18,
-            completions: 359,
-            attempts: 542,
-            rushingYards: 523,
-            rushingTDs: 15,
-            passerRating: 92.2
-          },
-          stats2024: '4306 yds, 29 TD'
-        },
-        {
-          id: '2',
-          name: 'Patrick Mahomes',
-          team: 'KC',
-          teamId: '12',
-          teamName: 'Kansas City Chiefs',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/kc.png',
-          jerseyNumber: '15',
-          experience: 8,
-          age: 29,
-          wins: 15,
-          losses: 2,
-          winPercentage: 0.882,
-          combinedRecord: '15-2 (0.882)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 4183,
-            passingTDs: 26,
-            interceptions: 11,
-            completions: 355,
-            attempts: 516,
-            rushingYards: 313,
-            rushingTDs: 6,
-            passerRating: 98.7
-          },
-          stats2024: '4183 yds, 26 TD'
-        },
-        {
-          id: '3',
-          name: 'Lamar Jackson',
-          team: 'BAL',
-          teamId: '33',
-          teamName: 'Baltimore Ravens',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/bal.png',
-          jerseyNumber: '8',
-          experience: 7,
-          age: 27,
-          wins: 12,
-          losses: 5,
-          winPercentage: 0.706,
-          combinedRecord: '12-5 (0.706)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 3678,
-            passingTDs: 24,
-            interceptions: 7,
-            completions: 290,
-            attempts: 448,
-            rushingYards: 915,
-            rushingTDs: 4,
-            passerRating: 112.7
-          },
-          stats2024: '3678 yds, 24 TD'
-        },
-        {
-          id: '4',
-          name: 'Joe Burrow',
-          team: 'CIN',
-          teamId: '4',
-          teamName: 'Cincinnati Bengals',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/cin.png',
-          jerseyNumber: '9',
-          experience: 5,
-          age: 28,
-          wins: 9,
-          losses: 8,
-          winPercentage: 0.529,
-          combinedRecord: '9-8 (0.529)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 4641,
-            passingTDs: 35,
-            interceptions: 12,
-            completions: 408,
-            attempts: 587,
-            rushingYards: 183,
-            rushingTDs: 3,
-            passerRating: 108.8
-          },
-          stats2024: '4641 yds, 35 TD'
-        },
-        {
-          id: '5',
-          name: 'Jalen Hurts',
-          team: 'PHI',
-          teamId: '21',
-          teamName: 'Philadelphia Eagles',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/phi.png',
-          jerseyNumber: '1',
-          experience: 4,
-          age: 26,
-          wins: 14,
-          losses: 3,
-          winPercentage: 0.824,
-          combinedRecord: '14-3 (0.824)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 3858,
-            passingTDs: 15,
-            interceptions: 5,
-            completions: 308,
-            attempts: 460,
-            rushingYards: 630,
-            rushingTDs: 14,
-            passerRating: 100.7
-          },
-          stats2024: '3858 yds, 15 TD'
-        },
-        
-        // Solid Starters
-        {
-          id: '6',
-          name: 'Tua Tagovailoa',
-          team: 'MIA',
-          teamId: '15',
-          teamName: 'Miami Dolphins',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/mia.png',
-          jerseyNumber: '1',
-          experience: 5,
-          age: 26,
-          wins: 8,
-          losses: 9,
-          winPercentage: 0.471,
-          combinedRecord: '8-9 (0.471)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 4624,
-            passingTDs: 29,
-            interceptions: 15,
-            completions: 409,
-            attempts: 608,
-            rushingYards: 87,
-            rushingTDs: 4,
-            passerRating: 95.2
-          },
-          stats2024: '4624 yds, 29 TD'
-        },
-        {
-          id: '7',
-          name: 'Justin Herbert',
-          team: 'LAC',
-          teamId: '24',
-          teamName: 'Los Angeles Chargers',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/lac.png',
-          jerseyNumber: '10',
-          experience: 5,
-          age: 26,
-          wins: 11,
-          losses: 6,
-          winPercentage: 0.647,
-          combinedRecord: '11-6 (0.647)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 3870,
-            passingTDs: 20,
-            interceptions: 3,
-            completions: 338,
-            attempts: 480,
-            rushingYards: 190,
-            rushingTDs: 9,
-            passerRating: 98.3
-          },
-          stats2024: '3870 yds, 20 TD'
-        },
-        {
-          id: '8',
-          name: 'Trevor Lawrence',
-          team: 'JAX',
-          teamId: '30',
-          teamName: 'Jacksonville Jaguars',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/jax.png',
-          jerseyNumber: '16',
-          experience: 4,
-          age: 25,
-          wins: 4,
-          losses: 13,
-          winPercentage: 0.235,
-          combinedRecord: '4-13 (0.235)',
-          stats: {
-            gamesStarted: 16,
-            passingYards: 4016,
-            passingTDs: 20,
-            interceptions: 14,
-            completions: 371,
-            attempts: 579,
-            rushingYards: 308,
-            rushingTDs: 4,
-            passerRating: 85.7
-          },
-          stats2024: '4016 yds, 20 TD'
-        },
-        {
-          id: '9',
-          name: 'Dak Prescott',
-          team: 'DAL',
-          teamId: '6',
-          teamName: 'Dallas Cowboys',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/dal.png',
-          jerseyNumber: '4',
-          experience: 9,
-          age: 31,
-          wins: 7,
-          losses: 10,
-          winPercentage: 0.412,
-          combinedRecord: '7-10 (0.412)',
-          stats: {
-            gamesStarted: 13,
-            passingYards: 3304,
-            passingTDs: 23,
-            interceptions: 8,
-            completions: 255,
-            attempts: 376,
-            rushingYards: 105,
-            rushingTDs: 6,
-            passerRating: 105.9
-          },
-          stats2024: '3304 yds, 23 TD'
-        },
-        {
-          id: '10',
-          name: 'Geno Smith',
-          team: 'SEA',
-          teamId: '26',
-          teamName: 'Seattle Seahawks',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/sea.png',
-          jerseyNumber: '7',
-          experience: 11,
-          age: 34,
-          wins: 10,
-          losses: 7,
-          winPercentage: 0.588,
-          combinedRecord: '10-7 (0.588)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 3623,
-            passingTDs: 15,
-            interceptions: 15,
-            completions: 323,
-            attempts: 506,
-            rushingYards: 233,
-            rushingTDs: 0,
-            passerRating: 84.8
-          },
-          stats2024: '3623 yds, 15 TD'
-        },
-        
-        // Veterans & Experienced
-        {
-          id: '11',
-          name: 'Aaron Rodgers',
-          team: 'NYJ',
-          teamId: '20',
-          teamName: 'New York Jets',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/nyj.png',
-          jerseyNumber: '8',
-          experience: 20,
-          age: 41,
-          wins: 5,
-          losses: 12,
-          winPercentage: 0.294,
-          combinedRecord: '5-12 (0.294)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 3897,
-            passingTDs: 28,
-            interceptions: 11,
-            completions: 364,
-            attempts: 544,
-            rushingYards: 131,
-            rushingTDs: 5,
-            passerRating: 97.4
-          },
-          stats2024: '3897 yds, 28 TD'
-        },
-        {
-          id: '12',
-          name: 'Russell Wilson',
-          team: 'PIT',
-          teamId: '23',
-          teamName: 'Pittsburgh Steelers',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/pit.png',
-          jerseyNumber: '3',
-          experience: 13,
-          age: 36,
-          wins: 10,
-          losses: 7,
-          winPercentage: 0.588,
-          combinedRecord: '10-7 (0.588)',
-          stats: {
-            gamesStarted: 11,
-            passingYards: 2482,
-            passingTDs: 16,
-            interceptions: 5,
-            completions: 186,
-            attempts: 270,
-            rushingYards: 120,
-            rushingTDs: 3,
-            passerRating: 103.4
-          },
-          stats2024: '2482 yds, 16 TD'
-        },
-        {
-          id: '13',
-          name: 'Kirk Cousins',
-          team: 'ATL',
-          teamId: '1',
-          teamName: 'Atlanta Falcons',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/atl.png',
-          jerseyNumber: '18',
-          experience: 13,
-          age: 36,
-          wins: 8,
-          losses: 9,
-          winPercentage: 0.471,
-          combinedRecord: '8-9 (0.471)',
-          stats: {
-            gamesStarted: 14,
-            passingYards: 3508,
-            passingTDs: 18,
-            interceptions: 16,
-            completions: 286,
-            attempts: 444,
-            rushingYards: 61,
-            rushingTDs: 0,
-            passerRating: 87.9
-          },
-          stats2024: '3508 yds, 18 TD'
-        },
-        {
-          id: '14',
-          name: 'Derek Carr',
-          team: 'NO',
-          teamId: '18',
-          teamName: 'New Orleans Saints',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/no.png',
-          jerseyNumber: '4',
-          experience: 11,
-          age: 33,
-          wins: 5,
-          losses: 12,
-          winPercentage: 0.294,
-          combinedRecord: '5-12 (0.294)',
-          stats: {
-            gamesStarted: 10,
-            passingYards: 2145,
-            passingTDs: 15,
-            interceptions: 5,
-            completions: 148,
-            attempts: 226,
-            rushingYards: 38,
-            rushingTDs: 1,
-            passerRating: 101.0
-          },
-          stats2024: '2145 yds, 15 TD'
-        },
-        {
-          id: '15',
-          name: 'Baker Mayfield',
-          team: 'TB',
-          teamId: '27',
-          teamName: 'Tampa Bay Buccaneers',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/tb.png',
-          jerseyNumber: '6',
-          experience: 7,
-          age: 29,
-          wins: 10,
-          losses: 7,
-          winPercentage: 0.588,
-          combinedRecord: '10-7 (0.588)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 4279,
-            passingTDs: 39,
-            interceptions: 16,
-            completions: 370,
-            attempts: 560,
-            rushingYards: 94,
-            rushingTDs: 4,
-            passerRating: 97.7
-          },
-          stats2024: '4279 yds, 39 TD'
-        },
-        
-        // Rising Stars & Recent Rookies
-        {
-          id: '16',
-          name: 'C.J. Stroud',
-          team: 'HOU',
-          teamId: '34',
-          teamName: 'Houston Texans',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/hou.png',
-          jerseyNumber: '7',
-          experience: 2,
-          age: 23,
-          wins: 10,
-          losses: 7,
-          winPercentage: 0.588,
-          combinedRecord: '10-7 (0.588)',
-          stats: {
-            gamesStarted: 15,
-            passingYards: 3727,
-            passingTDs: 20,
-            interceptions: 12,
-            completions: 274,
-            attempts: 442,
-            rushingYards: 167,
-            rushingTDs: 3,
-            passerRating: 85.3
-          },
-          stats2024: '3727 yds, 20 TD'
-        },
-        {
-          id: '17',
-          name: 'Jayden Daniels',
-          team: 'WSH',
-          teamId: '28',
-          teamName: 'Washington Commanders',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png',
-          jerseyNumber: '5',
-          experience: 1,
-          age: 24,
-          wins: 12,
-          losses: 5,
-          winPercentage: 0.706,
-          combinedRecord: '12-5 (0.706)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 3568,
-            passingTDs: 25,
-            interceptions: 9,
-            completions: 254,
-            attempts: 370,
-            rushingYards: 891,
-            rushingTDs: 6,
-            passerRating: 100.1
-          },
-          stats2024: '3568 yds, 25 TD'
-        },
-        {
-          id: '18',
-          name: 'Caleb Williams',
-          team: 'CHI',
-          teamId: '3',
-          teamName: 'Chicago Bears',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/chi.png',
-          jerseyNumber: '18',
-          experience: 1,
-          age: 23,
-          wins: 5,
-          losses: 12,
-          winPercentage: 0.294,
-          combinedRecord: '5-12 (0.294)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 3541,
-            passingTDs: 20,
-            interceptions: 6,
-            completions: 307,
-            attempts: 494,
-            rushingYards: 489,
-            rushingTDs: 4,
-            passerRating: 86.6
-          },
-          stats2024: '3541 yds, 20 TD'
-        },
-        {
-          id: '19',
-          name: 'Bo Nix',
-          team: 'DEN',
-          teamId: '7',
-          teamName: 'Denver Broncos',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/den.png',
-          jerseyNumber: '10',
-          experience: 1,
-          age: 25,
-          wins: 10,
-          losses: 7,
-          winPercentage: 0.588,
-          combinedRecord: '10-7 (0.588)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 3775,
-            passingTDs: 29,
-            interceptions: 12,
-            completions: 315,
-            attempts: 477,
-            rushingYards: 430,
-            rushingTDs: 4,
-            passerRating: 97.0
-          },
-          stats2024: '3775 yds, 29 TD'
-        },
-        {
-          id: '20',
-          name: 'Anthony Richardson',
-          team: 'IND',
-          teamId: '11',
-          teamName: 'Indianapolis Colts',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/ind.png',
-          jerseyNumber: '5',
-          experience: 2,
-          age: 22,
-          wins: 8,
-          losses: 9,
-          winPercentage: 0.471,
-          combinedRecord: '8-9 (0.471)',
-          stats: {
-            gamesStarted: 13,
-            passingYards: 1814,
-            passingTDs: 8,
-            interceptions: 12,
-            completions: 136,
-            attempts: 242,
-            rushingYards: 499,
-            rushingTDs: 6,
-            passerRating: 71.7
-          },
-          stats2024: '1814 yds, 8 TD'
-        },
-        
-        // Other Notable QBs (2022-2024)
-        {
-          id: '21',
-          name: 'Daniel Jones',
-          team: 'NYG',
-          teamId: '19',
-          teamName: 'New York Giants',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/nyg.png',
-          jerseyNumber: '8',
-          experience: 6,
-          age: 27,
-          wins: 3,
-          losses: 14,
-          winPercentage: 0.176,
-          combinedRecord: '3-14 (0.176)',
-          stats: {
-            gamesStarted: 10,
-            passingYards: 2070,
-            passingTDs: 8,
-            interceptions: 7,
-            completions: 150,
-            attempts: 235,
-            rushingYards: 265,
-            rushingTDs: 2,
-            passerRating: 79.4
-          },
-          stats2024: '2070 yds, 8 TD'
-        },
-        {
-          id: '22',
-          name: 'Kyler Murray',
-          team: 'ARI',
-          teamId: '22',
-          teamName: 'Arizona Cardinals',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/ari.png',
-          jerseyNumber: '1',
-          experience: 6,
-          age: 27,
-          wins: 8,
-          losses: 9,
-          winPercentage: 0.471,
-          combinedRecord: '8-9 (0.471)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 4036,
-            passingTDs: 22,
-            interceptions: 9,
-            completions: 362,
-            attempts: 558,
-            rushingYards: 514,
-            rushingTDs: 15,
-            passerRating: 90.6
-          },
-          stats2024: '4036 yds, 22 TD'
-        },
-        {
-          id: '23',
-          name: 'Sam Darnold',
-          team: 'MIN',
-          teamId: '16',
-          teamName: 'Minnesota Vikings',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/min.png',
-          jerseyNumber: '14',
-          experience: 7,
-          age: 27,
-          wins: 14,
-          losses: 3,
-          winPercentage: 0.824,
-          combinedRecord: '14-3 (0.824)',
-          stats: {
-            gamesStarted: 17,
-            passingYards: 4319,
-            passingTDs: 35,
-            interceptions: 12,
-            completions: 347,
-            attempts: 538,
-            rushingYards: 299,
-            rushingTDs: 5,
-            passerRating: 102.5
-          },
-          stats2024: '4319 yds, 35 TD'
-        },
-        {
-          id: '24',
-          name: 'Gardner Minshew',
-          team: 'LV',
-          teamId: '13',
-          teamName: 'Las Vegas Raiders',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/lv.png',
-          jerseyNumber: '15',
-          experience: 6,
-          age: 28,
-          wins: 4,
-          losses: 13,
-          winPercentage: 0.235,
-          combinedRecord: '4-13 (0.235)',
-          stats: {
-            gamesStarted: 11,
-            passingYards: 2716,
-            passingTDs: 15,
-            interceptions: 9,
-            completions: 208,
-            attempts: 328,
-            rushingYards: 104,
-            rushingTDs: 1,
-            passerRating: 85.0
-          },
-          stats2024: '2716 yds, 15 TD'
-        },
-        {
-          id: '25',
-          name: 'Bryce Young',
-          team: 'CAR',
-          teamId: '29',
-          teamName: 'Carolina Panthers',
-          teamLogo: 'https://a.espncdn.com/i/teamlogos/nfl/500/car.png',
-          jerseyNumber: '9',
-          experience: 2,
-          age: 23,
-          wins: 2,
-          losses: 15,
-          winPercentage: 0.118,
-          combinedRecord: '2-15 (0.118)',
-          stats: {
-            gamesStarted: 16,
-            passingYards: 2533,
-            passingTDs: 11,
-            interceptions: 13,
-            completions: 201,
-            attempts: 310,
-            rushingYards: 219,
-            rushingTDs: 4,
-            passerRating: 73.6
-          },
-          stats2024: '2533 yds, 11 TD'
-        }
-      ];
-
-      console.log('📊 Processing QB data...');
+      if (!response2024.ok) throw new Error('Failed to load 2024 data');
       
-      // Process the QBs with our scoring system
-      const processedQBs = mockQBs.map(qb => calculateQBMetrics(qb));
+      const csv2024 = await response2024.text();
+      const csv2023 = await response2023.text();
+      const csv2022 = await response2022.text();
+      const csvPlayoffs2024 = await responsePlayoffs2024.text();
+      const csvPlayoffs2023 = await responsePlayoffs2023.text();
+      const csvPlayoffs2022 = await responsePlayoffs2022.text();
       
-      setQbData(processedQBs);
+      console.log('✅ CSV files loaded successfully');
+      
+      // Debug: Check raw CSV content
+      console.log('🔍 Raw CSV 2024 length:', csv2024.length);
+      console.log('🔍 Raw CSV 2024 first 200 chars:', csv2024.substring(0, 200));
+      console.log('🔍 Raw CSV 2024 first line:', csv2024.split('\n')[0]);
+      
+      // Parse CSV data from all three years (regular season + playoffs)
+      const qbs2024 = parseCSV(csv2024);
+      const qbs2023 = parseCSV(csv2023);
+      const qbs2022 = parseCSV(csv2022);
+      const playoffQbs2024 = parseCSV(csvPlayoffs2024);
+      const playoffQbs2023 = parseCSV(csvPlayoffs2023);
+      const playoffQbs2022 = parseCSV(csvPlayoffs2022);
+      
+      console.log(`📊 Parsed regular season data: ${qbs2024.length} QBs in 2024, ${qbs2023.length} in 2023, ${qbs2022.length} in 2022`);
+      console.log(`🏆 Parsed playoff data: ${playoffQbs2024.length} QBs in 2024 playoffs, ${playoffQbs2023.length} in 2023 playoffs, ${playoffQbs2022.length} in 2022 playoffs`);
+      
+      // Debug: Check first few rows of parsed data
+      console.log('🔍 Debug - First 3 rows of 2024 data:', qbs2024.slice(0, 3));
+      console.log('🔍 Debug - Available columns:', Object.keys(qbs2024[0] || {}));
+      
+      // Combine regular season and playoff data from all years by player name
+      const combinedQBData = combinePlayerDataAcrossYears(
+        qbs2024, qbs2023, qbs2022,
+        playoffQbs2024, playoffQbs2023, playoffQbs2022
+      );
+      
+      console.log(`📊 Combined data for ${Object.keys(combinedQBData).length} unique quarterbacks across 3 seasons`);
+      
+      // Convert combined data to our QB format
+      const processedQBs = Object.entries(combinedQBData)
+        .filter(([playerName, data]) => {
+          // Filter for QBs with meaningful career data
+          const totalGames = data.career.gamesStarted;
+          const hasRecentActivity = data.seasons.some(season => season.year >= 2023);
+          return totalGames >= 10 && hasRecentActivity; // At least 10 career starts and active recently
+        })
+        .map(([playerName, data], index) => {
+          const mostRecentSeason = data.seasons[0]; // Already sorted by year desc
+          const teamInfo = getTeamInfo(mostRecentSeason.team);
+          
+          return {
+            id: `qb-${index + 1}`,
+            name: playerName,
+            team: mostRecentSeason.team,
+            teamId: teamInfo.id,
+            teamName: teamInfo.name,
+            teamLogo: teamInfo.logo,
+            jerseyNumber: '',
+            experience: data.career.seasons,
+            age: mostRecentSeason.age,
+            wins: data.career.wins,
+            losses: data.career.losses,
+            winPercentage: data.career.winPercentage,
+            combinedRecord: `${data.career.wins}-${data.career.losses} (${data.career.winPercentage.toFixed(3)})`,
+            stats: {
+              gamesStarted: data.career.gamesStarted,
+              passingYards: data.career.passingYards,
+              passingTDs: data.career.passingTDs,
+              interceptions: data.career.interceptions,
+              completions: data.career.completions,
+              attempts: data.career.attempts,
+              rushingYards: 0,
+              rushingTDs: 0,
+              passerRating: data.career.avgPasserRating
+            },
+            // Add season breakdown for detailed view
+            seasonData: data.seasons,
+            stats2024: `3-Year Total: ${data.career.passingYards} yds, ${data.career.passingTDs} TD`
+          };
+        });
+      
+      // Calculate QEI metrics
+      const qbsWithMetrics = processedQBs.map(qb => calculateQBMetrics(qb));
+      
+      setQbData(qbsWithMetrics);
+      setLastFetch(Date.now());
       setLoading(false);
       
+      console.log(`✅ Successfully processed ${qbsWithMetrics.length} quarterbacks`);
+      
     } catch (error) {
-      console.error('❌ Error setting up QB data:', error);
-      setError(error.message);
+      console.error('❌ Error loading QB data from CSV:', error);
+      setError(`Failed to load QB data: ${error.message}`);
       setLoading(false);
     }
   };
 
   const calculateQBMetrics = (qb) => {
-    const stats = qb.stats;
-    
-    // Calculate base scores
-    const baseScores = {
-      team: calculateTeamScore(qb.winPercentage, stats.gamesStarted, ['Patrick Mahomes', 'Josh Allen', 'Lamar Jackson', 'Joe Burrow', 'Jalen Hurts', 'Russell Wilson', 'Aaron Rodgers', 'Dak Prescott', 'Tua Tagovailoa'].includes(qb.name)),
-      stats: calculateStatsScore(stats),
-      championship: calculateChampionshipScore(qb),
-      clutch: calculateClutchScore(stats, qb.winPercentage, qb.name),
-      support: calculateSupportScore(qb)
+    // Create season data structure for enhanced calculations
+    const qbSeasonData = {
+      years: {}
     };
     
+    // Convert season data to expected format (including playoff data)
+    if (qb.seasonData && qb.seasonData.length > 0) {
+      qb.seasonData.forEach(season => {
+        qbSeasonData.years[season.year] = {
+          // Regular season data
+          G: season.gamesStarted,
+          GS: season.gamesStarted,
+          QBrec: `${season.wins}-${season.losses}-0`,
+          Rate: season.passerRating,
+          'ANY/A': season.anyPerAttempt || 0,
+          'TD%': season.passingTDs / Math.max(1, season.attempts) * 100,
+          'Int%': season.interceptions / Math.max(1, season.attempts) * 100,
+          'Succ%': season.successRate || 0,
+          'Sk%': season.sackPercentage || 0,
+          Yds: season.passingYards,
+          TD: season.passingTDs,
+          GWD: season.gameWinningDrives || 0,
+          '4QC': season.fourthQuarterComebacks || 0,
+          Team: season.team,
+          Player: qb.name,
+          Age: season.age,
+          
+          // Add playoff data if available
+          playoffData: season.playoffData || null
+        };
+      });
+    }
+
+    const baseScores = {
+      team: calculateTeamScore(qbSeasonData),
+      stats: calculateStatsScore(qbSeasonData),
+      clutch: calculateClutchScore(qbSeasonData),
+      durability: calculateDurabilityScore(qbSeasonData),
+      support: calculateSupportScore({ currentTeam: qb.team })
+    };
+
     return {
       ...qb,
       baseScores,
@@ -747,162 +521,499 @@ const DynamicQBRankings = () => {
     };
   };
 
-  const calculateTeamScore = (winPct, starts, playoffs = false) => {
-    // Base score from win percentage (0-70 points)
-    const winScore = Math.pow(winPct, 0.8) * 70; // Exponential curve favors higher win rates
+  // Enhanced Team Success Score with Playoff Integration (0-100)
+  const calculateTeamScore = (qbSeasonData) => {
+    const yearWeights = { 2024: 0.55, 2023: 0.35, 2022: 0.10 };
+    const PLAYOFF_WIN_BONUS = 1.5; // Playoff wins worth 1.5x regular season wins
     
-    // Games started bonus (0-20 points)
-    const volumeBonus = Math.min(20, (starts / 17) * 20);
+    let weightedWinPct = 0;
+    let weightedAvailability = 0;
+    let playoffWinBonus = 0;
+    let totalWeight = 0;
     
-    // Playoff appearance bonus (0-10 points)
-    const playoffBonus = playoffs ? 10 : 0;
+    Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
+      const weight = yearWeights[year] || 0;
+      if (weight === 0 || !data.QBrec) return;
+      
+      // Parse regular season QB record (format: "14-3-0")
+      const [wins, losses, ties = 0] = data.QBrec.split('-').map(Number);
+      let totalWins = wins;
+      let totalGames = wins + losses + ties;
+      
+      // Add playoff performance if available
+      if (data.playoffData) {
+        const playoff = data.playoffData;
+        const playoffWins = playoff.wins || 0;
+        const playoffLosses = playoff.losses || 0;
+        const playoffGames = playoffWins + playoffLosses;
+        
+        // Playoff wins get bonus weighting
+        totalWins += playoffWins * PLAYOFF_WIN_BONUS;
+        totalGames += playoffGames;
+        
+        // Additional playoff success bonus
+        if (playoffGames > 0) {
+          const playoffWinRate = playoffWins / playoffGames;
+          playoffWinBonus += playoffWinRate * playoffGames * weight * 3; // Big bonus for playoff success
+        }
+        
+        // Debug for Mahomes
+        if (data.Player && data.Player.includes('Mahomes')) {
+          console.log(`🏆 MAHOMES ${year} TEAM: Regular (${wins}-${losses}) + Playoff (${playoffWins}-${playoffLosses}), Total weighted wins: ${totalWins.toFixed(1)}`);
+        }
+      }
+      
+      const combinedWinPct = totalGames > 0 ? totalWins / totalGames : 0;
+      
+      // Games started availability (regular season + playoffs)
+      const regularGames = data.GS || 0;
+      const playoffGames = data.playoffData ? (data.playoffData.gamesStarted || 0) : 0;
+      const totalPossibleGames = 17 + (data.playoffData ? 4 : 0); // Assume up to 4 playoff games possible
+      const availability = Math.min(1, (regularGames + playoffGames) / totalPossibleGames);
+      
+      weightedWinPct += combinedWinPct * weight;
+      weightedAvailability += availability * weight;
+      totalWeight += weight;
+    });
     
-    return Math.min(100, winScore + volumeBonus + playoffBonus);
+    if (totalWeight === 0) return 0;
+    
+    // Normalize for missing years
+    weightedWinPct = weightedWinPct / totalWeight;
+    weightedAvailability = weightedAvailability / totalWeight;
+    playoffWinBonus = playoffWinBonus / totalWeight;
+    
+    // Win percentage with exponential curve (0-70 points, reduced to make room for playoff bonus)
+    const winScore = Math.pow(weightedWinPct, SCALING_RANGES.WIN_PCT_CURVE) * 70;
+    
+    // Availability bonus (0-20 points)
+    const availabilityScore = weightedAvailability * SCALING_RANGES.AVAILABILITY_WEIGHT;
+    
+    // Playoff success bonus (0-10 points)
+    const playoffBonusScore = Math.min(10, playoffWinBonus);
+    
+    return Math.min(100, winScore + availabilityScore + playoffBonusScore);
   };
 
-  const calculateStatsScore = (stats) => {
-    if (stats.attempts === 0) return 30;
+  // Enhanced Statistical Performance Score with Playoff Integration (0-100)
+  const calculateStatsScore = (qbSeasonData) => {
+    const yearWeights = { 2024: 0.55, 2023: 0.35, 2022: 0.10 };
+    const PLAYOFF_STATS_WEIGHT = 1.25; // Playoff stats weighted 25% higher (pressure situations)
     
-    // Efficiency metrics (40 points total)
-    const completionPct = stats.completions / stats.attempts;
-    const efficiencyScore = Math.min(40, (completionPct - 0.55) * 100); // Above 55% gets points
+    let weightedScores = {
+      anyA: 0, rating: 0, efficiency: 0, volume: 0, success: 0, sackAvoidance: 0
+    };
+    let totalWeight = 0;
     
-    // TD:INT ratio (25 points total)
-    const tdIntRatio = stats.passingTDs / Math.max(1, stats.interceptions);
-    const ratioScore = Math.min(25, Math.log(tdIntRatio + 1) * 12); // Logarithmic scaling
+    Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
+      const weight = yearWeights[year] || 0;
+      if (weight === 0) return;
+      
+      // Calculate regular season stats first
+      let totalAnyA = data['ANY/A'] || 0;
+      let totalRating = data.Rate || 0;
+      let totalTdPct = data['TD%'] || 0;
+      let totalIntPct = data['Int%'] || 0;
+      let totalPassingYards = data.Yds || 0;
+      let totalPassingTDs = data.TD || 0;
+      let totalSuccessRate = data['Succ%'] || 0;
+      let totalSackPct = data['Sk%'] || 0;
+      let totalGames = data.G || 1;
+      
+      // Integrate playoff stats with bonus weighting if available
+      if (data.playoffData) {
+        const playoff = data.playoffData;
+        const playoffGames = playoff.gamesPlayed || 0;
+        
+        if (playoffGames > 0) {
+          // Weight playoff stats higher and combine with regular season
+          const regularGames = data.G || 0;
+          const combinedGames = regularGames + playoffGames;
+          
+          // Calculate weighted averages (playoff stats get bonus weight)
+          const playoffAnyA = (playoff.anyPerAttempt || 0) * PLAYOFF_STATS_WEIGHT;
+          const playoffRating = (playoff.passerRating || 0) * PLAYOFF_STATS_WEIGHT;
+          const playoffSuccessRate = (playoff.successRate || 0) * PLAYOFF_STATS_WEIGHT;
+          const playoffSackPct = (playoff.sackPercentage || 0) / PLAYOFF_STATS_WEIGHT; // Lower is better
+          
+          // For percentage stats, weight by games
+          totalAnyA = regularGames > 0 ? 
+            (totalAnyA * regularGames + playoffAnyA * playoffGames) / (regularGames + playoffGames * PLAYOFF_STATS_WEIGHT) : 
+            playoffAnyA;
+          
+          totalRating = regularGames > 0 ? 
+            (totalRating * regularGames + playoffRating * playoffGames) / (regularGames + playoffGames * PLAYOFF_STATS_WEIGHT) : 
+            playoffRating;
+            
+          totalSuccessRate = regularGames > 0 ? 
+            (totalSuccessRate * regularGames + playoffSuccessRate * playoffGames) / (regularGames + playoffGames * PLAYOFF_STATS_WEIGHT) : 
+            playoffSuccessRate;
+            
+          totalSackPct = regularGames > 0 ? 
+            (totalSackPct * regularGames + playoffSackPct * playoffGames) / (regularGames + playoffGames * PLAYOFF_STATS_WEIGHT) : 
+            playoffSackPct;
+          
+          // For volume stats, add playoff production (weighted)
+          totalPassingYards += (playoff.passingYards || 0) * PLAYOFF_STATS_WEIGHT;
+          totalPassingTDs += (playoff.passingTDs || 0) * PLAYOFF_STATS_WEIGHT;
+          
+          // Recalculate TD% and INT% with combined data
+          const totalAttempts = (data.Att || 0) + (playoff.attempts || 0);
+          if (totalAttempts > 0) {
+            totalTdPct = (totalPassingTDs / totalAttempts) * 100;
+            totalIntPct = ((data.Int || 0) + (playoff.interceptions || 0)) / totalAttempts * 100;
+          }
+          
+          totalGames = combinedGames;
+          
+          // Debug for Mahomes
+          if (data.Player && data.Player.includes('Mahomes')) {
+            console.log(`🏆 MAHOMES ${year} STATS: Regular (${data.Rate?.toFixed(1)} rating, ${data['ANY/A']?.toFixed(1)} ANY/A) + Playoff (${playoff.passerRating?.toFixed(1)} rating, ${playoff.anyPerAttempt?.toFixed(1)} ANY/A) = Combined (${totalRating.toFixed(1)} rating, ${totalAnyA.toFixed(1)} ANY/A)`);
+          }
+        }
+      }
+      
+      // ANY/A - Best overall efficiency metric (0-35 points)
+      const anyAScore = Math.max(0, Math.min(
+        SCALING_RANGES.ANY_A.max, 
+        (totalAnyA - SCALING_RANGES.ANY_A.threshold) * SCALING_RANGES.ANY_A.scale
+      ));
+      
+      // Passer Rating (0-25 points)
+      const ratingScore = Math.max(0, Math.min(
+        SCALING_RANGES.PASSER_RATING.max,
+        (totalRating - SCALING_RANGES.PASSER_RATING.threshold) / SCALING_RANGES.PASSER_RATING.scale
+      ));
+      
+      // TD% vs INT% efficiency differential (0-20 points)
+      const efficiencyGap = Math.max(0, totalTdPct - totalIntPct);
+      const efficiencyScore = Math.min(20, efficiencyGap * 4);
+      
+      // Volume production - combined passing yards and TDs (0-15 points)
+      const yardsScore = Math.max(0, Math.min(8, (totalPassingYards - 3000) * 0.000005));
+      const tdScore = Math.max(0, Math.min(7, (totalPassingTDs - 20) * 0.3));
+      const volumeScore = yardsScore + tdScore;
+      
+      // Success Rate (0-5 points)  
+      const successScore = Math.max(0, Math.min(5, (totalSuccessRate - 40) * 0.25));
+      
+      // Sack Avoidance - QB performance metric (0-5 points) 
+      const sackAvoidanceScore = Math.max(0, Math.min(5, (8 - totalSackPct) * 0.625));
+      
+      // Apply weight to each component
+      weightedScores.anyA += anyAScore * weight;
+      weightedScores.rating += ratingScore * weight;
+      weightedScores.efficiency += efficiencyScore * weight;
+      weightedScores.volume += volumeScore * weight;
+      weightedScores.success += successScore * weight;
+      weightedScores.sackAvoidance = (weightedScores.sackAvoidance || 0) + sackAvoidanceScore * weight;
+      totalWeight += weight;
+    });
     
-    // Yards per attempt (20 points total)
-    const ypa = stats.passingYards / stats.attempts;
-    const ypaScore = Math.min(20, (ypa - 6) * 4); // Above 6 YPA gets points
+    if (totalWeight === 0) return 0;
     
-    // Passer rating integration (15 points total)
-    const ratingScore = Math.min(15, (stats.passerRating - 80) / 8); // Above 80 rating gets points
+    // Normalize all scores by total weight
+    Object.keys(weightedScores).forEach(key => {
+      weightedScores[key] = weightedScores[key] / totalWeight;
+    });
     
-    return Math.max(0, efficiencyScore + ratioScore + ypaScore + ratingScore);
+    return Object.values(weightedScores).reduce((sum, score) => sum + score, 0);
   };
 
-  const calculateChampionshipScore = (qb) => {
-    let score = 0;
+  // Enhanced Clutch Performance Score with Playoff Weighting (0-100)
+  const calculateClutchScore = (qbSeasonData) => {
+    const yearWeights = { 2024: 0.55, 2023: 0.35, 2022: 0.10 };
+    const PLAYOFF_MULTIPLIER = 3.0; // Playoff clutch moments worth 3x regular season
     
-    // Super Bowl wins (major impact)
-    const superBowlWins = {
-      'Patrick Mahomes': 3,
-      'Russell Wilson': 1,
-      'Aaron Rodgers': 1
-    };
-    score += (superBowlWins[qb.name] || 0) * 25;
+    let totalGWD = 0;
+    let totalFourthQC = 0;
+    let totalGames = 0;
+    let totalPlayoffWins = 0;
+    let totalPlayoffGames = 0;
+    let weightSum = 0;
     
-    // Super Bowl appearances
-    const superBowlApps = {
-      'Patrick Mahomes': 4,
-      'Jalen Hurts': 2,
-      'Joe Burrow': 1,
-      'Josh Allen': 0,
-      'Russell Wilson': 2,
-      'Aaron Rodgers': 1
-    };
-    score += (superBowlApps[qb.name] || 0) * 8;
+    Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
+      const weight = yearWeights[year] || 0;
+      if (weight === 0) return;
+      
+      // Regular season clutch stats
+      const regularGWD = data.GWD || 0;
+      const regularFourthQC = data['4QC'] || 0;
+      const regularGames = data.G || 0;
+      
+      // Apply regular season with normal weighting
+      totalGWD += regularGWD * weight;
+      totalFourthQC += regularFourthQC * weight;
+      totalGames += regularGames * weight;
+      
+      // Add playoff data with higher clutch weighting if available
+      if (data.playoffData) {
+        const playoff = data.playoffData;
+        
+        // Playoff GWD and 4QC are worth significantly more
+        const playoffGWD = (playoff.gameWinningDrives || 0) * PLAYOFF_MULTIPLIER;
+        const playoffFourthQC = (playoff.fourthQuarterComebacks || 0) * PLAYOFF_MULTIPLIER;
+        const playoffGames = playoff.gamesPlayed || 0;
+        const playoffWins = playoff.wins || 0;
+        
+        totalGWD += playoffGWD * weight;
+        totalFourthQC += playoffFourthQC * weight;
+        totalGames += playoffGames * weight; // Include playoff games in total games for rate
+        totalPlayoffWins += playoffWins * weight;
+        totalPlayoffGames += playoffGames * weight;
+        
+        // Debug for Mahomes
+        if (data.Player && data.Player.includes('Mahomes')) {
+          console.log(`🏆 MAHOMES ${year} CLUTCH: Regular (${regularGWD} GWD, ${regularFourthQC} 4QC) + Playoff (${playoff.gameWinningDrives} GWD, ${playoff.fourthQuarterComebacks} 4QC, ${playoffWins}-${playoff.losses} record)`);
+        }
+      }
+      
+      weightSum += weight;
+    });
     
-    // Conference Championship appearances
-    const confChampApps = {
-      'Patrick Mahomes': 6,
-      'Josh Allen': 3,
-      'Jalen Hurts': 2,
-      'Lamar Jackson': 1,
-      'Joe Burrow': 2,
-      'Russell Wilson': 3,
-      'Aaron Rodgers': 4
-    };
-    score += (confChampApps[qb.name] || 0) * 4;
+    if (weightSum === 0) return 0;
     
-    // Playoff win percentage boost
-    const playoffWinPct = {
-      'Patrick Mahomes': 0.800,
-      'Jalen Hurts': 0.818,
-      'Joe Burrow': 0.714,
-      'Josh Allen': 0.538,
-      'Lamar Jackson': 0.429,
-      'Russell Wilson': 0.563,
-      'Aaron Rodgers': 0.524
-    };
-    const pct = playoffWinPct[qb.name] || 0;
-    score += pct * 15;
+    // Normalize by total weight
+    totalGWD = totalGWD / weightSum;
+    totalFourthQC = totalFourthQC / weightSum;
+    totalGames = totalGames / weightSum;
+    totalPlayoffWins = totalPlayoffWins / weightSum;
+    totalPlayoffGames = totalPlayoffGames / weightSum;
     
-    return Math.min(100, score);
+    // Game Winning Drives - Primary clutch metric (0-40 points, reduced from 50 to make room for playoff bonus)
+    const gwdScore = Math.min(40, totalGWD * 8); // Adjusted scale
+    
+    // 4th Quarter Comebacks (0-25 points, reduced from 30)
+    const comebackScore = Math.min(25, totalFourthQC * 6); // Adjusted scale
+    
+    // Clutch rate - GWD per game played (0-15 points, reduced from 20)
+    const clutchRate = totalGames > 0 ? totalGWD / totalGames : 0;
+    const clutchRateScore = Math.min(15, clutchRate * 30); // Adjusted scale
+    
+    // NEW: Playoff success bonus (0-20 points)
+    let playoffSuccessScore = 0;
+    if (totalPlayoffGames > 0) {
+      const playoffWinRate = totalPlayoffWins / totalPlayoffGames;
+      playoffSuccessScore = Math.min(20, playoffWinRate * 20 + totalPlayoffGames * 2); // Win rate + participation bonus
+    }
+    
+    return gwdScore + comebackScore + clutchRateScore + playoffSuccessScore;
   };
 
-  const calculateClutchScore = (stats, winPct, qbName) => {
-    // Base clutch score from team success
-    const winClutch = winPct * 30;
+  // True Durability Score - Pure availability metrics (0-100)
+  const calculateDurabilityScore = (qbSeasonData) => {
+    const yearWeights = { 2024: 0.55, 2023: 0.35, 2022: 0.10 };
+    let totalGamesPlayed = 0;
+    let totalPossibleGames = 0;
+    let weightedAvailability = 0;
+    let totalWeight = 0;
+    let consistencyBonus = 0;
     
-    // Performance under pressure (efficiency in tough spots)
-    const efficiencyClutch = (stats.passerRating / 120) * 25; // Out of 25
+    Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
+      const weight = yearWeights[year] || 0;
+      if (weight === 0) return;
+      
+      // Games started this season (0-17)
+      const gamesStarted = data.GS || 0;
+      const possibleGames = 17; // NFL season length
+      
+      // Season availability percentage (0-1 scale)
+      const seasonAvailability = Math.min(1, gamesStarted / possibleGames);
+      
+      // Accumulate totals for overall durability
+      totalGamesPlayed += gamesStarted;
+      totalPossibleGames += possibleGames;
+      
+      // Weight this season's availability
+      weightedAvailability += seasonAvailability * weight;
+      totalWeight += weight;
+      
+      // Consistency bonus for playing full/near-full seasons
+      if (gamesStarted >= 16) {
+        consistencyBonus += weight * 10; // 10 point bonus for full availability
+      } else if (gamesStarted >= 14) {
+        consistencyBonus += weight * 5;  // 5 point bonus for near-full availability
+      }
+    });
     
-    // 4th quarter comeback history (known clutch performers)
-    const clutchReputation = {
-      'Patrick Mahomes': 25,
-      'Josh Allen': 22,
-      'Russell Wilson': 20,
-      'Baker Mayfield': 18,
-      'Derek Carr': 16,
-      'Kirk Cousins': 14,
-      'Geno Smith': 12,
-      'Lamar Jackson': 15,
-      'Joe Burrow': 18,
-      'Jalen Hurts': 17
-    };
-    const reputationScore = clutchReputation[qbName] || 10;
+    if (totalWeight === 0) return 0;
     
-    // TD:INT ratio in pressure situations (estimated)
-    const pressurePerformance = Math.min(20, (stats.passingTDs / Math.max(1, stats.interceptions)) * 3);
+    // Calculate weighted availability (0-1 scale)
+    const avgAvailability = weightedAvailability / totalWeight;
     
-    return Math.min(100, winClutch + efficiencyClutch + reputationScore + pressurePerformance);
+    // Overall 3-year availability vs 51 total possible games
+    const overallAvailability = Math.min(1, totalGamesPlayed / 51);
+    
+    // Availability score - heavily weighted (0-80 points)
+    const availabilityScore = avgAvailability * 80;
+    
+    // Multi-year consistency bonus (0-20 points)
+    const yearsActive = Object.keys(qbSeasonData.years || {}).length;
+    const consistencyScore = Math.min(20, consistencyBonus + (yearsActive >= 3 ? 5 : 0));
+    
+    return Math.min(100, availabilityScore + consistencyScore);
   };
 
-  const calculateSupportScore = (qb) => {
-    // Offensive line rankings (2024 estimates)
-    const oLineRankings = {
-      'PHI': 95, 'KC': 85, 'BUF': 80, 'BAL': 75, 'LAC': 85,
-      'HOU': 70, 'TB': 65, 'WSH': 70, 'MIN': 75, 'DEN': 60,
-      'CIN': 55, 'PIT': 70, 'SEA': 60, 'MIA': 50, 'ATL': 55,
-      'ARI': 45, 'IND': 50, 'DAL': 40, 'NO': 35, 'JAX': 30,
-      'NYJ': 35, 'CHI': 25, 'LV': 30, 'NYG': 20, 'CAR': 15
+  // Supporting Cast Difficulty Adjustment (0-100)
+  // Higher score = More "extra credit" for QB in difficult situation
+  const calculateSupportScore = (qbData) => {
+    const currentTeam = qbData.currentTeam || qbData.team;
+    
+    // Offensive Line Quality (0-35 points) - Protection & Run Blocking
+    const offensiveLineGrades = {
+      'PHI': 32,  // Elite O-line, Kelce, Johnson, Mailata
+      'SF': 30,   // Trent Williams anchored line
+      'DAL': 28,  // Martin, Smith when healthy
+      'KC': 27,   // Solid protection for Mahomes
+      'BUF': 26,  // Improved significantly in 2024
+      'DET': 26,  // Strong interior, decent tackles
+      'BAL': 25,  // Good run blocking, decent pass pro
+      'MIN': 24,  // O'Neill + Darrisaw solid
+      'MIA': 23,  // Armstead + Tunsil when healthy
+      'TB': 22,   // Jensen retirement hurt, but improving
+      'HOU': 22,  // Young line developing well
+      'LAC': 21,  // Inconsistent but has talent
+      'SEA': 20,  // Rebuilt line, decent now
+      'CIN': 19,  // Still rebuilding, Burrow gets sacked too much
+      'JAX': 18,  // Walker Jr. good, rest questionable
+      'ATL': 18,  // Bergeron solid, but depth issues
+      'IND': 17,  // Nelson elite, but tackles struggle
+      'WSH': 17,  // Improving but still developing
+      'DEN': 16,  // Average at best
+      'LAR': 16,  // Stafford gets hit too much
+      'PIT': 15,  // Aging line, protection issues
+      'NO': 15,   // Cap casualties hurt depth
+      'LV': 14,   // Major issues, Adams gets frustrated
+      'TEN': 14,  // Poor pass protection
+      'ARI': 13,  // Young line, growing pains
+      'GB': 13,   // Bakhtiari injuries hurt
+      'CLE': 12,  // Watson gets destroyed
+      'CHI': 12,  // Young line, Williams gets hit
+      'NYJ': 11,  // Rodgers gets no time
+      'NE': 10,   // Rebuilt but struggling
+      'NYG': 9,   // Jones constantly under pressure
+      'CAR': 8    // One of worst in league
     };
     
-    // Receiving weapons quality
-    const weaponsQuality = {
-      'KC': 90, 'BUF': 85, 'LAC': 80, 'PHI': 85, 'CIN': 90,
-      'MIA': 85, 'TB': 75, 'MIN': 80, 'HOU': 70, 'WSH': 65,
-      'BAL': 70, 'DEN': 60, 'SEA': 55, 'ATL': 65, 'PIT': 50,
-      'ARI': 60, 'IND': 55, 'DAL': 75, 'NO': 45, 'JAX': 40,
-      'NYJ': 50, 'CHI': 35, 'LV': 30, 'NYG': 25, 'CAR': 20
+    // Weapons Quality (0-40 points) - WRs, TEs, RBs
+    const weaponsGrades = {
+      'KC': 38,   // Kelce, Rice, Worthy, Hunt
+      'CIN': 36,  // Chase, Higgins, Burrow weapons
+      'MIA': 35,  // Tyreek, Waddle, speed everywhere
+      'BUF': 34,  // Diggs trade hurt, but Cooper + others
+      'LAC': 33,  // Allen, Williams, McConkey emerging
+      'MIN': 32,  // Jefferson elite, Addison, Hockenson
+      'PHI': 31,  // AJ Brown, Smith, Goedert, Barkley
+      'HOU': 30,  // Diggs, Collins, Tank Dell
+      'TB': 29,   // Evans, Godwin when healthy
+      'DAL': 28,  // CeeDee elite, but lacks depth
+      'DET': 28,  // Williams, St. Brown, LaPorta
+      'SF': 27,   // Deebo, Aiyuk, Kittle, CMC
+      'JAX': 26,  // Kirk, Ridley, Thomas decent
+      'WSH': 25,  // McLaurin, Daniels weapons improving
+      'ATL': 24,  // London, Pitts potential
+      'SEA': 23,  // Metcalf, Lockett aging
+      'LAR': 22,  // Kupp, Puka when healthy
+      'NO': 21,   // Olave good, Thomas aging
+      'DEN': 20,  // Sutton, Jeudy traded
+      'LV': 20,   // Adams elite but alone
+      'ARI': 19,  // Harrison Jr., Marvin promising
+      'BAL': 19,  // Andrews, Zay Flowers, limited depth
+      'GB': 18,   // Watson injured, Dobbs limited
+      'IND': 17,  // Richardson weapons still developing
+      'TEN': 16,  // Hopkins gone, limited options
+      'PIT': 15,  // Pickens alone, TE issues
+      'CHI': 15,  // Moore, Odunze, development needed
+      'CLE': 14,  // Cooper, limited after him
+      'NYJ': 13,  // Adams, Wilson, but inconsistent
+      'NE': 12,   // Rebuilding receiving corps
+      'NYG': 11,  // Nabers promising, but limited
+      'CAR': 10   // Rebuilding everything
     };
     
-    // Defensive support (helps with field position, game flow)
-    const defenseRankings = {
-      'BAL': 85, 'BUF': 80, 'KC': 75, 'DEN': 70, 'PIT': 75,
-      'HOU': 65, 'PHI': 60, 'MIN': 55, 'WSH': 50, 'LAC': 45,
-      'TB': 40, 'SEA': 45, 'CIN': 35, 'MIA': 40, 'ATL': 35,
-      'IND': 50, 'ARI': 45, 'NO': 30, 'DAL': 25, 'NYJ': 30,
-      'JAX': 20, 'CHI': 25, 'LV': 20, 'NYG': 15, 'CAR': 10
+    // Defense Quality (0-25 points) - How much defense helps QB
+    // Better defense = more opportunities, field position, leads
+    const defenseGrades = {
+      'BAL': 24,  // Elite defense helps Lamar
+      'BUF': 23,  // Von Miller, great secondary
+      'SF': 22,   // Elite when healthy
+      'PIT': 21,  // Watt, Fitzpatrick, always solid
+      'MIA': 20,  // Improved significantly
+      'DET': 20,  // Hutchinson, improving unit
+      'PHI': 19,  // Inconsistent but talented
+      'DAL': 19,  // Parsons elite, secondary issues
+      'HOU': 18,  // Young defense improving
+      'KC': 18,   // Spagnuolo system works
+      'MIN': 17,  // Decent but not elite
+      'DEN': 17,  // Surtain good, rest average
+      'CIN': 16,  // Pass rush improved
+      'LAC': 16,  // Bosa + others decent
+      'SEA': 16,  // Leonard Williams trade helped
+      'CLE': 15,  // Garrett elite, rest struggling
+      'IND': 15,  // Richardson development helped
+      'TB': 14,   // Winfield Jr. good, others average
+      'LAR': 14,  // Donald gone, rebuilding
+      'NO': 13,   // Cap casualties hurt
+      'WSH': 13,  // Young defense developing
+      'ATL': 12,  // Inconsistent unit
+      'JAX': 12,  // Josh Allen good, but limited
+      'ARI': 11,  // Young players learning
+      'GB': 11,   // Jaire good, rest inconsistent
+      'TEN': 10,  // Poor overall unit
+      'NYJ': 10,  // Sauce good, but overall poor
+      'LV': 9,    // Crosby good, rest struggling
+      'CHI': 9,   // Young unit learning
+      'NYG': 8,   // Rebuilding defense
+      'NE': 7,    // Rebuilding everything
+      'CAR': 6    // Among worst in league
     };
     
-    const oLine = oLineRankings[qb.team] || 40;
-    const weapons = weaponsQuality[qb.team] || 40;
-    const defense = defenseRankings[qb.team] || 40;
+    const oLineScore = offensiveLineGrades[currentTeam] || 15; // Default average
+    const weaponsScore = weaponsGrades[currentTeam] || 20;    // Default average  
+    const defenseScore = defenseGrades[currentTeam] || 12;    // Default average
     
-    // Weighted average: O-line 40%, Weapons 40%, Defense 20%
-    return (oLine * 0.4) + (weapons * 0.4) + (defense * 0.2);
+         const rawSupportQuality = oLineScore + weaponsScore + defenseScore;
+     
+     // INVERT THE LOGIC: Poor supporting cast = Higher difficulty adjustment score
+     // Scale from 0-100 where higher score = more "extra credit" for difficult situation
+     const difficultyAdjustment = Math.max(0, Math.min(100, 100 - rawSupportQuality));
+     
+     // Debug for major teams
+     if (['KC', 'BUF', 'CIN', 'BAL', 'CAR', 'NYG', 'MIN'].includes(currentTeam)) {
+       console.log(`🔍 ${currentTeam} SUPPORT: Raw Quality(${rawSupportQuality}) -> Difficulty Adjustment(${difficultyAdjustment}) [Higher = More Extra Credit]`);
+     }
+     
+     return difficultyAdjustment;
   };
 
   const calculateQEI = (baseScores) => {
-    return (
+    // Calculate weighted score first
+    const weightedScore = (
       (baseScores.team * weights.team / 100) +
       (baseScores.stats * weights.stats / 100) +
-      (baseScores.championship * weights.championship / 100) +
       (baseScores.clutch * weights.clutch / 100) +
+      (baseScores.durability * weights.durability / 100) +
       (baseScores.support * weights.support / 100)
     );
+    
+    // Apply dynamic scaling based on weight distribution
+    // This ensures that top performers in heavily weighted categories can reach elite tiers
+    const totalActiveWeight = Object.values(weights).reduce((sum, weight) => sum + (weight > 0 ? weight : 0), 0);
+    
+    if (totalActiveWeight === 0) return 0;
+    
+    // Find the dominant category (highest weight)
+    const maxWeight = Math.max(...Object.values(weights));
+    const isSpecialized = maxWeight >= 70; // If one category is 70%+ of total weight
+    
+    if (isSpecialized) {
+      // Apply specialized scaling - boost scores for focused evaluations
+      const specialistBoost = 1.2 + (maxWeight - 70) * 0.01; // 1.2x to 1.5x boost
+      return Math.min(100, weightedScore * specialistBoost);
+    } else {
+      // Standard scaling for balanced evaluations
+      return weightedScore;
+    }
   };
 
   const updateWeight = (category, value) => {
@@ -910,18 +1021,58 @@ const DynamicQBRankings = () => {
       ...prev,
       [category]: parseInt(value)
     }));
+    setCurrentPreset('custom'); // Reset to custom when manually adjusting
   };
 
+  // Updated Philosophy Presets
   const philosophyPresets = {
-    lombardi: { team: 60, stats: 20, championship: 15, clutch: 5, support: 0 },
-    balanced: { team: 25, stats: 25, championship: 25, clutch: 15, support: 10 },
-    analytics: { team: 15, stats: 50, championship: 10, clutch: 15, support: 10 },
-    clutch: { team: 30, stats: 25, championship: 30, clutch: 10, support: 5 },
-    championship: { team: 35, stats: 15, championship: 40, clutch: 5, support: 5 }
+    winner: {
+      team: 55, stats: 25, clutch: 15, durability: 5, support: 0,
+      description: "Winning is everything - team success dominates"
+    },
+    
+    analyst: {
+      team: 10, stats: 65, clutch: 15, durability: 5, support: 5,
+      description: "Numbers don't lie - statistical excellence"
+    },
+    
+    clutch: {
+      team: 25, stats: 30, clutch: 35, durability: 5, support: 5,
+      description: "Pressure makes diamonds - big moments matter most"
+    },
+    
+    balanced: {
+      team: 30, stats: 40, clutch: 15, durability: 10, support: 5,
+      description: "Well-rounded evaluation of all factors"
+    },
+    
+    context: {
+      team: 25, stats: 35, clutch: 15, durability: 10, support: 15,
+      description: "Context matters - extra credit for difficult situations"
+    }
   };
 
   const applyPreset = (presetName) => {
-    setWeights(philosophyPresets[presetName]);
+    const preset = philosophyPresets[presetName];
+    // Extract only the weight categories, exclude the description
+    const { description, ...weightCategories } = preset;
+    setWeights(weightCategories);
+    setCurrentPreset(presetName);
+  };
+
+  const getCurrentPresetDescription = () => {
+    console.log('Current preset:', currentPreset);
+    
+    if (currentPreset === 'custom') {
+      return "Custom settings - adjust sliders to match your QB evaluation philosophy";
+    }
+    
+    const preset = philosophyPresets[currentPreset];
+    if (preset && preset.description) {
+      return preset.description;
+    }
+    
+    return "Custom settings";
   };
 
   const getQEIColor = (qei) => {
@@ -949,12 +1100,13 @@ const DynamicQBRankings = () => {
           <div className="text-6xl mb-6">🏈</div>
           <h2 className="text-3xl font-bold mb-4">Loading NFL Quarterbacks...</h2>
           <div className="space-y-2 text-blue-200">
-            <p>📊 Processing quarterback statistics</p>
-            <p>🔢 Calculating performance metrics</p>
+            <p>📊 Loading quarterback data from CSV files</p>
+            <p>📈 Parsing 2024 season statistics</p>
+            <p>🔢 Calculating QEI performance metrics</p>
             <p>🏆 Ranking elite quarterbacks</p>
           </div>
           <div className="mt-6 text-yellow-300">
-            ⏳ Almost ready...
+            ⏳ Processing CSV data...
           </div>
         </div>
       </div>
@@ -985,9 +1137,9 @@ const DynamicQBRankings = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">🏈 NFL QB Rankings</h1>
-          <p className="text-blue-200">Real-time quarterback analysis • Dynamic rankings</p>
+          <p className="text-blue-200">3-Year NFL analysis (2022-2024) • Career quarterback rankings • Dynamic QEI</p>
           <div className="mt-4 text-sm text-blue-300">
-            📊 {rankedQBs.length} Quarterbacks • 🎛️ Customizable Weights • ⚡ Live Updates
+            📊 {rankedQBs.length} Active Quarterbacks • 🎛️ Customizable Weights • 📈 Multi-Year Career Data
           </div>
         </div>
 
@@ -998,12 +1150,24 @@ const DynamicQBRankings = () => {
           {/* Philosophy Presets */}
           <div className="mb-6">
             <h4 className="text-white font-medium mb-3">Quick Philosophy Presets:</h4>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mb-3">
               <button
-                onClick={() => applyPreset('lombardi')}
+                onClick={() => applyPreset('winner')}
                 className="bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-200 px-4 py-2 rounded-lg font-medium transition-colors"
               >
-                🏆 Lombardi (Wins Only)
+                🏆 Winner
+              </button>
+              <button
+                onClick={() => applyPreset('analyst')}
+                className="bg-green-600/20 hover:bg-green-600/30 text-green-200 px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                📊 Analyst
+              </button>
+              <button
+                onClick={() => applyPreset('clutch')}
+                className="bg-red-600/20 hover:bg-red-600/30 text-red-200 px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                💎 Clutch
               </button>
               <button
                 onClick={() => applyPreset('balanced')}
@@ -1012,23 +1176,19 @@ const DynamicQBRankings = () => {
                 ⚖️ Balanced
               </button>
               <button
-                onClick={() => applyPreset('analytics')}
-                className="bg-green-600/20 hover:bg-green-600/30 text-green-200 px-4 py-2 rounded-lg font-medium transition-colors"
-              >
-                📊 Analytics
-              </button>
-              <button
-                onClick={() => applyPreset('clutch')}
-                className="bg-red-600/20 hover:bg-red-600/30 text-red-200 px-4 py-2 rounded-lg font-medium transition-colors"
-              >
-                💎 Clutch Factor
-              </button>
-              <button
-                onClick={() => applyPreset('championship')}
+                onClick={() => applyPreset('context')}
                 className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-200 px-4 py-2 rounded-lg font-medium transition-colors"
               >
-                🏆 Championship Focus
+                🏢 Context
               </button>
+            </div>
+            <div className="text-sm text-blue-200 italic">
+              💡 Current Philosophy: {currentPreset === 'winner' ? 'Winning is everything - team success dominates' : 
+                                     currentPreset === 'analyst' ? 'Numbers don\'t lie - statistical excellence' :
+                                     currentPreset === 'clutch' ? 'Pressure makes diamonds - big moments matter most' :
+                                     currentPreset === 'balanced' ? 'Well-rounded evaluation of all factors' :
+                                     currentPreset === 'context' ? 'Context matters - extra credit for difficult situations' :
+                                     'Custom settings - adjust sliders to match your QB evaluation philosophy'}
             </div>
           </div>
           
@@ -1051,10 +1211,10 @@ const DynamicQBRankings = () => {
                 />
                 <div className="text-xs text-blue-200 mt-1">
                   {category === 'team' && 'Win-loss record, playoff success'}
-                  {category === 'stats' && 'Passing yards, TDs, rating'}
-                  {category === 'championship' && 'Super Bowl wins, playoff runs'}
-                  {category === 'clutch' && 'Performance in key moments'}
-                  {category === 'support' && 'Team quality adjustment'}
+                  {category === 'stats' && 'ANY/A, passer rating, efficiency'}
+                  {category === 'clutch' && 'Game-winning drives, 4QC'}
+                  {category === 'durability' && 'Games started, consistency'}
+                  {category === 'support' && 'Extra credit for poor supporting cast'}
                 </div>
               </div>
             ))}
@@ -1082,9 +1242,9 @@ const DynamicQBRankings = () => {
                   <th className="px-4 py-3 text-center text-white font-bold">Team</th>
                   <th className="px-4 py-3 text-center text-white font-bold">QEI</th>
                   <th className="px-4 py-3 text-center text-white font-bold">Team Record</th>
-                  <th className="px-4 py-3 text-center text-white font-bold">2024 Stats</th>
-                  <th className="px-4 py-3 text-center text-white font-bold">Starts</th>
-                  <th className="px-4 py-3 text-center text-white font-bold">Rating</th>
+                  <th className="px-4 py-3 text-center text-white font-bold">Career Stats</th>
+                  <th className="px-4 py-3 text-center text-white font-bold">Seasons</th>
+                  <th className="px-4 py-3 text-center text-white font-bold">Avg Rating</th>
                 </tr>
               </thead>
               <tbody>
@@ -1104,7 +1264,7 @@ const DynamicQBRankings = () => {
                     <td className="px-4 py-3">
                       <div>
                         <div className="font-bold text-white">{qb.name}</div>
-                        <div className="text-xs text-blue-200">#{qb.jerseyNumber} • {qb.experience}yr • {qb.age}</div>
+                        <div className="text-xs text-blue-200">{qb.experience} seasons • Age {qb.age}</div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -1124,8 +1284,14 @@ const DynamicQBRankings = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center text-blue-200">{qb.combinedRecord}</td>
-                    <td className="px-4 py-3 text-center text-blue-200">{qb.stats2024}</td>
-                    <td className="px-4 py-3 text-center text-white">{qb.stats.gamesStarted}</td>
+                    <td className="px-4 py-3 text-center text-blue-200">
+                      <div>{qb.stats.passingYards.toLocaleString()} yds</div>
+                      <div className="text-xs">{qb.stats.passingTDs} TD, {qb.stats.interceptions} INT</div>
+                    </td>
+                    <td className="px-4 py-3 text-center text-white">
+                      <div>{qb.experience}</div>
+                      <div className="text-xs text-blue-200">{qb.stats.gamesStarted} starts</div>
+                    </td>
                     <td className="px-4 py-3 text-center text-blue-200">{qb.stats.passerRating.toFixed(1)}</td>
                   </tr>
                 ))}
@@ -1136,12 +1302,18 @@ const DynamicQBRankings = () => {
 
         {/* Footer */}
         <div className="text-center mt-8 text-blue-300">
-          <p>🚀 Dynamic Rankings • 📊 Real QB Stats • 🎛️ Customizable Weights</p>
+          <p>🚀 Dynamic Rankings • 📈 3-Year Career Analysis • 🎛️ Customizable Weights</p>
+          {lastFetch && (
+            <p className="text-sm mt-2">
+              Last updated: {new Date(lastFetch).toLocaleTimeString()} 
+              {shouldRefreshData() ? ' (Data may be stale)' : ' (Fresh data)'}
+            </p>
+          )}
           <button 
             onClick={fetchAllQBData}
             className="mt-4 bg-blue-500/20 hover:bg-blue-500/30 px-6 py-2 rounded-lg font-bold transition-colors"
           >
-            🔄 Refresh Data
+            🔄 Refresh ESPN Data
           </button>
         </div>
       </div>
