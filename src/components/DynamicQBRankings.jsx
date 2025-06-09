@@ -641,7 +641,7 @@ const DynamicQBRankings = () => {
       stats: calculateStatsScore(qbSeasonData),
       clutch: calculateClutchScore(qbSeasonData),
       durability: calculateDurabilityScore(qbSeasonData),
-      support: calculateSupportScore({ currentTeam: qb.team })
+      support: calculateSupportScore(qb) // Pass full QB object for multi-team support
     };
 
     return {
@@ -1009,7 +1009,15 @@ const DynamicQBRankings = () => {
   // Supporting Cast Difficulty Adjustment (0-100)
   // Higher score = More "extra credit" for QB in difficult situation
   const calculateSupportScore = (qbData) => {
+    // Handle multi-team QBs - get all teams from their season data
     const currentTeam = qbData.currentTeam || qbData.team;
+    let teamsPlayed = [currentTeam];
+    
+    // Check if QB has seasonData with multiple teams
+    if (qbData.seasonData && qbData.seasonData.length > 0) {
+      const allTeams = qbData.seasonData.map(season => season.team).filter(team => team);
+      teamsPlayed = [...new Set(allTeams)]; // Remove duplicates
+    }
     
     // Offensive Line Quality (0-35 points) - Protection & Run Blocking
     const offensiveLineGrades = {
@@ -1120,19 +1128,38 @@ const DynamicQBRankings = () => {
       'CAR': 6    // Among worst in league
     };
     
-    const oLineScore = offensiveLineGrades[currentTeam] || 15; // Default average
-    const weaponsScore = weaponsGrades[currentTeam] || 20;    // Default average  
-    const defenseScore = defenseGrades[currentTeam] || 12;    // Default average
+    // Calculate weighted average support based on all teams played
+    let totalSupportQuality = 0;
+    let gamesWeightedSum = 0;
     
-         const rawSupportQuality = oLineScore + weaponsScore + defenseScore;
+    if (qbData.seasonData && qbData.seasonData.length > 0) {
+      // Weight by games started with each team
+      qbData.seasonData.forEach(season => {
+        const team = season.team;
+        const gamesStarted = season.gamesStarted || 1;
+        
+        const oLineScore = offensiveLineGrades[team] || 15;
+        const weaponsScore = weaponsGrades[team] || 20;
+        const defenseScore = defenseGrades[team] || 12;
+        
+        const teamSupportQuality = oLineScore + weaponsScore + defenseScore;
+        totalSupportQuality += teamSupportQuality * gamesStarted;
+        gamesWeightedSum += gamesStarted;
+      });
+    }
+    
+    const rawSupportQuality = gamesWeightedSum > 0 ? 
+      totalSupportQuality / gamesWeightedSum : 
+      (offensiveLineGrades[currentTeam] || 15) + (weaponsGrades[currentTeam] || 20) + (defenseGrades[currentTeam] || 12);
      
      // INVERT THE LOGIC: Poor supporting cast = Higher difficulty adjustment score
      // Scale from 0-100 where higher score = more "extra credit" for difficult situation
      const difficultyAdjustment = Math.max(0, Math.min(100, 100 - rawSupportQuality));
      
-     // Debug for major teams
-     if (['KC', 'BUF', 'CIN', 'BAL', 'CAR', 'NYG', 'MIN'].includes(currentTeam)) {
-       console.log(`🔍 ${currentTeam} SUPPORT: Raw Quality(${rawSupportQuality}) -> Difficulty Adjustment(${difficultyAdjustment}) [Higher = More Extra Credit]`);
+     // Debug for major teams or multi-team QBs
+     if (['KC', 'BUF', 'CIN', 'BAL', 'CAR', 'NYG', 'MIN'].includes(currentTeam) || teamsPlayed.length > 1) {
+       const teamsText = teamsPlayed.length > 1 ? `Teams: ${teamsPlayed.join(', ')}` : `Team: ${currentTeam}`;
+       console.log(`🔍 SUPPORT ${teamsText}: Raw Quality(${rawSupportQuality.toFixed(1)}) -> Difficulty Adjustment(${difficultyAdjustment}) [Higher = More Extra Credit]`);
      }
      
      return difficultyAdjustment;
@@ -1165,8 +1192,9 @@ const DynamicQBRankings = () => {
       const specialistBoost = 1.2 + (dominanceRatio - 0.7) * 1.0; // 1.2x to 1.5x boost based on dominance
       finalScore = weightedScore * specialistBoost;
     } else {
-      // Standard scaling for balanced evaluations
-      finalScore = weightedScore;
+      // Enhanced scaling for balanced evaluations - boost to make elite tiers reachable
+      const balancedBoost = 1.15; // 15% boost for balanced approaches
+      finalScore = weightedScore * balancedBoost;
     }
     
     // Apply experience modifier - slight penalty for inexperienced QBs
