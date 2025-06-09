@@ -367,12 +367,12 @@ const DynamicQBRankings = () => {
       console.log('🔄 Loading QB data from CSV files...');
       
       // Load CSV data files (regular season + playoffs)
-      const response2024 = await fetch('/src/data/2024.csv');
-      const response2023 = await fetch('/src/data/2023.csv');
-      const response2022 = await fetch('/src/data/2022.csv');
-      const responsePlayoffs2024 = await fetch('/src/data/2024playoffs.csv');
-      const responsePlayoffs2023 = await fetch('/src/data/2023playoffs.csv');
-      const responsePlayoffs2022 = await fetch('/src/data/2022playoffs.csv');
+      const response2024 = await fetch('/data/2024.csv');
+      const response2023 = await fetch('/data/2023.csv');
+      const response2022 = await fetch('/data/2022.csv');
+      const responsePlayoffs2024 = await fetch('/data/2024playoffs.csv');
+      const responsePlayoffs2023 = await fetch('/data/2023playoffs.csv');
+      const responsePlayoffs2022 = await fetch('/data/2022playoffs.csv');
       
       if (!response2024.ok) throw new Error('Failed to load 2024 data');
       
