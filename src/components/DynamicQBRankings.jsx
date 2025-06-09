@@ -815,27 +815,27 @@ const DynamicQBRankings = () => {
       
       // === HOLISTIC SCORING SYSTEM ===
       
-      // 1. EFFICIENCY (35 points) - Core QB metrics (NO PASSER RATING)
+      // 1. EFFICIENCY (25 points) - Core QB metrics (NO PASSER RATING) - REDUCED IMPACT
       let efficiencyScore = 0;
       
-      // ANY/A - Best overall efficiency metric (0-25 points) - INCREASED WEIGHT
-      efficiencyScore += Math.max(0, Math.min(25, (totalAnyA - 4.0) * 5));
+      // ANY/A - Best overall efficiency metric (0-18 points) - REDUCED FROM 25
+      efficiencyScore += Math.max(0, Math.min(18, (totalAnyA - 4.0) * 4.5));
       
-      // Success Rate - Consistent play effectiveness (0-10 points) - INCREASED WEIGHT
-      efficiencyScore += Math.max(0, Math.min(10, (totalSuccessRate - 35) * 0.3));
+      // Success Rate - Consistent play effectiveness (0-7 points) - REDUCED FROM 10
+      efficiencyScore += Math.max(0, Math.min(7, (totalSuccessRate - 35) * 0.25));
       
-      // 2. PRODUCTIVITY (30 points) - Total offensive production (TD-heavy focus)
+      // 2. PRODUCTIVITY (40 points) - Total offensive production (TD-heavy focus) - INCREASED FROM 30
       let productivityScore = 0;
       
-      // Total Yards (75% passing, 25% rushing) - Reduced weight to emphasize TDs
+      // Total Yards (75% passing, 25% rushing) - Weighted yards calculation
       const totalYards = (totalPassingYards * 0.75) + (totalRushingYards * 0.25);
-      productivityScore += Math.max(0, Math.min(10, (totalYards - 2500) * 0.000008));
+      productivityScore += Math.max(0, Math.min(15, (totalYards - 2500) * 0.000012));
       
       // Total TDs (passing + rushing at full weight) - HEAVILY WEIGHTED
       const totalTDs = totalPassingTDs + totalRushingTDs;
-      productivityScore += Math.max(0, Math.min(20, (totalTDs - 10) * 0.8)); // Increased from 15 to 20 points max
+      productivityScore += Math.max(0, Math.min(25, (totalTDs - 8) * 1.0)); // Increased from 20 to 25 points max
       
-      // 3. BALL SECURITY (20 points) - Protecting possessions
+      // 3. BALL SECURITY (20 points) - Protecting possessions (UNCHANGED)
       let ballSecurityScore = 0;
       
       // INT Rate - Lower is better (0-12 points)
@@ -844,7 +844,7 @@ const DynamicQBRankings = () => {
       // Sack Avoidance - QB responsibility (0-8 points)
       ballSecurityScore += Math.max(0, Math.min(8, (10 - totalSackPct) * 0.8));
       
-      // 4. PLAYMAKING (15 points) - Big play ability and versatility
+      // 4. PLAYMAKING (15 points) - Big play ability and versatility (UNCHANGED)
       let playmakingScore = 0;
       
       // TD Rate - Redzone efficiency (0-10 points) - INCREASED WEIGHT
@@ -1139,32 +1139,33 @@ const DynamicQBRankings = () => {
   };
 
   const calculateQEI = (baseScores) => {
-    // Calculate weighted score first
+    // Calculate total weight for normalization
+    const totalWeight = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
+    
+    if (totalWeight === 0) return 0;
+    
+    // Calculate weighted score with proper normalization
     const weightedScore = (
-      (baseScores.team * weights.team / 100) +
-      (baseScores.stats * weights.stats / 100) +
-      (baseScores.clutch * weights.clutch / 100) +
-      (baseScores.durability * weights.durability / 100) +
-      (baseScores.support * weights.support / 100)
-    );
+      (baseScores.team * weights.team) +
+      (baseScores.stats * weights.stats) +
+      (baseScores.clutch * weights.clutch) +
+      (baseScores.durability * weights.durability) +
+      (baseScores.support * weights.support)
+    ) / totalWeight; // Normalize by total weight to handle weights > 100%
     
     // Apply dynamic scaling based on weight distribution
     // This ensures that top performers in heavily weighted categories can reach elite tiers
-    const totalActiveWeight = Object.values(weights).reduce((sum, weight) => sum + (weight > 0 ? weight : 0), 0);
-    
-    if (totalActiveWeight === 0) return 0;
-    
-    // Find the dominant category (highest weight)
     const maxWeight = Math.max(...Object.values(weights));
-    const isSpecialized = maxWeight >= 70; // If one category is 70%+ of total weight
+    const dominanceRatio = totalWeight > 0 ? maxWeight / totalWeight : 0;
+    const isSpecialized = dominanceRatio >= 0.7; // If one category is 70%+ of total weight
     
     if (isSpecialized) {
       // Apply specialized scaling - boost scores for focused evaluations
-      const specialistBoost = 1.2 + (maxWeight - 70) * 0.01; // 1.2x to 1.5x boost
+      const specialistBoost = 1.2 + (dominanceRatio - 0.7) * 1.0; // 1.2x to 1.5x boost based on dominance
       return Math.min(100, weightedScore * specialistBoost);
     } else {
       // Standard scaling for balanced evaluations
-      return weightedScore;
+      return Math.min(100, weightedScore);
     }
   };
 
