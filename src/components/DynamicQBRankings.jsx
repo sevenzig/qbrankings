@@ -1021,111 +1021,111 @@ const DynamicQBRankings = () => {
     
     // Offensive Line Quality (0-35 points) - Protection & Run Blocking
     const offensiveLineGrades = {
-      'PHI': 32,  // Elite O-line, Kelce, Johnson, Mailata
-      'SF': 30,   // Trent Williams anchored line
-      'DAL': 28,  // Martin, Smith when healthy
-      'KC': 27,   // Solid protection for Mahomes
-      'BUF': 26,  // Improved significantly in 2024
-      'DET': 26,  // Strong interior, decent tackles
-      'BAL': 25,  // Good run blocking, decent pass pro
-      'MIN': 24,  // O'Neill + Darrisaw solid
-      'MIA': 23,  // Armstead + Tunsil when healthy
-      'TB': 22,   // Jensen retirement hurt, but improving
-      'HOU': 22,  // Young line developing well
-      'LAC': 21,  // Inconsistent but has talent
-      'SEA': 20,  // Rebuilt line, decent now
-      'CIN': 19,  // Still rebuilding, Burrow gets sacked too much
-      'JAX': 18,  // Walker Jr. good, rest questionable
-      'ATL': 18,  // Bergeron solid, but depth issues
-      'IND': 17,  // Nelson elite, but tackles struggle
-      'WSH': 17,  // Improving but still developing
-      'DEN': 16,  // Average at best
-      'LAR': 16,  // Stafford gets hit too much
-      'PIT': 15,  // Aging line, protection issues
-      'NO': 15,   // Cap casualties hurt depth
-      'LV': 14,   // Major issues, Adams gets frustrated
-      'TEN': 14,  // Poor pass protection
-      'ARI': 13,  // Young line, growing pains
-      'GB': 13,   // Bakhtiari injuries hurt
-      'CLE': 12,  // Watson gets destroyed
-      'CHI': 12,  // Young line, Williams gets hit
-      'NYJ': 11,  // Rodgers gets no time
-      'NE': 10,   // Rebuilt but struggling
-      'NYG': 9,   // Jones constantly under pressure
-      'CAR': 8    // One of worst in league
+      'DEN': 35,  // #1 PBWR + RBWR in 2024, elite across board
+      'PHI': 32,  // Elite talent, Mailata/Johnson/Dickerson core
+      'DET': 31,  // Sewell/Ragnow anchors, consistent excellence  
+      'TB': 30,   // Wirfs elite, excellent pass protection unit
+      'BAL': 29,  // Stanley healthy, top RBWR performance
+      'BUF': 28,  // Elite sack rate, clean pocket leader
+      'ATL': 26,  // Lindstrom elite RG, solid overall unit
+      'LAR': 25,  // Strong when healthy, good YBC numbers
+      'LAC': 24,  // Slater/Alt excellent bookends, interior improved
+      'CAR': 23,  // Hunt addition major upgrade, solid metrics
+      'MIN': 22,  // Darrisaw return + Kelly/Fries upgrades
+      'CHI': 21,  // Thuney/Jackson/Dalman major FA additions
+      'KC': 20,   // Lost Thuney/interior depth, LT issues
+      'ARI': 19,  // Johnson Jr. solid, consistent low pressure rate
+      'GB': 18,   // Tom excellent RT, Banks addition
+      'PIT': 18,  // Young core developing, Frazier/McCormick
+      'IND': 17,  // Lost Kelly/Fries, Nelson/Raimann still solid
+      'SF': 17,   // Williams aging, struggled without him
+      'NYJ': 16,  // Fashanu developing, decent interior trio
+      'LV': 15,   // Miller + Powers-Johnson core, needs depth
+      'JAX': 14,  // Lost key veterans, average metrics
+      'WAS': 14,  // Tunsil helps but unit needs more talent
+      'TEN': 13,  // Moore/Zeitler upgrades from terrible base
+      'NO': 12,   // Banks first-rounder, still rebuilding
+      'CLE': 12,  // Health/age concerns, inconsistent
+      'CIN': 11,  // Persistent bottom-tier protection
+      'DAL': 11,  // Booker drafted but Guyton/line struggles
+      'MIA': 10,  // Bottom tier run blocking, needs overhaul
+      'NYG': 10,  // Thomas when healthy, rest very poor
+      'SEA': 9,   // Zabel drafted, but major work needed
+      'HOU': 8,   // Traded Tunsil, among worst units
+      'NE': 6     // Bottom of NFL, Wallace/rookie protection
     };
     
     // Weapons Quality (0-40 points) - WRs, TEs, RBs
     const weaponsGrades = {
-      'KC': 38,   // Kelce, Rice, Worthy, Hunt
-      'CIN': 36,  // Chase, Higgins, Burrow weapons
-      'MIA': 35,  // Tyreek, Waddle, speed everywhere
-      'BUF': 34,  // Diggs trade hurt, but Cooper + others
-      'LAC': 33,  // Allen, Williams, McConkey emerging
-      'MIN': 32,  // Jefferson elite, Addison, Hockenson
-      'PHI': 31,  // AJ Brown, Smith, Goedert, Barkley
-      'HOU': 30,  // Diggs, Collins, Tank Dell
-      'TB': 29,   // Evans, Godwin when healthy
-      'DAL': 28,  // CeeDee elite, but lacks depth
-      'DET': 28,  // Williams, St. Brown, LaPorta
-      'SF': 27,   // Deebo, Aiyuk, Kittle, CMC
-      'JAX': 26,  // Kirk, Ridley, Thomas decent
-      'WSH': 25,  // McLaurin, Daniels weapons improving
-      'ATL': 24,  // London, Pitts potential
-      'SEA': 23,  // Metcalf, Lockett aging
-      'LAR': 22,  // Kupp, Puka when healthy
-      'NO': 21,   // Olave good, Thomas aging
-      'DEN': 20,  // Sutton, Jeudy traded
-      'LV': 20,   // Adams elite but alone
-      'ARI': 19,  // Harrison Jr., Marvin promising
-      'BAL': 19,  // Andrews, Zay Flowers, limited depth
-      'GB': 18,   // Watson injured, Dobbs limited
-      'IND': 17,  // Richardson weapons still developing
-      'TEN': 16,  // Hopkins gone, limited options
-      'PIT': 15,  // Pickens alone, TE issues
-      'CHI': 15,  // Moore, Odunze, development needed
-      'CLE': 14,  // Cooper, limited after him
-      'NYJ': 13,  // Adams, Wilson, but inconsistent
-      'NE': 12,   // Rebuilding receiving corps
-      'NYG': 11,  // Nabers promising, but limited
-      'CAR': 10   // Rebuilding everything
+      'KC': 30,   // Kelce elite TE, Rice (1400+ yds), Worthy speed, Hunt
+      'CIN': 38,  // Chase elite, Higgins when healthy, solid depth
+      'MIA': 36,  // Hill (1799 yds), Waddle, explosive speed combo
+      'MIN': 35,  // Jefferson elite (1533 yds), Addison solid, Hockenson
+      'PHI': 34,  // AJ Brown, Smith, Goedert, Barkley elite RB
+      'BUF': 33,  // Cooper trade, Diggs gone but still solid
+      'LAC': 32,  // Allen/Williams/McConkey emerged, depth improved
+      'HOU': 31,  // Diggs trade, Collins/Dell, weapons upgraded
+      'DET': 30,  // Williams/St. Brown elite, LaPorta, Montgomery/Gibbs
+      'DAL': 29,  // CeeDee elite (1749 yds), lacks consistent depth
+      'TB': 28,   // Evans (1004 yds), Godwin injured, Bucky Irving
+      'SF': 27,   // Deebo/Aiyuk solid, Kittle, CMC when healthy
+      'WSH': 26,  // McLaurin solid, Daniels weapons developing
+      'JAX': 25,  // Kirk/Ridley/Thomas decent trio
+      'ATL': 24,  // London emerging, Pitts potential, Bijan
+      'LAR': 23,  // Kupp/Puka when healthy, depth concerns
+      'SEA': 22,  // Metcalf (1297 yds), Lockett aging, JSN
+      'ARI': 21,  // Harrison Jr. ROY candidate, Marvin, McBride
+      'NO': 20,   // Olave solid, Kamara, Thomas limited
+      'LV': 19,   // Adams elite (1243 yds) but limited support
+      'BAL': 18,  // Andrews/Flowers, Lamar running ability
+      'DEN': 17,  // Sutton solid, Jeudy traded, limited depth
+      'GB': 16,   // Watson injured, Dobbs limited, Jacobs added
+      'IND': 15,  // Richardson weapons still developing, limited
+      'TEN': 14,  // Hopkins gone, Ridley/Boyd limited
+      'PIT': 13,  // Pickens solid, TE/depth issues
+      'CHI': 12,  // Moore/Odunze promising but developing
+      'CLE': 11,  // Cooper solid, very limited depth
+      'NYJ': 10,  // Adams trade, Wilson limited, rebuilding
+      'NYG': 9,   // Nabers promising rookie, very limited depth
+      'NE': 8,    // Rebuilding receiving corps, limited talent
+      'CAR': 7    // Rebuilding everything, very limited weapons
     };
     
     // Defense Quality (0-25 points) - How much defense helps QB
-    // Better defense = more opportunities, field position, leads
+    // Better defense = more opportunities, field position, leads, turnovers
     const defenseGrades = {
-      'BAL': 24,  // Elite defense helps Lamar
-      'BUF': 23,  // Von Miller, great secondary
-      'SF': 22,   // Elite when healthy
-      'PIT': 21,  // Watt, Fitzpatrick, always solid
-      'KC': 21,   // Elite defense creates turnovers, short fields for Mahomes
-      'MIA': 20,  // Improved significantly
-      'DET': 20,  // Hutchinson, improving unit
-      'PHI': 19,  // Inconsistent but talented
-      'DAL': 19,  // Parsons elite, secondary issues
-      'TB': 18,   // Todd Bowles defense creates turnovers, helps Brady/offense
-      'HOU': 18,  // Young defense improving
-      'MIN': 17,  // Decent but not elite
-      'DEN': 17,  // Surtain good, rest average
-      'CIN': 16,  // Pass rush improved
-      'LAC': 16,  // Bosa + others decent
-      'SEA': 16,  // Leonard Williams trade helped
+      'BAL': 25,  // #1 defense, elite pass rush + secondary
+      'BUF': 24,  // Von Miller, elite secondary, great overall
+      'KC': 23,   // Elite takeaways/turnovers, Spagnuolo system
+      'PIT': 22,  // Watt, Fitzpatrick, consistently strong
+      'SF': 21,   // Elite when healthy, pass rush + secondary
+      'MIA': 20,  // Improved significantly, solid overall
+      'DET': 20,  // Hutchinson emerging, improving overall
+      'PHI': 19,  // Talented but inconsistent performance
+      'HOU': 19,  // Young defense improving rapidly
+      'MIN': 18,  // Solid overall, Flores system working
+      'DEN': 18,  // Surtain elite, solid pass rush
+      'TB': 17,   // Bowles system creates opportunities
+      'LAC': 17,  // Bosa elite, Mack/others solid
+      'DAL': 16,  // Parsons elite, secondary inconsistent
+      'SEA': 16,  // Williams trade helped, solid overall
       'CLE': 15,  // Garrett elite, rest struggling
-      'IND': 15,  // Richardson development helped
-      'LAR': 14,  // Donald gone, rebuilding
-      'NO': 13,   // Cap casualties hurt
-      'WSH': 13,  // Young defense developing
-      'ATL': 12,  // Inconsistent unit
-      'JAX': 12,  // Josh Allen good, but limited
-      'ARI': 11,  // Young players learning
-      'GB': 11,   // Jaire good, rest inconsistent
-      'TEN': 10,  // Poor overall unit
-      'NYJ': 10,  // Sauce good, but overall poor
-      'LV': 9,    // Crosby good, rest struggling
-      'CHI': 9,   // Young unit learning
-      'NYG': 8,   // Rebuilding defense
-      'NE': 7,    // Rebuilding everything
-      'CAR': 6    // Among worst in league
+      'IND': 15,  // Decent overall, helps Richardson
+      'WSH': 14,  // Young defense developing quickly
+      'LAR': 13,  // Donald gone, rebuilding but talent
+      'CIN': 13,  // Pass rush improved, secondary issues
+      'NO': 12,   // Cap casualties hurt depth
+      'ATL': 12,  // Inconsistent unit, some talent
+      'JAX': 11,  // Josh Allen solid, limited overall
+      'GB': 11,   // Jaire elite, rest inconsistent
+      'ARI': 10,  // Young players learning, improving
+      'TEN': 9,   // Poor overall unit, few playmakers
+      'NYJ': 9,   // Sauce good, overall unit poor
+      'CHI': 8,   // Young unit learning, limited talent
+      'LV': 8,    // Crosby good, rest struggling
+      'NYG': 7,   // Rebuilding defense, limited talent
+      'NE': 6,    // Rebuilding everything, bottom tier
+      'CAR': 5    // Among worst in league, very limited
     };
     
     // Calculate weighted average support based on all teams played
