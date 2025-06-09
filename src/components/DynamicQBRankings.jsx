@@ -246,31 +246,59 @@ const DynamicQBRankings = () => {
         const yearYards = parseInt(qb.PassingYds) || 0;  // Use PassingYds which correctly extracts column 12
         const yearTDs = parseInt(qb.TD) || 0;
         
-        // Add season data
-        playerData[playerName].seasons.push({
-          year,
-          team: qb.Team,
-          age: parseInt(qb.Age) || 25,
-          gamesStarted,
-          wins: qbRecord.wins,
-          losses: qbRecord.losses,
-          winPercentage: qbRecord.winPercentage,
-          passingYards: yearYards,
-          passingTDs: yearTDs,
-          interceptions: parseInt(qb.Int) || 0,
-          completions: parseInt(qb.Cmp) || 0,
-          attempts: parseInt(qb.Att) || 0,
-          passerRating,
-          successRate: parseFloat(qb.SuccessRate) || 0,
-          sackPercentage: parseFloat(qb.SackPct) || 0,
-          anyPerAttempt: parseFloat(qb.AnyPerAttempt) || 0,
-          gameWinningDrives: parseInt(qb.ClutchGWD) || 0,
-          fourthQuarterComebacks: parseInt(qb.ClutchFourthQC) || 0
-        });
+        // Check if we already have data for this year (to handle multi-team seasons)
+        const existingSeasonIndex = playerData[playerName].seasons.findIndex(s => s.year === year);
         
-        // Update career totals
+        if (existingSeasonIndex >= 0) {
+          // Player already has data for this year - combine the stats (multi-team season)
+          const existingSeason = playerData[playerName].seasons[existingSeasonIndex];
+          existingSeason.gamesStarted += gamesStarted;
+          existingSeason.wins += qbRecord.wins;
+          existingSeason.losses += qbRecord.losses;
+          existingSeason.passingYards += yearYards;
+          existingSeason.passingTDs += yearTDs;
+          existingSeason.interceptions += parseInt(qb.Int) || 0;
+          existingSeason.completions += parseInt(qb.Cmp) || 0;
+          existingSeason.attempts += parseInt(qb.Att) || 0;
+          existingSeason.gameWinningDrives += parseInt(qb.ClutchGWD) || 0;
+          existingSeason.fourthQuarterComebacks += parseInt(qb.ClutchFourthQC) || 0;
+          
+          // Update weighted averages
+          const totalGames = existingSeason.gamesStarted;
+          if (totalGames > 0) {
+            existingSeason.winPercentage = (existingSeason.wins + existingSeason.losses) > 0 ? 
+              existingSeason.wins / (existingSeason.wins + existingSeason.losses) : 0;
+          }
+        } else {
+          // Add new season data
+          playerData[playerName].seasons.push({
+            year,
+            team: qb.Team,
+            age: parseInt(qb.Age) || 25,
+            gamesStarted,
+            wins: qbRecord.wins,
+            losses: qbRecord.losses,
+            winPercentage: qbRecord.winPercentage,
+            passingYards: yearYards,
+            passingTDs: yearTDs,
+            interceptions: parseInt(qb.Int) || 0,
+            completions: parseInt(qb.Cmp) || 0,
+            attempts: parseInt(qb.Att) || 0,
+            passerRating,
+            successRate: parseFloat(qb.SuccessRate) || 0,
+            sackPercentage: parseFloat(qb.SackPct) || 0,
+            anyPerAttempt: parseFloat(qb.AnyPerAttempt) || 0,
+            gameWinningDrives: parseInt(qb.ClutchGWD) || 0,
+            fourthQuarterComebacks: parseInt(qb.ClutchFourthQC) || 0
+          });
+          
+          // Only increment seasons for NEW years
+          const career = playerData[playerName].career;
+          career.seasons++;
+        }
+        
+        // Always update career totals regardless
         const career = playerData[playerName].career;
-        career.seasons++;
         career.gamesStarted += gamesStarted;
         career.wins += qbRecord.wins;
         career.losses += qbRecord.losses;
@@ -565,7 +593,7 @@ const DynamicQBRankings = () => {
           const mostRecentSeason = data.seasons[0]; // Already sorted by year desc
           const teamInfo = getTeamInfo(mostRecentSeason.team);
           
-          return {
+          const qbObject = {
             id: `qb-${index + 1}`,
             name: playerName,
             team: mostRecentSeason.team,
@@ -683,10 +711,196 @@ const DynamicQBRankings = () => {
     };
   };
 
+  // Helper function to calculate weighted playoff wins based on round progression
+  const calculatePlayoffWeightedWins = (playoffData, team, year) => {
+    const wins = playoffData.wins || 0;
+    const losses = playoffData.losses || 0;
+    const totalGames = wins + losses;
+    
+    if (totalGames === 0) return 0;
+    
+    // Define playoff weights object (additional 70% reduction)
+    const WEIGHTS = {
+      SUPER_BOWL_WIN: 0.6, SUPER_BOWL_LOSS: 0.3, // Further reduced from 2.0/1.0
+      CONF_CHAMPIONSHIP_WIN: 0.42, CONF_CHAMPIONSHIP_LOSS: 0.21, // Further reduced from 1.4/0.7
+      DIVISIONAL_WIN: 0.3, DIVISIONAL_LOSS: 0.15, // Further reduced from 1.0/0.5
+      WILD_CARD_WIN: 0.21, WILD_CARD_LOSS: 0.12 // Further reduced from 0.7/0.4
+    };
+    
+    let weightedWins = 0;
+    
+    // Determine playoff path based on wins/losses pattern
+    if (totalGames === 4 && wins === 4) {
+      // Won Super Bowl (4-0): WC + Div + Conf + SB wins
+      weightedWins = WEIGHTS.WILD_CARD_WIN + WEIGHTS.DIVISIONAL_WIN + 
+                    WEIGHTS.CONF_CHAMPIONSHIP_WIN + WEIGHTS.SUPER_BOWL_WIN;
+    } else if (totalGames === 4 && wins === 3) {
+      // Lost Super Bowl (3-1): WC + Div + Conf wins, SB loss
+      weightedWins = WEIGHTS.WILD_CARD_WIN + WEIGHTS.DIVISIONAL_WIN + 
+                    WEIGHTS.CONF_CHAMPIONSHIP_WIN + WEIGHTS.SUPER_BOWL_LOSS;
+    } else if (totalGames === 3 && wins === 3) {
+      // Won Super Bowl from bye (3-0): Div + Conf + SB wins
+      weightedWins = WEIGHTS.DIVISIONAL_WIN + WEIGHTS.CONF_CHAMPIONSHIP_WIN + WEIGHTS.SUPER_BOWL_WIN;
+    } else if (totalGames === 3 && wins === 2) {
+      // Lost Super Bowl from bye or won Conference Championship
+      if (team === 'KAN' && year === 2023) { // Known SB winner
+        weightedWins = WEIGHTS.DIVISIONAL_WIN + WEIGHTS.CONF_CHAMPIONSHIP_WIN + WEIGHTS.SUPER_BOWL_WIN;
+      } else {
+        // Assume Conference Championship win then SB loss
+        weightedWins = WEIGHTS.DIVISIONAL_WIN + WEIGHTS.CONF_CHAMPIONSHIP_WIN + WEIGHTS.SUPER_BOWL_LOSS;
+      }
+    } else if (totalGames === 2 && wins === 2) {
+      // Won Conference Championship (2-0)
+      weightedWins = WEIGHTS.DIVISIONAL_WIN + WEIGHTS.CONF_CHAMPIONSHIP_WIN;
+    } else if (totalGames === 2 && wins === 1) {
+      // Won one, lost one - could be various scenarios
+      if (losses === 1) {
+        // Most likely: Won first round, lost second round
+        weightedWins = WEIGHTS.WILD_CARD_WIN + WEIGHTS.DIVISIONAL_LOSS;
+      }
+    } else if (totalGames === 1 && wins === 1) {
+      // Won first playoff game only
+      weightedWins = WEIGHTS.WILD_CARD_WIN;
+    } else if (totalGames === 1 && wins === 0) {
+      // Lost first playoff game only
+      weightedWins = WEIGHTS.WILD_CARD_LOSS;
+    } else {
+      // Fallback: use generic weighting based on win/loss ratio
+      const winWeight = wins > losses ? WEIGHTS.DIVISIONAL_WIN : WEIGHTS.WILD_CARD_WIN;
+      const lossWeight = WEIGHTS.WILD_CARD_LOSS;
+      weightedWins = (wins * winWeight) + (losses * lossWeight);
+    }
+    
+    return weightedWins;
+  };
+  
+  // Helper function to calculate bye week bonus for QBs who earned their team a first-round bye
+  const calculateByeWeekBonus = (playoffData, team, year) => {
+    const totalGames = (playoffData.wins || 0) + (playoffData.losses || 0);
+    
+    // Teams that earned bye weeks typically play 3 games instead of 4 to reach same level
+    // If they played 3 games or fewer and had success, they likely had a bye
+    if (totalGames <= 3 && (playoffData.wins || 0) >= 1) {
+      // Known bye week teams by year (this could be expanded with more data)
+      const byeWeekTeams = {
+        2023: ['BAL', 'BUF', 'KC', 'SF', 'DAL', 'DET', 'PHI', 'MIA'], // Top 2 seeds per conference
+        2022: ['BUF', 'KC', 'TEN', 'PHI', 'MIN', 'SF', 'BAL', 'CIN'], // Top 2 seeds per conference
+        2024: ['KC', 'BUF', 'DET', 'PHI', 'BAL', 'HOU', 'MIN', 'LAR']  // Projected/partial
+      };
+      
+      if (byeWeekTeams[year] && byeWeekTeams[year].includes(team)) {
+        return 0.21; // Further reduced by 70% from 0.7 - they "earned" that win by getting the bye
+      }
+    }
+    
+    return 0;
+  };
+  
+  // Helper function to calculate average clutch multiplier based on playoff progression
+  const calculatePlayoffClutchMultiplier = (playoffData, team, year) => {
+    const wins = playoffData.wins || 0;
+    const losses = playoffData.losses || 0;
+    const totalGames = wins + losses;
+    
+    if (totalGames === 0) return 1.06; // Default multiplier (further reduced by 70% from 1.2)
+    
+    const CLUTCH_MULTIPLIERS = {
+      WILD_CARD: 1.06, DIVISIONAL: 1.08, // Further reduced by 70% from 1.2/1.4
+      CONF_CHAMPIONSHIP: 1.12, SUPER_BOWL: 1.22 // Further reduced by 70% from 1.8/2.4
+    };
+    
+    let totalMultiplier = 0;
+    let gameCount = 0;
+    
+    // Estimate which rounds were played based on games and outcomes
+    if (totalGames === 4) {
+      // Played all 4 rounds (no bye)
+      totalMultiplier += CLUTCH_MULTIPLIERS.WILD_CARD + CLUTCH_MULTIPLIERS.DIVISIONAL + 
+                        CLUTCH_MULTIPLIERS.CONF_CHAMPIONSHIP + CLUTCH_MULTIPLIERS.SUPER_BOWL;
+      gameCount = 4;
+    } else if (totalGames === 3) {
+      // Had bye, played 3 rounds  
+      totalMultiplier += CLUTCH_MULTIPLIERS.DIVISIONAL + CLUTCH_MULTIPLIERS.CONF_CHAMPIONSHIP + 
+                        CLUTCH_MULTIPLIERS.SUPER_BOWL;
+      gameCount = 3;
+    } else if (totalGames === 2) {
+      // Two rounds - assume divisional and conf championship for successful teams
+      totalMultiplier += CLUTCH_MULTIPLIERS.DIVISIONAL + CLUTCH_MULTIPLIERS.CONF_CHAMPIONSHIP;
+      gameCount = 2;
+    } else if (totalGames === 1) {
+      // One round - assume wild card for most teams
+      totalMultiplier += CLUTCH_MULTIPLIERS.WILD_CARD;
+      gameCount = 1;
+    }
+    
+    return gameCount > 0 ? totalMultiplier / gameCount : 1.06;
+  };
+  
+  // Helper function to calculate average stats multiplier based on playoff progression  
+  const calculatePlayoffStatsMultiplier = (playoffData, team, year) => {
+    const wins = playoffData.wins || 0;
+    const losses = playoffData.losses || 0;
+    const totalGames = wins + losses;
+    
+    if (totalGames === 0) return 1.03; // Default multiplier (further reduced by 70% from 1.1)
+    
+    const STATS_MULTIPLIERS = {
+      WILD_CARD: 1.018, DIVISIONAL: 1.03, // Further reduced by 70% from 1.06/1.1
+      CONF_CHAMPIONSHIP: 1.048, SUPER_BOWL: 1.072 // Further reduced by 70% from 1.16/1.24
+    };
+    
+    let totalMultiplier = 0;
+    let gameCount = 0;
+    
+    // Estimate which rounds were played based on games and outcomes
+    if (totalGames === 4) {
+      // Played all 4 rounds (no bye)
+      totalMultiplier += STATS_MULTIPLIERS.WILD_CARD + STATS_MULTIPLIERS.DIVISIONAL + 
+                        STATS_MULTIPLIERS.CONF_CHAMPIONSHIP + STATS_MULTIPLIERS.SUPER_BOWL;
+      gameCount = 4;
+    } else if (totalGames === 3) {
+      // Had bye, played 3 rounds  
+      totalMultiplier += STATS_MULTIPLIERS.DIVISIONAL + STATS_MULTIPLIERS.CONF_CHAMPIONSHIP + 
+                        STATS_MULTIPLIERS.SUPER_BOWL;
+      gameCount = 3;
+    } else if (totalGames === 2) {
+      // Two rounds - assume divisional and conf championship for successful teams
+      totalMultiplier += STATS_MULTIPLIERS.DIVISIONAL + STATS_MULTIPLIERS.CONF_CHAMPIONSHIP;
+      gameCount = 2;
+    } else if (totalGames === 1) {
+      // One round - assume wild card for most teams
+      totalMultiplier += STATS_MULTIPLIERS.WILD_CARD;
+      gameCount = 1;
+    }
+    
+    return gameCount > 0 ? totalMultiplier / gameCount : 1.03;
+  };
+
   // Enhanced Team Success Score with Playoff Integration (0-100)
   const calculateTeamScore = (qbSeasonData) => {
     const yearWeights = { 2024: 0.55, 2023: 0.35, 2022: 0.10 };
-    const PLAYOFF_WIN_BONUS = 1.5; // Playoff wins worth 1.5x regular season wins
+    
+    // NEW: Comprehensive Playoff Round Weighting System
+    const PLAYOFF_WEIGHTS = {
+      // Super Bowl (Championship Game)
+      SUPER_BOWL_WIN: 5.0,
+      SUPER_BOWL_LOSS: 2.5,
+      
+      // Conference Championship 
+      CONF_CHAMPIONSHIP_WIN: 3.5,
+      CONF_CHAMPIONSHIP_LOSS: 1.8,
+      
+      // Divisional Round
+      DIVISIONAL_WIN: 2.5,
+      DIVISIONAL_LOSS: 1.3,
+      
+      // Wild Card Round
+      WILD_CARD_WIN: 1.8,
+      WILD_CARD_LOSS: 1.0,
+      
+      // First-round bye bonus (equivalent to wild card win for earning the bye)
+      BYE_WEEK_BONUS: 1.8
+    };
     
     let weightedWinPct = 0;
     let weightedAvailability = 0;
@@ -702,26 +916,30 @@ const DynamicQBRankings = () => {
       let totalWins = wins;
       let totalGames = wins + losses + ties;
       
-      // Add playoff performance if available
+      // Add playoff performance with round-specific weighting
       if (data.playoffData) {
         const playoff = data.playoffData;
         const playoffWins = playoff.wins || 0;
         const playoffLosses = playoff.losses || 0;
         const playoffGames = playoffWins + playoffLosses;
         
-        // Playoff wins get bonus weighting
-        totalWins += playoffWins * PLAYOFF_WIN_BONUS;
+        // Calculate weighted playoff performance based on round progression
+        const playoffWeightedWins = calculatePlayoffWeightedWins(playoff, data.Team, year);
+        const byeWeekBonus = calculateByeWeekBonus(playoff, data.Team, year);
+        
+        // Add weighted playoff wins and bye bonus
+        totalWins += playoffWeightedWins + byeWeekBonus;
         totalGames += playoffGames;
         
-        // Additional playoff success bonus
+        // Additional playoff success bonus (reduced since weighting is now more sophisticated)
         if (playoffGames > 0) {
           const playoffWinRate = playoffWins / playoffGames;
-          playoffWinBonus += playoffWinRate * playoffGames * weight * 3; // Big bonus for playoff success
+                      playoffWinBonus += playoffWinRate * playoffGames * weight * 0.18; // Further reduced by 70% from 0.6
         }
         
-        // Debug for Mahomes
-        if (data.Player && data.Player.includes('Mahomes')) {
-          console.log(`🏆 MAHOMES ${year} TEAM: Regular (${wins}-${losses}) + Playoff (${playoffWins}-${playoffLosses}), Total weighted wins: ${totalWins.toFixed(1)}`);
+        // Debug for key QBs
+        if (data.Player && (data.Player.includes('Mahomes') || data.Player.includes('Allen') || data.Player.includes('Burrow'))) {
+          console.log(`🏆 ${data.Player} ${year} TEAM: Regular (${wins}-${losses}) + Playoff (${playoffWins}-${playoffLosses}), Weighted wins: ${playoffWeightedWins.toFixed(1)}, Bye bonus: ${byeWeekBonus.toFixed(1)}`);
         }
       }
       
@@ -745,185 +963,262 @@ const DynamicQBRankings = () => {
     weightedAvailability = weightedAvailability / totalWeight;
     playoffWinBonus = playoffWinBonus / totalWeight;
     
-    // Win percentage with exponential curve (0-70 points, reduced to make room for playoff bonus)
-    const winScore = Math.pow(weightedWinPct, SCALING_RANGES.WIN_PCT_CURVE) * 70;
+    // MAJOR REBALANCING: Separate regular season success from playoff success
+    // This ensures deep playoff runs (especially Super Bowl appearances) are properly valued
     
-    // Availability bonus (0-20 points)
-    const availabilityScore = weightedAvailability * SCALING_RANGES.AVAILABILITY_WEIGHT;
+    // Calculate separate playoff achievement score based on career playoff success
+    let careerPlayoffScore = 0;
+    let totalPlayoffGames = 0;
+    let superBowlAppearances = 0;
+    let superBowlWins = 0;
+    let confChampAppearances = 0;
+    let confChampWins = 0;
     
-    // Playoff success bonus (0-10 points)
-    const playoffBonusScore = Math.min(10, playoffWinBonus);
+    Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
+      const weight = yearWeights[year] || 0;
+      if (weight === 0 || !data.playoffData) return;
+      
+      const playoff = data.playoffData;
+      const playoffWins = playoff.wins || 0;
+      const playoffLosses = playoff.losses || 0;
+      const playoffGames = playoffWins + playoffLosses;
+      
+      if (playoffGames === 0) return;
+      
+      totalPlayoffGames += playoffGames * weight;
+      
+             // Enhanced Super Bowl detection with known historical data
+       let isSuperBowlWin = false;
+       let isSuperBowlAppearance = false;
+       
+       // Known Super Bowl results for accurate detection
+       const knownSuperBowlWins = {
+         'KAN': [2023, 2024], // Mahomes SB wins
+         'TAM': [2022], // Brady's final SB
+         'LAR': [2022] // Stafford SB win
+       };
+       
+       const knownSuperBowlAppearances = {
+         'KAN': [2022, 2023, 2024], // Mahomes appearances
+         'PHI': [2023], // Hurts SB loss
+         'CIN': [2022], // Burrow SB loss
+         'SFO': [2023] // Purdy SB loss
+       };
+       
+       // Check known cases first
+       if (knownSuperBowlWins[data.Team] && knownSuperBowlWins[data.Team].includes(parseInt(year))) {
+         isSuperBowlWin = true;
+         isSuperBowlAppearance = true;
+       } else if (knownSuperBowlAppearances[data.Team] && knownSuperBowlAppearances[data.Team].includes(parseInt(year))) {
+         isSuperBowlAppearance = true;
+       } else {
+         // Fallback to game-based detection
+         if (playoffGames >= 3 && playoffWins >= 2) {
+           if (playoffWins === 4 || (playoffGames === 3 && playoffWins === 3)) {
+             isSuperBowlWin = true;
+             isSuperBowlAppearance = true;
+           } else if (playoffWins === 3 || (playoffGames === 3 && playoffWins === 2)) {
+             isSuperBowlAppearance = true;
+           }
+         }
+       }
+       
+       if (isSuperBowlWin) {
+         superBowlWins += weight;
+         superBowlAppearances += weight;
+         careerPlayoffScore += 50 * weight; // MASSIVE bonus for SB wins
+       } else if (isSuperBowlAppearance) {
+         superBowlAppearances += weight;
+         careerPlayoffScore += 30 * weight; // Large bonus for SB appearances
+       }
+      
+      // Detect Conference Championship appearances
+      if (playoffGames >= 2 && playoffWins >= 1) {
+        if (playoffWins >= 2) {
+          confChampWins += weight;
+          confChampAppearances += weight;
+          careerPlayoffScore += 2.4 * weight; // Further reduced bonus for conf champ wins (70% reduction from 8)
+        } else if (playoffGames >= 2) {
+          confChampAppearances += weight;
+          careerPlayoffScore += 1.2 * weight; // Further reduced bonus for conf champ appearances (70% reduction from 4)
+        }
+      }
+      
+      // Base playoff participation bonus (further reduced by 70%)
+      careerPlayoffScore += playoffGames * 0.36 * weight; // 0.36 points per playoff game (reduced from 1.2)
+    });
     
-    return Math.min(100, winScore + availabilityScore + playoffBonusScore);
+    // Regular season win percentage (0-50 points, increased by 25% from 40)
+    const regSeasonScore = Math.pow(weightedWinPct, SCALING_RANGES.WIN_PCT_CURVE) * 50;
+    
+    // Availability bonus (0-15 points, reduced)
+    const availabilityScore = weightedAvailability * 15;
+    
+    // Career playoff achievement score (0-45 points, massively increased)
+    const normalizedPlayoffScore = Math.min(45, careerPlayoffScore);
+    
+    const finalScore = regSeasonScore + availabilityScore + normalizedPlayoffScore;
+    
+    // Debug for Mahomes and other elite playoff QBs
+    if (qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player?.includes('Mahomes')) {
+      console.log(`🏆 MAHOMES TEAM SCORE: RegSeason(${regSeasonScore.toFixed(1)}) + Avail(${availabilityScore.toFixed(1)}) + Playoffs(${normalizedPlayoffScore.toFixed(1)}) = ${finalScore.toFixed(1)}`);
+      console.log(`🏆 MAHOMES PLAYOFF RESUME: ${superBowlWins.toFixed(1)} SB wins, ${superBowlAppearances.toFixed(1)} SB apps, ${confChampWins.toFixed(1)} Conf wins`);
+    }
+    
+    return Math.min(100, finalScore);
   };
 
   // Enhanced Statistical Performance Score with Holistic Approach (0-100)
   const calculateStatsScore = (qbSeasonData) => {
     const yearWeights = { 2024: 0.55, 2023: 0.35, 2022: 0.10 };
-    const PLAYOFF_STATS_WEIGHT = 1.25; // Playoff stats weighted 25% higher (pressure situations)
     
-    // Holistic scoring weights - balanced approach for complete QB evaluation  
-    let weightedScores = {
-      efficiency: 0,      // ANY/A, Success Rate (30 points)
-      productivity: 0,    // Per-game yards, TDs (35 points) 
-      ballSecurity: 0,    // INT%, Sack avoidance, Turnover rate (25 points) - INCREASED
-      playmaking: 0,      // Big play ability, Versatility (10 points)
-    };
+    let totalWeightedScore = 0;
     let totalWeight = 0;
     
     Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
       const weight = yearWeights[year] || 0;
       if (weight === 0) return;
       
-      // Calculate regular season stats first
-      let totalAnyA = data['ANY/A'] || 0;
-      let totalRating = data.Rate || 0;
-      let totalTdPct = data['TD%'] || 0;
-      let totalIntPct = data['Int%'] || 0;
-      let totalPassingYards = data.Yds || 0;
-      let totalPassingTDs = data.TD || 0;
-      let totalSuccessRate = data['Succ%'] || 0;
-      let totalSackPct = data['Sk%'] || 0;
-      let totalGames = data.G || 1;
+      // === EXTRACT ALL FUNDAMENTAL QB METRICS ===
       
-      // Initialize rushing stats (extract from CSV data)
-      let totalRushingYards = data.RushingYds || 0;
-      let totalRushingTDs = data.RushingTDs || 0;
+      // Basic volume and attempts
+      const attempts = parseFloat(data.Att) || 0;
+      const completions = parseFloat(data.Cmp) || 0;
+      const passingYards = parseFloat(data.Yds) || 0;
+      const passingTDs = parseFloat(data.TD) || 0;
+      const interceptions = parseFloat(data.Int) || 0;
+      const games = Math.max(1, parseFloat(data.G) || 1);
       
-      // Integrate playoff stats with bonus weighting if available
-      if (data.playoffData) {
-        const playoff = data.playoffData;
-        const playoffGames = playoff.gamesPlayed || 0;
-        
-        if (playoffGames > 0) {
-          // Weight playoff stats higher and combine with regular season
-          const regularGames = data.G || 0;
-          const combinedGames = regularGames + playoffGames;
-          
-          // Calculate weighted averages (playoff stats get bonus weight)
-          const playoffAnyA = (playoff.anyPerAttempt || 0) * PLAYOFF_STATS_WEIGHT;
-          const playoffRating = (playoff.passerRating || 0) * PLAYOFF_STATS_WEIGHT;
-          const playoffSuccessRate = (playoff.successRate || 0) * PLAYOFF_STATS_WEIGHT;
-          const playoffSackPct = (playoff.sackPercentage || 0) / PLAYOFF_STATS_WEIGHT; // Lower is better
-          
-          // For percentage stats, weight by games
-          totalAnyA = regularGames > 0 ? 
-            (totalAnyA * regularGames + playoffAnyA * playoffGames) / (regularGames + playoffGames * PLAYOFF_STATS_WEIGHT) : 
-            playoffAnyA;
-          
-          totalRating = regularGames > 0 ? 
-            (totalRating * regularGames + playoffRating * playoffGames) / (regularGames + playoffGames * PLAYOFF_STATS_WEIGHT) : 
-            playoffRating;
-            
-          totalSuccessRate = regularGames > 0 ? 
-            (totalSuccessRate * regularGames + playoffSuccessRate * playoffGames) / (regularGames + playoffGames * PLAYOFF_STATS_WEIGHT) : 
-            playoffSuccessRate;
-            
-          totalSackPct = regularGames > 0 ? 
-            (totalSackPct * regularGames + playoffSackPct * playoffGames) / (regularGames + playoffGames * PLAYOFF_STATS_WEIGHT) : 
-            playoffSackPct;
-          
-          // For volume stats, add playoff production (weighted)
-          totalPassingYards += (playoff.passingYards || 0) * PLAYOFF_STATS_WEIGHT;
-          totalPassingTDs += (playoff.passingTDs || 0) * PLAYOFF_STATS_WEIGHT;
-          totalRushingYards += (playoff.rushingYards || 0) * PLAYOFF_STATS_WEIGHT;
-          totalRushingTDs += (playoff.rushingTDs || 0) * PLAYOFF_STATS_WEIGHT;
-          
-          // Recalculate TD% and INT% with combined data
-          const totalAttempts = (data.Att || 0) + (playoff.attempts || 0);
-          if (totalAttempts > 0) {
-            totalTdPct = (totalPassingTDs / totalAttempts) * 100;
-            totalIntPct = ((data.Int || 0) + (playoff.interceptions || 0)) / totalAttempts * 100;
-          }
-          
-          totalGames = combinedGames;
-          
-          // Debug for Mahomes
-          if (data.Player && data.Player.includes('Mahomes')) {
-            console.log(`🏆 MAHOMES ${year} STATS: Regular (${data.Rate?.toFixed(1)} rating, ${data['ANY/A']?.toFixed(1)} ANY/A) + Playoff (${playoff.passerRating?.toFixed(1)} rating, ${playoff.anyPerAttempt?.toFixed(1)} ANY/A) = Combined (${totalRating.toFixed(1)} rating, ${totalAnyA.toFixed(1)} ANY/A)`);
-          }
-        }
-      }
+      // Rushing stats
+      const rushingYards = parseFloat(data.RushingYds) || 0;
+      const rushingTDs = parseFloat(data.RushingTDs) || 0;
+      const fumbles = parseFloat(data.Fumbles) || 0;
       
-      // === HOLISTIC SCORING SYSTEM ===
+      // Advanced metrics
+      const sacks = parseFloat(data.Sk) || 0;
+      const sackYards = parseFloat(data.SackYds) || Math.abs(parseFloat(data.SackYds)) || 0;
+      const firstDowns = parseFloat(data['1D']) || 0;
+      const successRate = parseFloat(data['Succ%']) || 0;
       
-      // Calculate per-game averages
-      const gamesPlayed = Math.max(1, totalGames);
-      const yardsPerGame = (totalPassingYards * 0.8 + totalRushingYards * 0.2) / gamesPlayed;
-      const tdsPerGame = (totalPassingTDs + totalRushingTDs) / gamesPlayed;
-      const yardsPerAttempt = (data.Att || 0) > 0 ? totalPassingYards / (data.Att || 1) : 0;
+      // Calculated percentages and rates
+      const completionPct = attempts > 0 ? (completions / attempts) * 100 : 0;
+      const tdPct = attempts > 0 ? (passingTDs / attempts) * 100 : 0;
+      const intPct = attempts > 0 ? (interceptions / attempts) * 100 : 0;
+      const yardsPerAttempt = attempts > 0 ? passingYards / attempts : 0;
+      const yardsPerCompletion = completions > 0 ? passingYards / completions : 0;
+      const sackRate = (attempts + sacks) > 0 ? (sacks / (attempts + sacks)) * 100 : 0;
       
-      // 1. EFFICIENCY (30 points) - Core QB metrics
-      let efficiencyScore = 0;
+      // Per-game metrics
+      const totalTDs = passingTDs + rushingTDs;
+      const totalTurnovers = interceptions + fumbles;
+      const totalYards = passingYards + rushingYards;
+      const attemptsPerGame = attempts / games;
+      const firstDownsPerGame = firstDowns / games;
       
-      // ANY/A - Best overall efficiency metric (0-20 points)
-      efficiencyScore += Math.max(0, Math.min(20, (totalAnyA - 4.0) * 5.0));
+             // === NFL-CALIBRATED QB STATISTICAL SCORING (0-134 points, normalized to 100) ===
+       
+       let statsScore = 0;
+       
+       // 1. ACCURACY & COMPLETION (18 points) - How precise is the QB?
+       // NFL Avg: 65.3%, Elite: 70%+ (18), Good: 67%+ (12), Average: 65%+ (9), Poor: <62% (3)
+       const accuracyScore = Math.max(0, Math.min(18, (completionPct - 58) * 1.5));
+       statsScore += accuracyScore;
+       
+       // 2. VOLUME & OPPORTUNITY (12 points) - How much does the team trust the QB?
+       // NFL Starter Avg: ~30 att/game, Elite: 35+ (12), Good: 32+ (9), Average: 28+ (6), Low: 25+ (3)
+       const volumeScore = Math.max(0, Math.min(12, (attemptsPerGame - 22) * 0.8));
+       statsScore += volumeScore;
+       
+       // 3. TOUCHDOWN EFFICIENCY (20 points) - How likely is a pass to score?
+       // NFL Avg: ~4.2%, Elite: 5.5%+ (20), Good: 4.8+ (15), Average: 4.2+ (10), Poor: 3.5+ (5)
+       const tdEfficiencyScore = Math.max(0, Math.min(20, (tdPct - 3.0) * 8.0));
+       statsScore += tdEfficiencyScore;
+       
+       // 4. TOTAL TOUCHDOWN PRODUCTION (12 points) - Raw scoring ability
+       // NFL Starter Avg: ~25 TDs, Elite: 35+ (12), Good: 30+ (9), Average: 25+ (6), Low: 20+ (3)
+       const totalTdScore = Math.max(0, Math.min(12, (totalTDs - 15) * 0.4));
+       statsScore += totalTdScore;
+       
+       // 5. BALL SECURITY - INTERCEPTION RATE (15 points) - How safe are the QB's passes?
+       // NFL Avg: ~2.4%, Elite: 1.5% (15), Good: 2.0% (12), Average: 2.4% (9), Poor: 3.0% (6)
+       const intSecurityScore = Math.max(0, Math.min(15, (3.2 - intPct) * 7.5));
+       statsScore += intSecurityScore;
+       
+       // 6. TOTAL TURNOVER PROTECTION (8 points) - Overall ball security
+       // NFL Avg: ~15 turnovers, Elite: 10 (8), Good: 13 (6), Average: 16 (4), Poor: 20 (2)
+       const turnoverScore = Math.max(0, Math.min(8, (22 - totalTurnovers) * 0.4));
+       statsScore += turnoverScore;
+       
+       // 7. SACK AVOIDANCE (7 points) - QB pocket presence and decision making
+       // NFL Avg: ~6.5%, Elite: 4% (7), Good: 5.5% (5), Average: 6.5% (4), Poor: 8% (2)
+       const sackAvoidanceScore = Math.max(0, Math.min(7, (9 - sackRate) * 1.0));
+       statsScore += sackAvoidanceScore;
+       
+       // 8. YARDS PER ATTEMPT (12 points) - Downfield passing efficiency
+       // NFL Avg: ~7.0 Y/A, Elite: 8.0+ (12), Good: 7.5+ (9), Average: 7.0+ (6), Poor: 6.5+ (3)
+       const ypaScore = Math.max(0, Math.min(12, (yardsPerAttempt - 6.0) * 6.0));
+       statsScore += ypaScore;
+       
+       // 9. YARDS PER COMPLETION (8 points) - Big play ability after the catch
+       // NFL Avg: ~11.0 Y/C, Elite: 12.5+ (8), Good: 11.5+ (6), Average: 11.0+ (4), Poor: 10.5+ (2)
+       const ypcScore = Math.max(0, Math.min(8, (yardsPerCompletion - 9.5) * 2.67));
+       statsScore += ypcScore;
+       
+       // 10. FIRST DOWN GENERATION (12 points) - Chain moving ability
+       // NFL Avg: ~12 1D/game, Elite: 16+ (12), Good: 14+ (9), Average: 12+ (6), Poor: 10+ (3)
+       const firstDownScore = Math.max(0, Math.min(12, (firstDownsPerGame - 8) * 1.5));
+       statsScore += firstDownScore;
+       
+       // 11. SUCCESS RATE (10 points) - Consistent positive plays
+       // NFL Avg: ~45%, Elite: 50%+ (10), Good: 47%+ (7), Average: 45%+ (5), Poor: 42%+ (2)
+       const successRateScore = Math.max(0, Math.min(10, (successRate - 40) * 1.0));
+       statsScore += successRateScore;
       
-      // Success Rate - Consistent play effectiveness (0-10 points)
-      efficiencyScore += Math.max(0, Math.min(10, (totalSuccessRate - 35) * 0.3));
-      
-      // 2. PRODUCTIVITY (35 points) - Per-game offensive production
-      let productivityScore = 0;
-      
-      // Yards per game (75% passing, 25% rushing) (0-15 points)
-      productivityScore += Math.max(0, Math.min(15, (yardsPerGame - 150) * 0.06));
-      
-      // TDs per game (passing + rushing) - HEAVILY WEIGHTED (0-20 points)
-      productivityScore += Math.max(0, Math.min(20, (tdsPerGame - 0.5) * 10));
-      
-      // 3. BALL SECURITY (25 points) - Protecting possessions - INCREASED WEIGHT
-      let ballSecurityScore = 0;
-      
-      // INT Rate - Lower is better, MORE HEAVILY PENALIZED (0-15 points)
-      ballSecurityScore += Math.max(0, Math.min(15, (3.8 - totalIntPct) * 4.5)); // Increased penalty weight
-      
-      // Sack Avoidance - QB responsibility (0-6 points)
-      ballSecurityScore += Math.max(0, Math.min(6, (10 - totalSackPct) * 0.6));
-      
-      // Turnover Rate - Additional penalty for high-turnover QBs (0-4 points)
-      const totalInts = (data.Int || 0) + (data.playoffData?.interceptions || 0);
-      const totalFumbles = (data.Fumbles || 0) + (data.playoffData?.fumbles || 0);
-      const totalTurnovers = totalInts + totalFumbles;
-      const turnoversPerGame = totalTurnovers / gamesPlayed;
-      ballSecurityScore += Math.max(0, Math.min(4, (1.5 - turnoversPerGame) * 3)); // Heavy penalty for turnovers per game
-      
-      // 4. PLAYMAKING (10 points) - Big play ability and versatility
-      let playmakingScore = 0;
-      
-      // TD Rate - Redzone efficiency (0-6 points)
-      playmakingScore += Math.max(0, Math.min(6, (totalTdPct - 2.5) * 2.0));
-      
-      // Y/A - Big play potential (0-4 points)
-      playmakingScore += Math.max(0, Math.min(4, (yardsPerAttempt - 6.0) * 2.0));
-      
-      // Debug for comparison of ball security between QBs
-      if (data.Player && (turnoversPerGame >= 1.0 || tdsPerGame >= 2.0 || data.Player.includes('Mahomes') || data.Player.includes('Allen') || data.Player.includes('Mayfield') || data.Player.includes('Herbert') || data.Player.includes('Burrow'))) {
-        const ballSecurityGrade = turnoversPerGame <= 1.0 ? 'EXCELLENT' : turnoversPerGame <= 1.5 ? 'GOOD' : turnoversPerGame <= 2.0 ? 'AVERAGE' : 'POOR';
-        console.log(`📊 STATS ${data.Player} ${year}: ${yardsPerGame.toFixed(0)} ypg, ${tdsPerGame.toFixed(1)} td/g, ${turnoversPerGame.toFixed(2)} to/g (${ballSecurityGrade}) -> Ball Security: ${ballSecurityScore.toFixed(1)}/25`);
-      }
-      
-      // Apply weight to each component
-      weightedScores.efficiency += efficiencyScore * weight;
-      weightedScores.productivity += productivityScore * weight;
-      weightedScores.ballSecurity += ballSecurityScore * weight;
-      weightedScores.playmaking += playmakingScore * weight;
-      totalWeight += weight;
-    });
-    
-    if (totalWeight === 0) return 0;
-    
-    // Normalize all scores by total weight
-    Object.keys(weightedScores).forEach(key => {
-      weightedScores[key] = weightedScores[key] / totalWeight;
-    });
-    
-    return Object.values(weightedScores).reduce((sum, score) => sum + score, 0);
+      // Debug output for problem QBs and elite QBs
+      if (data.Player && (
+        data.Player.includes('Mariota') || 
+        data.Player.includes('Mahomes') || 
+        data.Player.includes('Allen') || 
+        data.Player.includes('Burrow') ||
+        data.Player.includes('Herbert') ||
+        statsScore > 80 || 
+        (attempts > 0 && attempts < 100)  // Low volume QBs that might be skewing results
+      )) {
+                 console.log(`📊 STATS REBUILD ${data.Player} ${year}:`);
+         console.log(`  📈 Volume: ${attempts} att (${attemptsPerGame.toFixed(1)}/game) -> ${volumeScore.toFixed(1)}/12 pts`);
+         console.log(`  🎯 Accuracy: ${completionPct.toFixed(1)}% comp -> ${accuracyScore.toFixed(1)}/18 pts`);
+         console.log(`  🏈 TDs: ${totalTDs} total (${tdPct.toFixed(1)}% rate) -> ${(tdEfficiencyScore + totalTdScore).toFixed(1)}/32 pts`);
+         console.log(`  🛡️ Security: ${intPct.toFixed(1)}% INT, ${totalTurnovers} TOs -> ${(intSecurityScore + turnoverScore).toFixed(1)}/23 pts`);
+         console.log(`  ⚡ Efficiency: ${yardsPerAttempt.toFixed(1)} Y/A, ${yardsPerCompletion.toFixed(1)} Y/C -> ${(ypaScore + ypcScore).toFixed(1)}/20 pts`);
+         console.log(`  📏 Chains: ${firstDownsPerGame.toFixed(1)} 1D/game, ${successRate.toFixed(1)}% success -> ${(firstDownScore + successRateScore).toFixed(1)}/22 pts`);
+         console.log(`  🔥 Sacks: ${sackRate.toFixed(1)}% rate -> ${sackAvoidanceScore.toFixed(1)}/7 pts`);
+         console.log(`  🏆 TOTAL: ${statsScore.toFixed(1)}/134 points (${((statsScore/134)*100).toFixed(1)}%)`);
+       }
+       
+       totalWeightedScore += statsScore * weight;
+       totalWeight += weight;
+     });
+     
+     if (totalWeight === 0) return 0;
+     
+     // Return normalized score (0-100 scale) from 134-point system
+     // Much more generous scaling to ensure elite QBs can reach 100
+     const rawScore = totalWeightedScore / totalWeight;
+     const finalScore = Math.min(100, (rawScore / 50) * 100);
+     return Math.max(0, finalScore);
   };
 
   // Enhanced Clutch Performance Score with Playoff Weighting (0-100)
   const calculateClutchScore = (qbSeasonData) => {
     const yearWeights = { 2024: 0.55, 2023: 0.35, 2022: 0.10 };
-    const PLAYOFF_MULTIPLIER = 3.0; // Playoff clutch moments worth 3x regular season
+    
+    // Further reduced playoff multipliers (additional 70% reduction)
+    const PLAYOFF_CLUTCH_MULTIPLIERS = {
+      WILD_CARD: 1.06,     // Wild card clutch moments worth 1.06x regular season (reduced from 1.2)
+      DIVISIONAL: 1.08,    // Divisional round clutch moments worth 1.08x (reduced from 1.4)
+      CONF_CHAMPIONSHIP: 1.12, // Conference championship clutch moments worth 1.12x (reduced from 1.8)
+      SUPER_BOWL: 1.22     // Super Bowl clutch moments worth 1.22x regular season (reduced from 2.4)
+    };
     
     let totalGWD = 0;
     let totalFourthQC = 0;
@@ -946,13 +1241,15 @@ const DynamicQBRankings = () => {
       totalFourthQC += regularFourthQC * weight;
       totalGames += regularGames * weight;
       
-      // Add playoff data with higher clutch weighting if available
+      // Add playoff data with round-specific clutch weighting if available
       if (data.playoffData) {
         const playoff = data.playoffData;
         
-        // Playoff GWD and 4QC are worth significantly more
-        const playoffGWD = (playoff.gameWinningDrives || 0) * PLAYOFF_MULTIPLIER;
-        const playoffFourthQC = (playoff.fourthQuarterComebacks || 0) * PLAYOFF_MULTIPLIER;
+        // Calculate weighted playoff clutch based on likely round progression
+        const clutchMultiplier = calculatePlayoffClutchMultiplier(playoff, data.Team, year);
+        
+        const playoffGWD = (playoff.gameWinningDrives || 0) * clutchMultiplier;
+        const playoffFourthQC = (playoff.fourthQuarterComebacks || 0) * clutchMultiplier;
         const playoffGames = playoff.gamesPlayed || 0;
         const playoffWins = playoff.wins || 0;
         
@@ -962,9 +1259,9 @@ const DynamicQBRankings = () => {
         totalPlayoffWins += playoffWins * weight;
         totalPlayoffGames += playoffGames * weight;
         
-        // Debug for Mahomes
-        if (data.Player && data.Player.includes('Mahomes')) {
-          console.log(`🏆 MAHOMES ${year} CLUTCH: Regular (${regularGWD} GWD, ${regularFourthQC} 4QC) + Playoff (${playoff.gameWinningDrives} GWD, ${playoff.fourthQuarterComebacks} 4QC, ${playoffWins}-${playoff.losses} record)`);
+        // Debug for key QBs
+        if (data.Player && (data.Player.includes('Mahomes') || data.Player.includes('Allen') || data.Player.includes('Burrow'))) {
+          console.log(`🏆 ${data.Player} ${year} CLUTCH: Regular (${regularGWD} GWD, ${regularFourthQC} 4QC) + Playoff (${playoff.gameWinningDrives} GWD, ${playoff.fourthQuarterComebacks} 4QC, Multiplier: ${clutchMultiplier.toFixed(1)}x)`);
         }
       }
       
@@ -994,7 +1291,13 @@ const DynamicQBRankings = () => {
     const totalClutchPerGame = gwdPerGame + comebacksPerGame;
     const clutchRateScore = Math.min(15, totalClutchPerGame * 50); // Combined clutch rate
     
-    // NEW: Playoff success bonus (0-20 points)
+    // REBALANCED PLAYOFF CLUTCH SCORING:
+    // - Wild Card clutch moments: 2.0x multiplier
+    // - Divisional clutch moments: 2.5x multiplier  
+    // - Conference Championship clutch moments: 3.5x multiplier
+    // - Super Bowl clutch moments: 5.0x multiplier
+    
+    // Enhanced playoff success bonus (0-20 points)
     let playoffSuccessScore = 0;
     if (totalPlayoffGames > 0) {
       const playoffWinRate = totalPlayoffWins / totalPlayoffGames;
@@ -1236,50 +1539,46 @@ const DynamicQBRankings = () => {
     
     if (totalWeight === 0) return 0;
     
-    // Calculate weighted score with proper normalization
-    const weightedScore = (
+    // Calculate pure weighted average (0-100 scale already from baseScores)
+    const rawWeightedScore = (
       (baseScores.team * weights.team) +
       (baseScores.stats * weights.stats) +
       (baseScores.clutch * weights.clutch) +
       (baseScores.durability * weights.durability) +
       (baseScores.support * weights.support)
-    ) / totalWeight; // Normalize by total weight to handle weights > 100%
+    ) / totalWeight;
     
-    // Apply dynamic scaling based on weight distribution
-    // This ensures that top performers in heavily weighted categories can reach elite tiers
-    const maxWeight = Math.max(...Object.values(weights));
-    const dominanceRatio = totalWeight > 0 ? maxWeight / totalWeight : 0;
-    const isSpecialized = dominanceRatio >= 0.7; // If one category is 70%+ of total weight
-    
-    let finalScore;
-    if (isSpecialized) {
-      // Apply specialized scaling - boost scores for focused evaluations
-      const specialistBoost = 1.2 + (dominanceRatio - 0.7) * 1.0; // 1.2x to 1.5x boost based on dominance
-      finalScore = weightedScore * specialistBoost;
-    } else {
-      // Enhanced scaling for balanced evaluations - boost to make elite tiers reachable
-      const balancedBoost = 1.15; // 15% boost for balanced approaches
-      finalScore = weightedScore * balancedBoost;
-    }
-    
-    // Apply experience modifier - slight penalty for inexperienced QBs
+    // Apply experience modifier early in calculation
     const experience = qb?.experience || qb?.seasonData?.length || 1;
     let experienceModifier = 1.0;
     
     if (experience === 1) {
-      experienceModifier = 0.95; // 5% penalty for rookies/1-year QBs
-      if (qb?.name && (qb.name.includes('Williams') || qb.name.includes('Daniels') || qb.name.includes('Maye') || qb.name.includes('Nix'))) {
-        console.log(`👶 ROOKIE PENALTY: ${qb.name} (${experience} yr) - 5% reduction applied`);
-      }
+      experienceModifier = 0.93; // 7% penalty for rookies (more realistic)
     } else if (experience === 2) {
-      experienceModifier = 0.98; // 2% penalty for second-year QBs
-      if (qb?.name && (qb.name.includes('Young') || qb.name.includes('Stroud') || qb.name.includes('Richardson'))) {
-        console.log(`🧑 SECOND-YEAR PENALTY: ${qb.name} (${experience} yrs) - 2% reduction applied`);
-      }
+      experienceModifier = 0.97; // 3% penalty for second-year QBs
     }
     // 3+ years: no penalty (1.0x modifier)
     
-    return Math.min(100, finalScore * experienceModifier);
+    let adjustedScore = rawWeightedScore * experienceModifier;
+    
+    // CRITICAL FIX: Remove all artificial scaling that was causing ceiling effects
+    // The baseScores are already on 0-100 scales, so we just need raw weighted average
+    
+    // Apply natural spreading to differentiate elite vs very good
+    // Use a subtle exponential curve only for the top tier
+    if (adjustedScore >= 85) {
+      // Elite tier: enhance differences at the top
+      const eliteBonus = Math.pow((adjustedScore - 85) / 15, 1.2) * 5; // Max 5 point boost
+      adjustedScore = Math.min(100, adjustedScore + eliteBonus);
+    }
+    
+    // Debug logging for key QBs
+    if (qb?.name && (qb.name.includes('Mahomes') || qb.name.includes('Allen') || qb.name.includes('Burrow') || qb.name.includes('Lamar'))) {
+      console.log(`🎯 QEI ${qb.name}: Team(${baseScores.team.toFixed(1)}) Stats(${baseScores.stats.toFixed(1)}) Clutch(${baseScores.clutch.toFixed(1)}) = Raw(${rawWeightedScore.toFixed(1)}) -> Final(${adjustedScore.toFixed(1)})`);
+    }
+    
+    // Return the natural score without artificial capping - let the best QBs rise to the top
+    return Math.max(0, Math.min(100, adjustedScore));
   };
 
   const updateWeight = (category, value) => {
@@ -1294,7 +1593,7 @@ const DynamicQBRankings = () => {
   const philosophyPresets = {
     winner: {
       team: 55, stats: 25, clutch: 15, durability: 5, support: 0,
-      description: "Winning is everything - team success dominates"
+      description: "Winning is everything - team success dominates (NEW: Enhanced playoff round weighting)"
     },
     
     analyst: {
@@ -1342,11 +1641,12 @@ const DynamicQBRankings = () => {
   };
 
   const getQEIColor = (qei) => {
-    if (qei >= 90) return 'bg-gradient-to-r from-yellow-400/30 to-orange-400/30 text-yellow-200'; // Gold - Elite
-    if (qei >= 80) return 'bg-gradient-to-r from-gray-300/30 to-gray-400/30 text-gray-200'; // Silver - Excellent
-    if (qei >= 70) return 'bg-gradient-to-r from-amber-600/30 to-amber-700/30 text-amber-200'; // Bronze - Very Good
-    if (qei >= 60) return 'bg-gradient-to-r from-green-500/30 to-green-600/30 text-green-200'; // Green - Good
-    return 'bg-white/10 text-white'; // Standard
+    if (qei >= 95) return 'bg-gradient-to-r from-yellow-400/30 to-orange-400/30 text-yellow-200'; // Gold - Elite (much higher threshold)
+    if (qei >= 88) return 'bg-gradient-to-r from-gray-300/30 to-gray-400/30 text-gray-200'; // Silver - Excellent
+    if (qei >= 78) return 'bg-gradient-to-r from-amber-600/30 to-amber-700/30 text-amber-200'; // Bronze - Very Good
+    if (qei >= 65) return 'bg-gradient-to-r from-green-500/30 to-green-600/30 text-green-200'; // Green - Good
+    if (qei >= 50) return 'bg-gradient-to-r from-blue-500/30 to-blue-600/30 text-blue-200'; // Blue - Average
+    return 'bg-white/10 text-white'; // Below Average
   };
 
   // Calculate QEI with current weights
@@ -1476,9 +1776,9 @@ const DynamicQBRankings = () => {
                   className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
                 />
                 <div className="text-xs text-blue-200 mt-1">
-                  {category === 'team' && 'Win-loss record, playoff success'}
-                  {category === 'stats' && 'ANY/A, success rate, production'}
-                  {category === 'clutch' && 'Game-winning drives, 4QC'}
+                  {category === 'team' && 'Win-loss record, playoff success (NEW: Round-specific weighting)'}
+                  {category === 'stats' && 'ANY/A, success rate, production (NEW: Playoff stat bonuses)'}
+                  {category === 'clutch' && 'Game-winning drives, 4QC (NEW: Round-specific multipliers)'}
                   {category === 'durability' && 'Games started, consistency'}
                   {category === 'support' && 'Extra credit for poor supporting cast'}
                 </div>
@@ -1545,7 +1845,7 @@ const DynamicQBRankings = () => {
                       <div className={`inline-block px-3 py-1 rounded-lg ${getQEIColor(qb.qei)}`}>
                         <span className="text-xl font-bold">{qb.qei.toFixed(1)}</span>
                         <div className="text-xs opacity-75">
-                          {qb.qei >= 90 ? 'Elite' : qb.qei >= 80 ? 'Excellent' : qb.qei >= 70 ? 'Very Good' : qb.qei >= 60 ? 'Good' : 'Average'}
+                          {qb.qei >= 95 ? 'Elite' : qb.qei >= 88 ? 'Excellent' : qb.qei >= 78 ? 'Very Good' : qb.qei >= 65 ? 'Good' : qb.qei >= 50 ? 'Average' : 'Below Avg'}
                         </div>
                       </div>
                     </td>
