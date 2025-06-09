@@ -730,12 +730,12 @@ const DynamicQBRankings = () => {
     const yearWeights = { 2024: 0.55, 2023: 0.35, 2022: 0.10 };
     const PLAYOFF_STATS_WEIGHT = 1.25; // Playoff stats weighted 25% higher (pressure situations)
     
-    // Holistic scoring weights - balanced approach for complete QB evaluation
+    // Holistic scoring weights - balanced approach for complete QB evaluation  
     let weightedScores = {
-      efficiency: 0,      // ANY/A, Rating, Success Rate (35 points)
-      productivity: 0,    // Total yards, TDs, Volume (30 points) 
-      ballSecurity: 0,    // INT%, Sack avoidance (20 points)
-      playmaking: 0,      // Big play ability, Versatility (15 points)
+      efficiency: 0,      // ANY/A, Success Rate (30 points)
+      productivity: 0,    // Per-game yards, TDs (35 points) 
+      ballSecurity: 0,    // INT%, Sack avoidance, Turnover rate (25 points) - INCREASED
+      playmaking: 0,      // Big play ability, Versatility (10 points)
     };
     let totalWeight = 0;
     
@@ -815,44 +815,57 @@ const DynamicQBRankings = () => {
       
       // === HOLISTIC SCORING SYSTEM ===
       
-      // 1. EFFICIENCY (25 points) - Core QB metrics (NO PASSER RATING) - REDUCED IMPACT
+      // Calculate per-game averages
+      const gamesPlayed = Math.max(1, totalGames);
+      const yardsPerGame = (totalPassingYards * 0.75 + totalRushingYards * 0.25) / gamesPlayed;
+      const tdsPerGame = (totalPassingTDs + totalRushingTDs) / gamesPlayed;
+      const yardsPerAttempt = (data.Att || 0) > 0 ? totalPassingYards / (data.Att || 1) : 0;
+      
+      // 1. EFFICIENCY (30 points) - Core QB metrics
       let efficiencyScore = 0;
       
-      // ANY/A - Best overall efficiency metric (0-18 points) - REDUCED FROM 25
-      efficiencyScore += Math.max(0, Math.min(18, (totalAnyA - 4.0) * 4.5));
+      // ANY/A - Best overall efficiency metric (0-20 points)
+      efficiencyScore += Math.max(0, Math.min(20, (totalAnyA - 4.0) * 5.0));
       
-      // Success Rate - Consistent play effectiveness (0-7 points) - REDUCED FROM 10
-      efficiencyScore += Math.max(0, Math.min(7, (totalSuccessRate - 35) * 0.25));
+      // Success Rate - Consistent play effectiveness (0-10 points)
+      efficiencyScore += Math.max(0, Math.min(10, (totalSuccessRate - 35) * 0.3));
       
-      // 2. PRODUCTIVITY (40 points) - Total offensive production (TD-heavy focus) - INCREASED FROM 30
+      // 2. PRODUCTIVITY (35 points) - Per-game offensive production
       let productivityScore = 0;
       
-      // Total Yards (75% passing, 25% rushing) - Weighted yards calculation
-      const totalYards = (totalPassingYards * 0.75) + (totalRushingYards * 0.25);
-      productivityScore += Math.max(0, Math.min(15, (totalYards - 2500) * 0.000012));
+      // Yards per game (75% passing, 25% rushing) (0-15 points)
+      productivityScore += Math.max(0, Math.min(15, (yardsPerGame - 150) * 0.06));
       
-      // Total TDs (passing + rushing at full weight) - HEAVILY WEIGHTED
-      const totalTDs = totalPassingTDs + totalRushingTDs;
-      productivityScore += Math.max(0, Math.min(25, (totalTDs - 8) * 1.0)); // Increased from 20 to 25 points max
+      // TDs per game (passing + rushing) - HEAVILY WEIGHTED (0-20 points)
+      productivityScore += Math.max(0, Math.min(20, (tdsPerGame - 0.5) * 10));
       
-      // 3. BALL SECURITY (20 points) - Protecting possessions (UNCHANGED)
+      // 3. BALL SECURITY (25 points) - Protecting possessions - INCREASED WEIGHT
       let ballSecurityScore = 0;
       
-      // INT Rate - Lower is better (0-12 points)
-      ballSecurityScore += Math.max(0, Math.min(12, (3.5 - totalIntPct) * 3));
+      // INT Rate - Lower is better, MORE HEAVILY PENALIZED (0-15 points)
+      ballSecurityScore += Math.max(0, Math.min(15, (3.8 - totalIntPct) * 4.5)); // Increased penalty weight
       
-      // Sack Avoidance - QB responsibility (0-8 points)
-      ballSecurityScore += Math.max(0, Math.min(8, (10 - totalSackPct) * 0.8));
+      // Sack Avoidance - QB responsibility (0-6 points)
+      ballSecurityScore += Math.max(0, Math.min(6, (10 - totalSackPct) * 0.6));
       
-      // 4. PLAYMAKING (15 points) - Big play ability and versatility (UNCHANGED)
+      // Turnover Rate - Additional penalty for high-turnover QBs (0-4 points)
+      const totalInts = (data.Int || 0) + (data.playoffData?.interceptions || 0);
+      const intPerGame = totalInts / gamesPlayed;
+      ballSecurityScore += Math.max(0, Math.min(4, (1.0 - intPerGame) * 4)); // Heavy penalty for INTs per game
+      
+      // 4. PLAYMAKING (10 points) - Big play ability and versatility
       let playmakingScore = 0;
       
-      // TD Rate - Redzone efficiency (0-10 points) - INCREASED WEIGHT
-      playmakingScore += Math.max(0, Math.min(10, (totalTdPct - 2.5) * 2.5)); // Increased from 8 to 10 points, lowered threshold
+      // TD Rate - Redzone efficiency (0-6 points)
+      playmakingScore += Math.max(0, Math.min(6, (totalTdPct - 2.5) * 2.0));
       
-      // Y/A - Big play potential (0-5 points) - Reduced to emphasize TD rate
-      const yardsPerAttempt = totalGames > 0 ? totalPassingYards / ((data.Att || 0) + 1) : 0;
-      playmakingScore += Math.max(0, Math.min(5, (yardsPerAttempt - 6.0) * 2.5));
+      // Y/A - Big play potential (0-4 points)
+      playmakingScore += Math.max(0, Math.min(4, (yardsPerAttempt - 6.0) * 2.0));
+      
+      // Debug for high-volume or high-turnover QBs
+      if (data.Player && (intPerGame >= 1.0 || tdsPerGame >= 2.0 || data.Player.includes('Mahomes') || data.Player.includes('Allen') || data.Player.includes('Herbert'))) {
+        console.log(`📊 STATS ${data.Player} ${year}: ${yardsPerGame.toFixed(0)} ypg, ${tdsPerGame.toFixed(1)} td/g, ${intPerGame.toFixed(2)} int/g -> Eff:${efficiencyScore.toFixed(1)}, Prod:${productivityScore.toFixed(1)}, Ball:${ballSecurityScore.toFixed(1)}, Play:${playmakingScore.toFixed(1)}`);
+      }
       
       // Apply weight to each component
       weightedScores.efficiency += efficiencyScore * weight;
