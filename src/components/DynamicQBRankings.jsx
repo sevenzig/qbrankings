@@ -210,12 +210,14 @@ const DynamicQBRankings = () => {
         const playerName = qb.Player.trim();
         const gamesStarted = parseInt(qb.GS) || 0;
         
-        // Skip if no meaningful playing time this season
-        if (gamesStarted < 3) return;
+        // Include ALL games from ALL seasons - no minimum threshold
         
-        // Debug Patrick Mahomes specifically (simplified)
+        // Debug specific players
         if (playerName.includes('Mahomes')) {
           console.log(`✅ MAHOMES ${year} PASSING: ${parseInt(qb.PassingYds) || 0} yards, ${parseInt(qb.TD) || 0} TDs`);
+        }
+        if (playerName.includes('Rodgers')) {
+          console.log(`✅ RODGERS ${year} PASSING: ${gamesStarted} games started, ${parseInt(qb.PassingYds) || 0} yards, ${parseInt(qb.TD) || 0} TDs`);
         }
         
         if (!playerData[playerName]) {
@@ -278,9 +280,12 @@ const DynamicQBRankings = () => {
         career.completions += parseInt(qb.Cmp) || 0;
         career.attempts += parseInt(qb.Att) || 0;
         
-        // Debug Mahomes career accumulation (simplified)
+        // Debug career accumulation
         if (playerName.includes('Mahomes')) {
           console.log(`✅ MAHOMES ${year} PASSING: ${yearYards} yards added, career total now: ${career.passingYards}`);
+        }
+        if (playerName.includes('Rodgers')) {
+          console.log(`✅ RODGERS ${year} PASSING: ${gamesStarted} games added, career games now: ${career.gamesStarted}`);
         }
         
         // Track passer rating for averaging (weighted by games started)
