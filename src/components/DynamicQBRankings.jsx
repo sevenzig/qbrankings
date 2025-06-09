@@ -88,6 +88,7 @@ const DynamicQBRankings = () => {
         // Column 29 = ANY/A (Adjusted Net Yards per Attempt)
         // Column 30 = 4QC (4th Quarter Comebacks)
         // Column 31 = GWD (Game Winning Drives)
+        // Look for additional rushing columns if present
         if (values.length > 30) {
           obj.PassingYds = values[11] || '0';  // Force passing yards
           obj.SuccessRate = values[17] || '0'; // Success rate (column 18, index 17)
@@ -96,6 +97,14 @@ const DynamicQBRankings = () => {
           obj.AnyPerAttempt = values[29] || '0'; // ANY/A (column 30, index 29)
           obj.ClutchFourthQC = values[30] || '0'; // 4th Quarter Comebacks (column 31, index 30)
           obj.ClutchGWD = values[31] || '0';     // Game Winning Drives (column 32, index 31)
+          
+          // Check for rushing stats in extended columns (if available)
+          if (values.length > 35) {
+            obj.RushingAtt = values[32] || '0';   // Rushing attempts
+            obj.RushingYds = values[33] || '0';   // Rushing yards  
+            obj.RushingTDs = values[34] || '0';   // Rushing touchdowns
+            obj.RushingYPA = values[35] || '0';   // Rushing yards per attempt
+          }
         }
         
         // Debug first few rows
@@ -181,7 +190,7 @@ const DynamicQBRankings = () => {
     return teamMap[teamAbbr] || { id: '0', name: teamAbbr, logo: '' };
   };
 
-  const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQbs2024, playoffQbs2023, playoffQbs2022) => {
+  const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQbs2024, playoffQbs2023, playoffQbs2022, rushingQbs2024, rushingQbs2023, rushingQbs2022, rushingPlayoffQbs2024, rushingPlayoffQbs2023, rushingPlayoffQbs2022) => {
     const playerData = {};
     
     // Process each year of data
@@ -336,6 +345,90 @@ const DynamicQBRankings = () => {
       });
     });
     
+    // Process rushing data for regular season
+    const rushingYearsData = [
+      { year: 2024, data: rushingQbs2024 },
+      { year: 2023, data: rushingQbs2023 },
+      { year: 2022, data: rushingQbs2022 }
+    ];
+
+    rushingYearsData.forEach(({ year, data }) => {
+      data.forEach(qb => {
+        // Only process quarterbacks with valid data
+        if (qb.Pos !== 'QB' || !qb.Player || !qb.Team || qb.Team.length > 3) {
+          return;
+        }
+        
+        const playerName = qb.Player.trim();
+        
+        // Only add rushing data if the player already exists (played regular season passing)
+        if (!playerData[playerName]) return;
+        
+        // Add rushing data to the existing regular season data for this year
+        const existingSeasonIndex = playerData[playerName].seasons.findIndex(s => s.year === year);
+        if (existingSeasonIndex >= 0) {
+          const season = playerData[playerName].seasons[existingSeasonIndex];
+          
+          // Add rushing statistics
+          season.rushingYards = parseInt(qb.Yds) || 0;
+          season.rushingTDs = parseInt(qb.TD) || 0;
+          season.rushingAttempts = parseInt(qb.Att) || 0;
+          
+          // Update career rushing totals
+          const career = playerData[playerName].career;
+          career.rushingYards = (career.rushingYards || 0) + season.rushingYards;
+          career.rushingTDs = (career.rushingTDs || 0) + season.rushingTDs;
+          
+          // Debug for mobile QBs
+          if (season.rushingYards > 200) {
+            console.log(`🏃 RUSHING ${playerName} ${year}: ${season.rushingYards} yards, ${season.rushingTDs} TDs`);
+          }
+        }
+      });
+    });
+
+    // Process rushing playoff data
+    const rushingPlayoffYearsData = [
+      { year: 2024, data: rushingPlayoffQbs2024 },
+      { year: 2023, data: rushingPlayoffQbs2023 },
+      { year: 2022, data: rushingPlayoffQbs2022 }
+    ];
+
+    rushingPlayoffYearsData.forEach(({ year, data }) => {
+      data.forEach(qb => {
+        // Only process quarterbacks with valid data
+        if (qb.Pos !== 'QB' || !qb.Player || !qb.Team || qb.Team.length > 3) {
+          return;
+        }
+        
+        const playerName = qb.Player.trim();
+        
+        // Only add rushing playoff data if the player already exists
+        if (!playerData[playerName]) return;
+        
+        // Add rushing playoff data to the existing season
+        const existingSeasonIndex = playerData[playerName].seasons.findIndex(s => s.year === year);
+        if (existingSeasonIndex >= 0) {
+          const season = playerData[playerName].seasons[existingSeasonIndex];
+          
+          // Ensure playoff data exists
+          if (!season.playoffData) {
+            season.playoffData = {};
+          }
+          
+          // Add rushing playoff statistics
+          season.playoffData.rushingYards = parseInt(qb.Yds) || 0;
+          season.playoffData.rushingTDs = parseInt(qb.TD) || 0;
+          season.playoffData.rushingAttempts = parseInt(qb.Att) || 0;
+          
+          // Debug rushing playoff data for mobile QBs
+          if (season.playoffData.rushingYards > 50) {
+            console.log(`🏃🏆 PLAYOFF RUSHING ${playerName} ${year}: ${season.playoffData.rushingYards} yards, ${season.playoffData.rushingTDs} TDs`);
+          }
+        }
+      });
+    });
+    
     // Calculate final career averages
     Object.values(playerData).forEach(player => {
       const career = player.career;
@@ -366,15 +459,32 @@ const DynamicQBRankings = () => {
       setError(null);
       console.log('🔄 Loading QB data from CSV files...');
       
-      // Load CSV data files (regular season + playoffs)
+      // Load CSV data files (regular season + playoffs + rushing)
       const response2024 = await fetch('/data/2024.csv');
       const response2023 = await fetch('/data/2023.csv');
       const response2022 = await fetch('/data/2022.csv');
       const responsePlayoffs2024 = await fetch('/data/2024playoffs.csv');
       const responsePlayoffs2023 = await fetch('/data/2023playoffs.csv');
       const responsePlayoffs2022 = await fetch('/data/2022playoffs.csv');
+      const responseRushing2024 = await fetch('/data/2024qbrushing.csv');
+      const responseRushing2023 = await fetch('/data/2023qbrushing.csv');
+      const responseRushing2022 = await fetch('/data/2022qbrushing.csv');
+      const responseRushingPlayoffs2024 = await fetch('/data/2024qbrushingplayoffs.csv');
+      const responseRushingPlayoffs2023 = await fetch('/data/2023qbrushingplayoffs.csv');
+      const responseRushingPlayoffs2022 = await fetch('/data/2022qbrushingplayoffs.csv');
       
       if (!response2024.ok) throw new Error('Failed to load 2024 data');
+      if (!response2023.ok) throw new Error('Failed to load 2023 data');
+      if (!response2022.ok) throw new Error('Failed to load 2022 data');
+      if (!responsePlayoffs2024.ok) throw new Error('Failed to load 2024 playoff data');
+      if (!responsePlayoffs2023.ok) throw new Error('Failed to load 2023 playoff data');
+      if (!responsePlayoffs2022.ok) throw new Error('Failed to load 2022 playoff data');
+      if (!responseRushing2024.ok) throw new Error('Failed to load 2024 rushing data');
+      if (!responseRushing2023.ok) throw new Error('Failed to load 2023 rushing data');
+      if (!responseRushing2022.ok) throw new Error('Failed to load 2022 rushing data');
+      if (!responseRushingPlayoffs2024.ok) throw new Error('Failed to load 2024 playoff rushing data');
+      if (!responseRushingPlayoffs2023.ok) throw new Error('Failed to load 2023 playoff rushing data');
+      if (!responseRushingPlayoffs2022.ok) throw new Error('Failed to load 2022 playoff rushing data');
       
       const csv2024 = await response2024.text();
       const csv2023 = await response2023.text();
@@ -382,6 +492,12 @@ const DynamicQBRankings = () => {
       const csvPlayoffs2024 = await responsePlayoffs2024.text();
       const csvPlayoffs2023 = await responsePlayoffs2023.text();
       const csvPlayoffs2022 = await responsePlayoffs2022.text();
+      const csvRushing2024 = await responseRushing2024.text();
+      const csvRushing2023 = await responseRushing2023.text();
+      const csvRushing2022 = await responseRushing2022.text();
+      const csvRushingPlayoffs2024 = await responseRushingPlayoffs2024.text();
+      const csvRushingPlayoffs2023 = await responseRushingPlayoffs2023.text();
+      const csvRushingPlayoffs2022 = await responseRushingPlayoffs2022.text();
       
       console.log('✅ CSV files loaded successfully');
       
@@ -390,25 +506,35 @@ const DynamicQBRankings = () => {
       console.log('🔍 Raw CSV 2024 first 200 chars:', csv2024.substring(0, 200));
       console.log('🔍 Raw CSV 2024 first line:', csv2024.split('\n')[0]);
       
-      // Parse CSV data from all three years (regular season + playoffs)
+      // Parse CSV data from all three years (regular season + playoffs + rushing)
       const qbs2024 = parseCSV(csv2024);
       const qbs2023 = parseCSV(csv2023);
       const qbs2022 = parseCSV(csv2022);
       const playoffQbs2024 = parseCSV(csvPlayoffs2024);
       const playoffQbs2023 = parseCSV(csvPlayoffs2023);
       const playoffQbs2022 = parseCSV(csvPlayoffs2022);
+      const rushingQbs2024 = parseCSV(csvRushing2024);
+      const rushingQbs2023 = parseCSV(csvRushing2023);
+      const rushingQbs2022 = parseCSV(csvRushing2022);
+      const rushingPlayoffQbs2024 = parseCSV(csvRushingPlayoffs2024);
+      const rushingPlayoffQbs2023 = parseCSV(csvRushingPlayoffs2023);
+      const rushingPlayoffQbs2022 = parseCSV(csvRushingPlayoffs2022);
       
       console.log(`📊 Parsed regular season data: ${qbs2024.length} QBs in 2024, ${qbs2023.length} in 2023, ${qbs2022.length} in 2022`);
       console.log(`🏆 Parsed playoff data: ${playoffQbs2024.length} QBs in 2024 playoffs, ${playoffQbs2023.length} in 2023 playoffs, ${playoffQbs2022.length} in 2022 playoffs`);
+      console.log(`🏃 Parsed rushing data: ${rushingQbs2024.length} QBs in 2024, ${rushingQbs2023.length} in 2023, ${rushingQbs2022.length} in 2022`);
+      console.log(`🏃🏆 Parsed playoff rushing data: ${rushingPlayoffQbs2024.length} QBs in 2024, ${rushingPlayoffQbs2023.length} in 2023, ${rushingPlayoffQbs2022.length} in 2022`);
       
       // Debug: Check first few rows of parsed data
       console.log('🔍 Debug - First 3 rows of 2024 data:', qbs2024.slice(0, 3));
       console.log('🔍 Debug - Available columns:', Object.keys(qbs2024[0] || {}));
       
-      // Combine regular season and playoff data from all years by player name
+      // Combine regular season, playoff, and rushing data from all years by player name
       const combinedQBData = combinePlayerDataAcrossYears(
         qbs2024, qbs2023, qbs2022,
-        playoffQbs2024, playoffQbs2023, playoffQbs2022
+        playoffQbs2024, playoffQbs2023, playoffQbs2022,
+        rushingQbs2024, rushingQbs2023, rushingQbs2022,
+        rushingPlayoffQbs2024, rushingPlayoffQbs2023, rushingPlayoffQbs2022
       );
       
       console.log(`📊 Combined data for ${Object.keys(combinedQBData).length} unique quarterbacks across 3 seasons`);
@@ -446,13 +572,13 @@ const DynamicQBRankings = () => {
               interceptions: data.career.interceptions,
               completions: data.career.completions,
               attempts: data.career.attempts,
-              rushingYards: 0,
-              rushingTDs: 0,
+              rushingYards: data.career.rushingYards || 0,
+              rushingTDs: data.career.rushingTDs || 0,
               passerRating: data.career.avgPasserRating
             },
             // Add season breakdown for detailed view
             seasonData: data.seasons,
-            stats2024: `3-Year Total: ${data.career.passingYards} yds, ${data.career.passingTDs} TD`
+            stats2024: `3-Year Total: ${data.career.passingYards} pass yds, ${data.career.passingTDs + (data.career.rushingTDs || 0)} total TDs (${data.career.rushingYards || 0} rush yds)`
           };
         });
       
@@ -499,6 +625,10 @@ const DynamicQBRankings = () => {
           Team: season.team,
           Player: qb.name,
           Age: season.age,
+          
+          // Add rushing data
+          RushingYds: season.rushingYards || 0,
+          RushingTDs: season.rushingTDs || 0,
           
           // Add playoff data if available
           playoffData: season.playoffData || null
@@ -595,13 +725,17 @@ const DynamicQBRankings = () => {
     return Math.min(100, winScore + availabilityScore + playoffBonusScore);
   };
 
-  // Enhanced Statistical Performance Score with Playoff Integration (0-100)
+  // Enhanced Statistical Performance Score with Holistic Approach (0-100)
   const calculateStatsScore = (qbSeasonData) => {
     const yearWeights = { 2024: 0.55, 2023: 0.35, 2022: 0.10 };
     const PLAYOFF_STATS_WEIGHT = 1.25; // Playoff stats weighted 25% higher (pressure situations)
     
+    // Holistic scoring weights - balanced approach for complete QB evaluation
     let weightedScores = {
-      anyA: 0, rating: 0, efficiency: 0, volume: 0, success: 0, sackAvoidance: 0
+      efficiency: 0,      // ANY/A, Rating, Success Rate (35 points)
+      productivity: 0,    // Total yards, TDs, Volume (30 points) 
+      ballSecurity: 0,    // INT%, Sack avoidance (20 points)
+      playmaking: 0,      // Big play ability, Versatility (15 points)
     };
     let totalWeight = 0;
     
@@ -619,6 +753,10 @@ const DynamicQBRankings = () => {
       let totalSuccessRate = data['Succ%'] || 0;
       let totalSackPct = data['Sk%'] || 0;
       let totalGames = data.G || 1;
+      
+      // Initialize rushing stats (extract from CSV data)
+      let totalRushingYards = data.RushingYds || 0;
+      let totalRushingTDs = data.RushingTDs || 0;
       
       // Integrate playoff stats with bonus weighting if available
       if (data.playoffData) {
@@ -656,6 +794,8 @@ const DynamicQBRankings = () => {
           // For volume stats, add playoff production (weighted)
           totalPassingYards += (playoff.passingYards || 0) * PLAYOFF_STATS_WEIGHT;
           totalPassingTDs += (playoff.passingTDs || 0) * PLAYOFF_STATS_WEIGHT;
+          totalRushingYards += (playoff.rushingYards || 0) * PLAYOFF_STATS_WEIGHT;
+          totalRushingTDs += (playoff.rushingTDs || 0) * PLAYOFF_STATS_WEIGHT;
           
           // Recalculate TD% and INT% with combined data
           const totalAttempts = (data.Att || 0) + (playoff.attempts || 0);
@@ -673,40 +813,55 @@ const DynamicQBRankings = () => {
         }
       }
       
-      // ANY/A - Best overall efficiency metric (0-35 points)
-      const anyAScore = Math.max(0, Math.min(
-        SCALING_RANGES.ANY_A.max, 
-        (totalAnyA - SCALING_RANGES.ANY_A.threshold) * SCALING_RANGES.ANY_A.scale
-      ));
+      // === HOLISTIC SCORING SYSTEM ===
       
-      // Passer Rating (0-25 points)
-      const ratingScore = Math.max(0, Math.min(
-        SCALING_RANGES.PASSER_RATING.max,
-        (totalRating - SCALING_RANGES.PASSER_RATING.threshold) / SCALING_RANGES.PASSER_RATING.scale
-      ));
+      // 1. EFFICIENCY (35 points) - Core QB metrics
+      let efficiencyScore = 0;
       
-      // TD% vs INT% efficiency differential (0-20 points)
-      const efficiencyGap = Math.max(0, totalTdPct - totalIntPct);
-      const efficiencyScore = Math.min(20, efficiencyGap * 4);
+      // ANY/A - Best overall efficiency metric (0-20 points)
+      efficiencyScore += Math.max(0, Math.min(20, (totalAnyA - 4.5) * 4));
       
-      // Volume production - combined passing yards and TDs (0-15 points)
-      const yardsScore = Math.max(0, Math.min(8, (totalPassingYards - 3000) * 0.000005));
-      const tdScore = Math.max(0, Math.min(7, (totalPassingTDs - 20) * 0.3));
-      const volumeScore = yardsScore + tdScore;
+      // Passer Rating - Traditional benchmark (0-10 points)
+      efficiencyScore += Math.max(0, Math.min(10, (totalRating - 75) * 0.25));
       
-      // Success Rate (0-5 points)  
-      const successScore = Math.max(0, Math.min(5, (totalSuccessRate - 40) * 0.25));
+      // Success Rate - Consistent play effectiveness (0-5 points)
+      efficiencyScore += Math.max(0, Math.min(5, (totalSuccessRate - 40) * 0.2));
       
-      // Sack Avoidance - QB performance metric (0-5 points) 
-      const sackAvoidanceScore = Math.max(0, Math.min(5, (8 - totalSackPct) * 0.625));
+      // 2. PRODUCTIVITY (30 points) - Total offensive production
+      let productivityScore = 0;
+      
+      // Total Yards (75% passing, 25% rushing) - Future-ready for rushing data
+      const totalYards = (totalPassingYards * 0.75) + (totalRushingYards * 0.25);
+      productivityScore += Math.max(0, Math.min(15, (totalYards - 2500) * 0.00001));
+      
+      // Total TDs (passing + rushing at full weight)
+      const totalTDs = totalPassingTDs + totalRushingTDs;
+      productivityScore += Math.max(0, Math.min(15, (totalTDs - 15) * 0.5));
+      
+      // 3. BALL SECURITY (20 points) - Protecting possessions
+      let ballSecurityScore = 0;
+      
+      // INT Rate - Lower is better (0-12 points)
+      ballSecurityScore += Math.max(0, Math.min(12, (3.5 - totalIntPct) * 3));
+      
+      // Sack Avoidance - QB responsibility (0-8 points)
+      ballSecurityScore += Math.max(0, Math.min(8, (10 - totalSackPct) * 0.8));
+      
+      // 4. PLAYMAKING (15 points) - Big play ability and versatility
+      let playmakingScore = 0;
+      
+      // TD Rate - Redzone efficiency (0-8 points)
+      playmakingScore += Math.max(0, Math.min(8, (totalTdPct - 3.0) * 2));
+      
+      // Y/A - Big play potential (0-7 points)
+      const yardsPerAttempt = totalGames > 0 ? totalPassingYards / ((data.Att || 0) + 1) : 0;
+      playmakingScore += Math.max(0, Math.min(7, (yardsPerAttempt - 6.0) * 3));
       
       // Apply weight to each component
-      weightedScores.anyA += anyAScore * weight;
-      weightedScores.rating += ratingScore * weight;
       weightedScores.efficiency += efficiencyScore * weight;
-      weightedScores.volume += volumeScore * weight;
-      weightedScores.success += successScore * weight;
-      weightedScores.sackAvoidance = (weightedScores.sackAvoidance || 0) + sackAvoidanceScore * weight;
+      weightedScores.productivity += productivityScore * weight;
+      weightedScores.ballSecurity += ballSecurityScore * weight;
+      weightedScores.playmaking += playmakingScore * weight;
       totalWeight += weight;
     });
     
