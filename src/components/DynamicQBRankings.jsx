@@ -815,28 +815,25 @@ const DynamicQBRankings = () => {
       
       // === HOLISTIC SCORING SYSTEM ===
       
-      // 1. EFFICIENCY (35 points) - Core QB metrics
+      // 1. EFFICIENCY (35 points) - Core QB metrics (NO PASSER RATING)
       let efficiencyScore = 0;
       
-      // ANY/A - Best overall efficiency metric (0-20 points)
-      efficiencyScore += Math.max(0, Math.min(20, (totalAnyA - 4.5) * 4));
+      // ANY/A - Best overall efficiency metric (0-25 points) - INCREASED WEIGHT
+      efficiencyScore += Math.max(0, Math.min(25, (totalAnyA - 4.0) * 5));
       
-      // Passer Rating - Traditional benchmark (0-10 points)
-      efficiencyScore += Math.max(0, Math.min(10, (totalRating - 75) * 0.25));
+      // Success Rate - Consistent play effectiveness (0-10 points) - INCREASED WEIGHT
+      efficiencyScore += Math.max(0, Math.min(10, (totalSuccessRate - 35) * 0.3));
       
-      // Success Rate - Consistent play effectiveness (0-5 points)
-      efficiencyScore += Math.max(0, Math.min(5, (totalSuccessRate - 40) * 0.2));
-      
-      // 2. PRODUCTIVITY (30 points) - Total offensive production
+      // 2. PRODUCTIVITY (30 points) - Total offensive production (TD-heavy focus)
       let productivityScore = 0;
       
-      // Total Yards (75% passing, 25% rushing) - Future-ready for rushing data
+      // Total Yards (75% passing, 25% rushing) - Reduced weight to emphasize TDs
       const totalYards = (totalPassingYards * 0.75) + (totalRushingYards * 0.25);
-      productivityScore += Math.max(0, Math.min(15, (totalYards - 2500) * 0.00001));
+      productivityScore += Math.max(0, Math.min(10, (totalYards - 2500) * 0.000008));
       
-      // Total TDs (passing + rushing at full weight)
+      // Total TDs (passing + rushing at full weight) - HEAVILY WEIGHTED
       const totalTDs = totalPassingTDs + totalRushingTDs;
-      productivityScore += Math.max(0, Math.min(15, (totalTDs - 15) * 0.5));
+      productivityScore += Math.max(0, Math.min(20, (totalTDs - 10) * 0.8)); // Increased from 15 to 20 points max
       
       // 3. BALL SECURITY (20 points) - Protecting possessions
       let ballSecurityScore = 0;
@@ -850,12 +847,12 @@ const DynamicQBRankings = () => {
       // 4. PLAYMAKING (15 points) - Big play ability and versatility
       let playmakingScore = 0;
       
-      // TD Rate - Redzone efficiency (0-8 points)
-      playmakingScore += Math.max(0, Math.min(8, (totalTdPct - 3.0) * 2));
+      // TD Rate - Redzone efficiency (0-10 points) - INCREASED WEIGHT
+      playmakingScore += Math.max(0, Math.min(10, (totalTdPct - 2.5) * 2.5)); // Increased from 8 to 10 points, lowered threshold
       
-      // Y/A - Big play potential (0-7 points)
+      // Y/A - Big play potential (0-5 points) - Reduced to emphasize TD rate
       const yardsPerAttempt = totalGames > 0 ? totalPassingYards / ((data.Att || 0) + 1) : 0;
-      playmakingScore += Math.max(0, Math.min(7, (yardsPerAttempt - 6.0) * 3));
+      playmakingScore += Math.max(0, Math.min(5, (yardsPerAttempt - 6.0) * 2.5));
       
       // Apply weight to each component
       weightedScores.efficiency += efficiencyScore * weight;
@@ -1366,7 +1363,7 @@ const DynamicQBRankings = () => {
                 />
                 <div className="text-xs text-blue-200 mt-1">
                   {category === 'team' && 'Win-loss record, playoff success'}
-                  {category === 'stats' && 'ANY/A, passer rating, efficiency'}
+                  {category === 'stats' && 'ANY/A, success rate, production'}
                   {category === 'clutch' && 'Game-winning drives, 4QC'}
                   {category === 'durability' && 'Games started, consistency'}
                   {category === 'support' && 'Extra credit for poor supporting cast'}
