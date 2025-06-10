@@ -40,6 +40,22 @@ const DynamicQBRankings = () => {
   });
   const [showTeamDetails, setShowTeamDetails] = useState(false);
 
+  // Component weights for clutch scoring
+  const [clutchWeights, setClutchWeights] = useState({
+    gameWinningDrives: 40,    // GWD score component
+    fourthQuarterComebacks: 25, // 4QC score component
+    clutchRate: 15,           // Combined clutch rate score
+    playoffBonus: 20          // Playoff success bonus
+  });
+  const [showClutchDetails, setShowClutchDetails] = useState(false);
+
+  // Component weights for durability scoring
+  const [durabilityWeights, setDurabilityWeights] = useState({
+    availability: 80,         // Season availability score
+    consistency: 20           // Multi-year consistency bonus
+  });
+  const [showDurabilityDetails, setShowDurabilityDetails] = useState(false);
+
   // Global playoff inclusion toggle - affects ALL calculations
   const [includePlayoffs, setIncludePlayoffs] = useState(true);
 
@@ -109,6 +125,58 @@ const DynamicQBRankings = () => {
         };
       }
       
+      // Calculate total with the new value
+      const newWeights = { ...prev, [component]: newValue };
+      const total = Object.values(newWeights).reduce((sum, val) => sum + val, 0);
+      
+      // Allow independent operation but prevent total from exceeding 100
+      if (total <= 100) {
+        return newWeights;
+      } else {
+        // If total would exceed 100, set to max possible value
+        const otherTotal = Object.keys(prev)
+          .filter(key => key !== component)
+          .reduce((sum, key) => sum + prev[key], 0);
+        const maxValue = 100 - otherTotal;
+        return { ...prev, [component]: Math.max(0, maxValue) };
+      }
+    });
+  };
+
+  const updateClutchWeight = (component, value) => {
+    // If playoffs are disabled, freeze the playoff bonus slider and don't allow changes
+    if (!includePlayoffs && component === 'playoffBonus') {
+      return;
+    }
+    
+    const newValue = parseInt(value);
+    setClutchWeights(prev => {
+      // When playoffs are disabled, automatically set playoffBonus to 0%
+      if (!includePlayoffs && component === 'playoffBonus') {
+        return prev; // Don't change anything
+      }
+      
+      // Calculate total with the new value
+      const newWeights = { ...prev, [component]: newValue };
+      const total = Object.values(newWeights).reduce((sum, val) => sum + val, 0);
+      
+      // Allow independent operation but prevent total from exceeding 100
+      if (total <= 100) {
+        return newWeights;
+      } else {
+        // If total would exceed 100, set to max possible value
+        const otherTotal = Object.keys(prev)
+          .filter(key => key !== component)
+          .reduce((sum, key) => sum + prev[key], 0);
+        const maxValue = 100 - otherTotal;
+        return { ...prev, [component]: Math.max(0, maxValue) };
+      }
+    });
+  };
+
+  const updateDurabilityWeight = (component, value) => {
+    const newValue = parseInt(value);
+    setDurabilityWeights(prev => {
       // Calculate total with the new value
       const newWeights = { ...prev, [component]: newValue };
       const total = Object.values(newWeights).reduce((sum, val) => sum + val, 0);
@@ -383,16 +451,24 @@ const DynamicQBRankings = () => {
 
   // Calculate QEI with current weights and dynamic component calculations
   const rankedQBs = useMemo(() => {
-    return qbData
-      .map(qb => {
-        // Recalculate base scores with all current weight settings
-        const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, includePlayoffs);
-        return {
-          ...qb,
-          baseScores,
-          qei: calculateQEI(baseScores, qb, weights)
-        };
-      })
+    // First pass: Calculate all base scores
+    const qbsWithBaseScores = qbData.map(qb => {
+      const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, includePlayoffs);
+      return {
+        ...qb,
+        baseScores
+      };
+    });
+    
+    // Extract all base scores for support rebalancing
+    const allQBBaseScores = qbsWithBaseScores.map(qb => qb.baseScores);
+    
+    // Second pass: Calculate QEI with support rebalancing
+    return qbsWithBaseScores
+      .map(qb => ({
+        ...qb,
+        qei: calculateQEI(qb.baseScores, qb, weights, includePlayoffs, allQBBaseScores)
+      }))
       .sort((a, b) => b.qei - a.qei);
   }, [qbData, weights, supportWeights, statsWeights, teamWeights, includePlayoffs]);
 
@@ -560,8 +636,28 @@ const DynamicQBRankings = () => {
                       </button>
                     </div>
                   )}
-                  {category === 'clutch' && 'Game-winning drives, 4QC (NEW: Round-specific multipliers)'}
-                  {category === 'durability' && 'Games started, consistency'}
+                  {category === 'clutch' && (
+                    <div>
+                      <div>Game-winning drives, 4QC (NEW: Round-specific multipliers)</div>
+                      <button
+                        onClick={() => setShowClutchDetails(!showClutchDetails)}
+                        className="mt-1 text-blue-300 hover:text-blue-100 underline text-xs"
+                      >
+                        {showClutchDetails ? '▼ Hide Details' : '▶ Adjust Components'}
+                      </button>
+                    </div>
+                  )}
+                  {category === 'durability' && (
+                    <div>
+                      <div>Games started, consistency</div>
+                      <button
+                        onClick={() => setShowDurabilityDetails(!showDurabilityDetails)}
+                        className="mt-1 text-blue-300 hover:text-blue-100 underline text-xs"
+                      >
+                        {showDurabilityDetails ? '▼ Hide Details' : '▶ Adjust Components'}
+                      </button>
+                    </div>
+                  )}
                   {category === 'support' && (
                     <div>
                       <div>Extra credit for poor supporting cast</div>
@@ -610,8 +706,8 @@ const DynamicQBRankings = () => {
                     </div>
                     <input
                       type="range"
-                      min="5"
-                      max="80"
+                      min="0"
+                      max="100"
                       value={value}
                       onChange={(e) => updateSupportWeight(component, e.target.value)}
                       className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
@@ -659,8 +755,8 @@ const DynamicQBRankings = () => {
                     </div>
                     <input
                       type="range"
-                      min="10"
-                      max="70"
+                      min="0"
+                      max="100"
                       value={value}
                       onChange={(e) => updateStatsWeight(component, e.target.value)}
                       className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
@@ -711,8 +807,8 @@ const DynamicQBRankings = () => {
                     </div>
                     <input
                       type="range"
-                      min="10"
-                      max="90"
+                      min="0"
+                      max="100"
                       value={value}
                       onChange={(e) => updateTeamWeight(component, e.target.value)}
                       disabled={!includePlayoffs && component === 'playoff'}
@@ -739,6 +835,117 @@ const DynamicQBRankings = () => {
                     ⚠️ Playoff component disabled - only Regular Season will be scored
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Clutch Component Details Dropdown */}
+          {showClutchDetails && (
+            <div className="mt-6 bg-white/5 rounded-lg p-4 border-2 border-red-500/30">
+              <h4 className="text-white font-medium mb-3 flex items-center">
+                💎 Clutch Performance Components
+                <span className="ml-2 text-xs text-red-200 bg-red-500/20 px-2 py-1 rounded">
+                  Advanced Settings
+                </span>
+              </h4>
+              <div className="text-xs text-blue-200 mb-4">
+                Adjust how much each component affects the clutch performance score. All components must sum to 100%.
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {Object.entries(clutchWeights).map(([component, value]) => (
+                  <div key={component} className="bg-white/5 rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-white font-medium text-sm">
+                        {component === 'gameWinningDrives' ? 'Game Winning Drives' :
+                         component === 'fourthQuarterComebacks' ? '4th Quarter Comebacks' :
+                         component === 'clutchRate' ? 'Clutch Rate' :
+                         component === 'playoffBonus' ? 'Playoff Bonus' : component}
+                      </label>
+                      <span className="bg-red-500/30 text-red-100 px-2 py-1 rounded text-xs">
+                        {value}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={value}
+                      onChange={(e) => updateClutchWeight(component, e.target.value)}
+                      disabled={!includePlayoffs && component === 'playoffBonus'}
+                      className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                        !includePlayoffs && component === 'playoffBonus' 
+                          ? 'bg-gray-400 cursor-not-allowed opacity-50' 
+                          : 'bg-red-200'
+                      }`}
+                    />
+                    <div className="text-xs text-red-200 mt-1">
+                      {component === 'gameWinningDrives' && 'Drives that directly lead to game-winning scores'}
+                      {component === 'fourthQuarterComebacks' && 'Successful comebacks initiated in 4th quarter'}
+                      {component === 'clutchRate' && 'Combined GWD and 4QC opportunities per game'}
+                      {component === 'playoffBonus' && 'Additional points for playoff clutch performance'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-3 text-center">
+                <span className={`text-sm font-bold ${Object.values(clutchWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-red-400'}`}>
+                  Component Total: {Object.values(clutchWeights).reduce((sum, val) => sum + val, 0)}%
+                </span>
+                {!includePlayoffs && (
+                  <div className="text-xs text-orange-300 mt-1">
+                    ⚠️ Playoff Bonus component disabled - only regular season clutch will be scored
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Durability Component Details Dropdown */}
+          {showDurabilityDetails && (
+            <div className="mt-6 bg-white/5 rounded-lg p-4 border-2 border-orange-500/30">
+              <h4 className="text-white font-medium mb-3 flex items-center">
+                ⚡ Durability Components
+                <span className="ml-2 text-xs text-orange-200 bg-orange-500/20 px-2 py-1 rounded">
+                  Advanced Settings
+                </span>
+              </h4>
+              <div className="text-xs text-blue-200 mb-4">
+                Adjust how much each component affects the durability score. All components must sum to 100%.
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Object.entries(durabilityWeights).map(([component, value]) => (
+                  <div key={component} className="bg-white/5 rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-white font-medium text-sm capitalize">
+                        {component === 'availability' ? 'Season Availability' : 'Multi-Year Consistency'}
+                      </label>
+                      <span className="bg-orange-500/30 text-orange-100 px-2 py-1 rounded text-xs">
+                        {value}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={value}
+                      onChange={(e) => updateDurabilityWeight(component, e.target.value)}
+                      className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="text-xs text-orange-200 mt-1">
+                      {component === 'availability' && 'Weighted average games started across all seasons'}
+                      {component === 'consistency' && 'Bonus points for sustained availability and longevity'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-3 text-center">
+                <span className={`text-sm font-bold ${Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-red-400'}`}>
+                  Component Total: {Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0)}%
+                </span>
               </div>
             </div>
           )}
