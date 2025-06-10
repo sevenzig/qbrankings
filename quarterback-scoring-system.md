@@ -235,11 +235,11 @@ All calculations use temporal weighting across the last three seasons:
 - NYG: 7 (Limited talent, rebuilding)
 
 ### 5.2 Support Score Calculation:
-**Formula**: `max(0, min(100, (100 - Raw Support Quality) × 1.0))`
+**Formula**: `max(0, min(100, Raw Support Quality))`
 
-**Logic**: Poor supporting cast = Higher difficulty adjustment score
-- Teams with excellent support get LOW scores (less extra credit)
-- Teams with poor support get HIGH scores (more extra credit for difficult situation)
+**Logic**: Better supporting cast = Higher quality score
+- Teams with excellent support get HIGH scores (better supporting cast)
+- Teams with poor support get LOW scores (poor supporting cast)
 - Maximum possible support quality: 100 points (35+40+25)
 
 ---

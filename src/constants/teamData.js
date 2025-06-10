@@ -40,7 +40,8 @@ export const TEAM_MAP = {
   'TAM': { id: '27', name: 'Tampa Bay Buccaneers', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/tb.png' },
   'TEN': { id: '10', name: 'Tennessee Titans', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/ten.png' },
   'WSH': { id: '28', name: 'Washington Commanders', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png' },
-  'WAS': { id: '28', name: 'Washington Commanders', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png' }
+  'WAS': { id: '28', name: 'Washington Commanders', logo: 'https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png' },
+  '2TM': { id: '0', name: 'Multiple Teams', logo: '' } // Special case for players who played for multiple teams
 };
 
 export const PHILOSOPHY_PRESETS = {

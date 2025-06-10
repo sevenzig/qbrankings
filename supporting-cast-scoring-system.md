@@ -1,19 +1,19 @@
 # Supporting Cast Scoring System Documentation
 
 ## Overview
-The Supporting Cast Score is a **difficulty adjustment system** that provides extra credit to quarterbacks playing in challenging situations. Unlike other scoring components, this system operates with **inverted logic**: poor supporting cast quality results in higher scores (more extra credit), while excellent supporting cast quality results in lower scores (less extra credit). The maximum possible score is **100 points**.
+The Supporting Cast Score is a **quality assessment system** that rewards quarterbacks playing with better supporting talent. This system operates with **direct logic**: excellent supporting cast quality results in higher scores, while poor supporting cast quality results in lower scores. The maximum possible score is **100 points**.
 
 ---
 
 ## System Philosophy
 
 ### Core Concept
-**"Context Matters"** - Quarterback performance should be evaluated relative to the quality of their supporting cast. A QB throwing for 3,000 yards with poor weapons and protection deserves more credit than one throwing for 3,500 yards with elite talent around them.
+**"Elite Teams, Elite Scores"** - Quarterback performance should reflect the quality of their supporting cast. A QB playing with elite weapons, protection, and defense should be recognized for having superior organizational support, while QBs with poor supporting casts receive lower support scores.
 
-### Inverted Scoring Logic
+### Direct Scoring Logic
 ```javascript
-excellentSupport = LOW score (0-20 points)    // Less extra credit needed
-poorSupport = HIGH score (80-100 points)      // More extra credit deserved
+excellentSupport = HIGH score (80-100 points)    // Elite supporting cast
+poorSupport = LOW score (0-20 points)           // Poor supporting cast
 ```
 
 ### Multi-Team QB Handling
@@ -266,42 +266,38 @@ seasonData.forEach(season => {
 rawSupportQuality = totalSupportQuality / gamesWeightedSum;
 ```
 
-### Step 3: Difficulty Adjustment (Inverted Scoring)
+### Step 3: Quality Assessment (Direct Scoring)
 ```javascript
-const maxSupportQuality = 100; // 35 + 40 + 25
-
-// Invert the scale: poor support = high score, good support = low score
-difficultyAdjustment = max(0, min(100, 
-  (maxSupportQuality - rawSupportQuality) * (100 / maxSupportQuality)
-));
+// Direct scale: good support = high score, poor support = low score
+supportQualityScore = max(0, min(100, rawSupportQuality));
 ```
 
 ### Step 4: Final Support Score
 ```javascript
-finalSupportScore = difficultyAdjustment; // 0-100 scale
+finalSupportScore = supportQualityScore; // 0-100 scale
 ```
 
 ---
 
 ## Real-World Scoring Examples
 
-### Elite Supporting Cast (Low Support Scores):
+### Elite Supporting Cast (High Support Scores):
+
+#### Example: Philadelphia Eagles QB (Jalen Hurts should rank #1)
+- **Offensive Line**: PHI = 32 points
+- **Weapons**: PHI = 34 points
+- **Defense**: PHI = 19 points  
+- **Raw Support Quality**: 85 points
+- **Support Score**: 85 points
+- **Interpretation**: Elite support, high quality score
 
 #### Example: Kansas City Chiefs QB
 - **Offensive Line**: KC = 20 points
 - **Weapons**: KC = 30 points  
 - **Defense**: KC = 23 points
 - **Raw Support Quality**: 73 points
-- **Difficulty Adjustment**: (100 - 73) × 1.0 = **27 points**
-- **Interpretation**: Excellent support, minimal extra credit needed
-
-#### Example: Philadelphia Eagles QB
-- **Offensive Line**: PHI = 32 points
-- **Weapons**: PHI = 34 points
-- **Defense**: PHI = 19 points  
-- **Raw Support Quality**: 85 points
-- **Difficulty Adjustment**: (100 - 85) × 1.0 = **15 points**
-- **Interpretation**: Elite support, very little extra credit
+- **Support Score**: 73 points
+- **Interpretation**: Excellent support, high quality score
 
 ### Average Supporting Cast (Moderate Support Scores):
 
@@ -310,34 +306,34 @@ finalSupportScore = difficultyAdjustment; // 0-100 scale
 - **Weapons**: GB = 16 points
 - **Defense**: GB = 11 points
 - **Raw Support Quality**: 45 points
-- **Difficulty Adjustment**: (100 - 45) × 1.0 = **55 points**
-- **Interpretation**: Average support, moderate extra credit
+- **Support Score**: 45 points
+- **Interpretation**: Average support, moderate quality score
 
 #### Example: Las Vegas Raiders QB
 - **Offensive Line**: LV = 15 points
 - **Weapons**: LV = 19 points
 - **Defense**: LV = 8 points
 - **Raw Support Quality**: 42 points
-- **Difficulty Adjustment**: (100 - 42) × 1.0 = **58 points**
-- **Interpretation**: Below-average support, moderate extra credit
+- **Support Score**: 42 points
+- **Interpretation**: Below-average support, moderate quality score
 
-### Poor Supporting Cast (High Support Scores):
+### Poor Supporting Cast (Low Support Scores):
 
-#### Example: New England Patriots QB
-- **Offensive Line**: NE = 6 points
-- **Weapons**: NE = 8 points
-- **Defense**: NE = 6 points
-- **Raw Support Quality**: 20 points
-- **Difficulty Adjustment**: (100 - 20) × 1.0 = **80 points**
-- **Interpretation**: Poor support, significant extra credit
+#### Example: Houston Texans QB (Davis Mills gets bottom rung)
+- **Offensive Line**: HOU = 8 points (2022)
+- **Weapons**: HOU = 9 points (2022)
+- **Defense**: HOU = 4 points (2022)
+- **Raw Support Quality**: 21 points
+- **Support Score**: 21 points
+- **Interpretation**: Poor support, low quality score
 
 #### Example: Carolina Panthers QB
 - **Offensive Line**: CAR = 23 points
 - **Weapons**: CAR = 7 points
 - **Defense**: CAR = 5 points
 - **Raw Support Quality**: 35 points
-- **Difficulty Adjustment**: (100 - 35) × 1.0 = **65 points**
-- **Interpretation**: Poor overall support, considerable extra credit
+- **Support Score**: 35 points
+- **Interpretation**: Poor overall support, low quality score
 
 ### Multi-Team QB Example:
 
@@ -358,21 +354,21 @@ difficultyAdjustment = (100 - 58.2) × 1.0 = 41.8 points
 ## Support Quality Tiers and Thresholds
 
 ### Quality Classification:
-| Raw Support Quality | Support Level | Difficulty Score Range | Extra Credit Level |
+| Raw Support Quality | Support Level | Support Score Range | Quality Level |
 |-------------------|---------------|----------------------|-------------------|
-| **85-100 points** | EXCELLENT | 0-15 points | Minimal extra credit |
-| **70-84 points** | GOOD | 16-30 points | Low extra credit |
-| **55-69 points** | AVERAGE | 31-45 points | Moderate extra credit |
-| **40-54 points** | BELOW AVERAGE | 46-60 points | Considerable extra credit |
-| **25-39 points** | POOR | 61-75 points | High extra credit |
-| **0-24 points** | VERY POOR | 76-100 points | Maximum extra credit |
+| **85-100 points** | EXCELLENT | 85-100 points | Elite supporting cast |
+| **70-84 points** | GOOD | 70-84 points | High-quality supporting cast |
+| **55-69 points** | AVERAGE | 55-69 points | Moderate supporting cast |
+| **40-54 points** | BELOW AVERAGE | 40-54 points | Below-average supporting cast |
+| **25-39 points** | POOR | 25-39 points | Poor supporting cast |
+| **0-24 points** | VERY POOR | 0-24 points | Terrible supporting cast |
 
 ### Critical Thresholds:
-- **80+ Raw Support**: Elite supporting cast (minimal extra credit)
-- **60-79 Raw Support**: Good supporting cast (low extra credit)  
-- **40-59 Raw Support**: Average supporting cast (moderate extra credit)
-- **25-39 Raw Support**: Poor supporting cast (high extra credit)
-- **<25 Raw Support**: Dire supporting cast (maximum extra credit)
+- **80+ Raw Support**: Elite supporting cast (high support score)
+- **60-79 Raw Support**: Good supporting cast (good support score)  
+- **40-59 Raw Support**: Average supporting cast (moderate support score)
+- **25-39 Raw Support**: Poor supporting cast (low support score)
+- **<25 Raw Support**: Dire supporting cast (very low support score)
 
 ---
 
@@ -408,34 +404,29 @@ const defaultGrades = {
 | **Analyst** | 5% | Minimal context consideration |
 | **Clutch** | 5% | Focus on performance over situation |
 | **Balanced** | 5% | Moderate context weighting |
-| **Context** | 15% | Heavy emphasis on situational difficulty |
+| **Context** | 15% | Emphasis on supporting cast quality |
 
 ### Interaction with Other Components:
-- **Statistical Performance**: Poor support may excuse lower statistical output
+- **Statistical Performance**: Better support should correlate with higher statistical output
 - **Team Success**: Good support should correlate with team wins
-- **Clutch Performance**: Difficult situations may create more clutch opportunities
-- **Durability**: Poor protection may increase injury risk
+- **Clutch Performance**: Better support may create fewer clutch opportunities
+- **Durability**: Better protection may decrease injury risk
 
 ---
 
 ## System Design Philosophy
 
 ### Core Principles:
-1. **Contextual Fairness**: Account for varying levels of organizational support
-2. **Inverted Logic**: Reward QBs facing greater challenges
+1. **Quality Recognition**: Reward QBs playing with superior organizational support
+2. **Direct Logic**: Better supporting cast = higher support score
 3. **Multi-Dimensional Analysis**: Consider all aspects of supporting cast
 4. **Weighted Accuracy**: Account for multi-team seasons properly
-5. **Conservative Application**: Moderate weight to avoid over-adjustment
+5. **Fair Assessment**: QBs with elite support should be credited accordingly
 
 ### Balance Considerations:
-- **Not Excuse-Making**: Poor support explains but doesn't fully excuse poor performance
-- **Credit Where Due**: QBs with elite support should be evaluated accordingly
+- **Credit Elite Support**: QBs with excellent support get higher scores
+- **Recognize Poor Support**: QBs with poor support get lower scores
 - **Sample Size**: Multi-team QBs get accurate weighted evaluation
 - **Temporal Stability**: Team grades reflect current roster construction
-
-### Maximum Score Distribution:
-- **Offensive Line**: 35% of raw support quality (35/100)
-- **Weapons**: 40% of raw support quality (40/100)  
-- **Defense**: 25% of raw support quality (25/100)
 
 The supporting cast scoring system provides crucial context for quarterback evaluation, ensuring that performance is assessed relative to the quality of surrounding talent and organizational support structure. 

@@ -75,6 +75,16 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
         existingSeason.gameWinningDrives += parseInt(qb.ClutchGWD) || 0;
         existingSeason.fourthQuarterComebacks += parseInt(qb.ClutchFourthQC) || 0;
         
+        // Track all teams played for during this season (skip "2TM", "3TM" etc.)
+        if (!existingSeason.teamsPlayed) {
+          existingSeason.teamsPlayed = [];
+        }
+        if (qb.Team && qb.Team.length === 3 && !qb.Team.match(/^\d+TM$/)) {
+          if (!existingSeason.teamsPlayed.includes(qb.Team)) {
+            existingSeason.teamsPlayed.push(qb.Team);
+          }
+        }
+        
         // Update weighted averages
         const totalGames = existingSeason.gamesStarted;
         if (totalGames > 0) {
@@ -83,7 +93,7 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
         }
       } else {
         // Add new season data
-        playerData[playerName].seasons.push({
+        const newSeason = {
           year,
           team: qb.Team,
           age: parseInt(qb.Age) || 25,
@@ -101,8 +111,16 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
           sackPercentage: parseFloat(qb.SackPct) || 0,
           anyPerAttempt: parseFloat(qb.AnyPerAttempt) || 0,
           gameWinningDrives: parseInt(qb.ClutchGWD) || 0,
-          fourthQuarterComebacks: parseInt(qb.ClutchFourthQC) || 0
-        });
+          fourthQuarterComebacks: parseInt(qb.ClutchFourthQC) || 0,
+          teamsPlayed: []
+        };
+        
+        // Add the current team to teamsPlayed (skip "2TM", "3TM" etc.)
+        if (qb.Team && qb.Team.length === 3 && !qb.Team.match(/^\d+TM$/)) {
+          newSeason.teamsPlayed.push(qb.Team);
+        }
+        
+        playerData[playerName].seasons.push(newSeason);
         
         // Only increment seasons for NEW years
         const career = playerData[playerName].career;
@@ -157,6 +175,16 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
       const qbRecord = parseQBRecord(qb.QBrec);
       const gamesStarted = parseInt(qb.GS) || 0;
       const gamesPlayed = parseInt(qb.G) || 0;
+      const attempts = parseInt(qb.Att) || 0;
+      
+      // THRESHOLD: Only count playoff experience for QBs with 15+ pass attempts
+      // This filters out backup QBs who only played a few snaps
+      if (attempts < 15) {
+        if (playerName.includes('Mahomes') || playerName.includes('Hurts') || playerName.includes('Burrow')) {
+          console.log(`🚫 FILTERED OUT ${playerName} ${year} PLAYOFFS: Only ${attempts} attempts (< 15 threshold)`);
+        }
+        return;
+      }
       
       // Add playoff data to the existing regular season data for this year
       const existingSeasonIndex = playerData[playerName].seasons.findIndex(s => s.year === year);
@@ -173,7 +201,7 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
            passingYards: parseInt(qb.PassingYds) || 0,
            passingTDs: parseInt(qb.TD) || 0,
            interceptions: parseInt(qb.Int) || 0,
-           attempts: parseInt(qb.Att) || 0,
+           attempts: attempts,
            completions: parseInt(qb.Cmp) || 0,
            passerRating: parseFloat(qb.Rate) || 0,
            gameWinningDrives: parseInt(qb.ClutchGWD) || 0,
@@ -183,9 +211,9 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
            sackPercentage: parseFloat(qb.SackPct) || 0
          };
         
-        // Debug playoff data for Mahomes
-        if (playerName.includes('Mahomes')) {
-          console.log(`🏆 MAHOMES ${year} PLAYOFFS: ${season.playoffData.gamesPlayed} games, ${season.playoffData.gameWinningDrives} GWD, ${season.playoffData.fourthQuarterComebacks} 4QC`);
+        // Debug playoff data for key QBs
+        if (playerName.includes('Mahomes') || playerName.includes('Hurts') || playerName.includes('Burrow')) {
+          console.log(`🏆 ${playerName} ${year} PLAYOFFS QUALIFIED: ${attempts} attempts, ${season.playoffData.gamesPlayed} games, ${qbRecord.wins}-${qbRecord.losses} record`);
         }
       }
     });
