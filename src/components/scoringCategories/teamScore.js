@@ -1,4 +1,4 @@
-import { SCALING_RANGES, YEAR_WEIGHTS } from './constants.js';
+import { SCALING_RANGES, PLAYOFF_YEAR_WEIGHTS, REGULAR_SEASON_YEAR_WEIGHTS, STABILITY_YEAR_WEIGHTS } from './constants.js';
 
 // Helper function to calculate weighted playoff wins based on round progression
 const calculatePlayoffWeightedWins = (playoffData, team, year) => {
@@ -85,46 +85,80 @@ const calculateByeWeekBonus = (playoffData, team, year) => {
   return 0;
 };
 
-// Enhanced Team Success Score with Playoff Integration (0-100)
-export const calculateTeamScore = (qbSeasonData) => {
+// Enhanced Team Success Score with configurable weights and playoff toggle (0-100)
+export const calculateTeamScore = (qbSeasonData, teamWeights = { regularSeason: 65, playoff: 35 }, teamSettings = { includePlayoffs: true }) => {
+  // Debug logging for when playoffs are disabled
+  const includePlayoffs = teamSettings.includePlayoffs;
+  const debugMode = !includePlayoffs;
+  const playerName = qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player;
+  
+  if (debugMode && playerName) {
+    console.log(`🔍 DEBUG TEAM SCORE - ${playerName} (Playoffs ${includePlayoffs ? 'ENABLED' : 'DISABLED'})`);
+    console.log(`🔍 Team Weights: RegSeason=${teamWeights.regularSeason}, Playoff=${teamWeights.playoff}`);
+  }
+  
   // NEW: Comprehensive Playoff Round Weighting System
   const PLAYOFF_WEIGHTS = {
-    // Super Bowl (Championship Game)
-    SUPER_BOWL_WIN: 5.0,
-    SUPER_BOWL_LOSS: 2.5,
+    // Super Bowl (Championship Game) - Reduced impact
+    SUPER_BOWL_WIN: 2.0,     // Reduced from 5.0
+    SUPER_BOWL_LOSS: 1.0,    // Reduced from 2.5
     
-    // Conference Championship 
-    CONF_CHAMPIONSHIP_WIN: 3.5,
-    CONF_CHAMPIONSHIP_LOSS: 1.8,
+    // Conference Championship - Reduced impact
+    CONF_CHAMPIONSHIP_WIN: 1.5,   // Reduced from 3.5
+    CONF_CHAMPIONSHIP_LOSS: 0.8,  // Reduced from 1.8
     
-    // Divisional Round
-    DIVISIONAL_WIN: 2.5,
-    DIVISIONAL_LOSS: 1.3,
+    // Divisional Round - Reduced impact
+    DIVISIONAL_WIN: 1.2,     // Reduced from 2.5
+    DIVISIONAL_LOSS: 0.6,    // Reduced from 1.3
     
-    // Wild Card Round
-    WILD_CARD_WIN: 1.8,
-    WILD_CARD_LOSS: 1.0,
+    // Wild Card Round - Reduced impact
+    WILD_CARD_WIN: 0.9,      // Reduced from 1.8
+    WILD_CARD_LOSS: 0.5,     // Reduced from 1.0
     
     // First-round bye bonus (equivalent to wild card win for earning the bye)
-    BYE_WEEK_BONUS: 1.8
+    BYE_WEEK_BONUS: 0.9      // Reduced from 1.8
   };
   
   let weightedWinPct = 0;
-  let weightedAvailability = 0;
   let playoffWinBonus = 0;
   let totalWeight = 0;
   
+  // Debug data collection
+  let debugRegularSeasonData = [];
+  
   Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
-    const weight = YEAR_WEIGHTS[year] || 0;
+    const weight = REGULAR_SEASON_YEAR_WEIGHTS[year] || 0;
     if (weight === 0 || !data.QBrec) return;
     
     // Parse regular season QB record (format: "14-3-0")
     const [wins, losses, ties = 0] = data.QBrec.split('-').map(Number);
     let totalWins = wins;
     let totalGames = wins + losses + ties;
+    const regularSeasonWinPct = totalGames > 0 ? wins / totalGames : 0;
     
-    // Add playoff performance with round-specific weighting
-    if (data.playoffData) {
+    // MINIMUM GAMES THRESHOLD: Require at least 4 games started for team success evaluation
+    // This prevents inflated scores from small sample sizes (e.g., Kenny Pickett's 1-0 record)
+    const gamesStarted = parseInt(data.GS) || 0;
+    if (gamesStarted < 4) {
+      if (debugMode && playerName) {
+        console.log(`🔍 ${year}: SKIPPED - Only ${gamesStarted} games started (minimum 4 required)`);
+      }
+      return;
+    }
+    
+    // Debug: Store regular season data
+    if (debugMode && playerName) {
+      debugRegularSeasonData.push({
+        year,
+        record: `${wins}-${losses}-${ties}`,
+        winPct: regularSeasonWinPct.toFixed(3),
+        weight: weight.toFixed(2),
+        hasPlayoffData: !!data.playoffData
+      });
+    }
+    
+    // Add playoff performance with round-specific weighting (if enabled)
+    if (data.playoffData && includePlayoffs) {
       const playoff = data.playoffData;
       const playoffWins = playoff.wins || 0;
       const playoffLosses = playoff.losses || 0;
@@ -148,18 +182,19 @@ export const calculateTeamScore = (qbSeasonData) => {
       if (data.Player && (data.Player.includes('Mahomes') || data.Player.includes('Allen') || data.Player.includes('Burrow'))) {
         console.log(`🏆 ${data.Player} ${year} TEAM: Regular (${wins}-${losses}) + Playoff (${playoffWins}-${playoffLosses}), Weighted wins: ${playoffWeightedWins.toFixed(1)}, Bye bonus: ${byeWeekBonus.toFixed(1)}`);
       }
+    } else if (debugMode && playerName && data.playoffData) {
+      // Debug: Show what playoff data would have been used
+      const playoff = data.playoffData;
+      console.log(`🔍 ${year}: Playoff data IGNORED - ${playoff.wins || 0}-${playoff.losses || 0} playoff record`);
     }
     
     const combinedWinPct = totalGames > 0 ? totalWins / totalGames : 0;
     
-    // Games started availability (regular season + playoffs)
-    const regularGames = data.GS || 0;
-    const playoffGames = data.playoffData ? (data.playoffData.gamesStarted || 0) : 0;
-    const totalPossibleGames = 17 + (data.playoffData ? 4 : 0); // Assume up to 4 playoff games possible
-    const availability = Math.min(1, (regularGames + playoffGames) / totalPossibleGames);
+    if (debugMode && playerName) {
+      console.log(`🔍 ${year}: ${data.QBrec} regular season -> Combined: ${totalWins.toFixed(1)}/${totalGames} = ${combinedWinPct.toFixed(3)} (weight: ${weight.toFixed(2)})`);
+    }
     
     weightedWinPct += combinedWinPct * weight;
-    weightedAvailability += availability * weight;
     totalWeight += weight;
   });
   
@@ -167,8 +202,15 @@ export const calculateTeamScore = (qbSeasonData) => {
   
   // Normalize for missing years
   weightedWinPct = weightedWinPct / totalWeight;
-  weightedAvailability = weightedAvailability / totalWeight;
   playoffWinBonus = playoffWinBonus / totalWeight;
+  
+  if (debugMode && playerName) {
+    console.log(`🔍 REGULAR SEASON DATA:`);
+    debugRegularSeasonData.forEach(season => {
+      console.log(`🔍   ${season.year}: ${season.record} (${season.winPct}) weight=${season.weight} playoff=${season.hasPlayoffData}`);
+    });
+    console.log(`🔍 WEIGHTED WIN PCT: ${weightedWinPct.toFixed(3)} (total weight: ${totalWeight.toFixed(2)})`);
+  }
   
   // MAJOR REBALANCING: Separate regular season success from playoff success
   // This ensures deep playoff runs (especially Super Bowl appearances) are properly valued
@@ -182,8 +224,8 @@ export const calculateTeamScore = (qbSeasonData) => {
   let confChampWins = 0;
   
   Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
-    const weight = YEAR_WEIGHTS[year] || 0;
-    if (weight === 0 || !data.playoffData) return;
+    const weight = PLAYOFF_YEAR_WEIGHTS[year] || 0;
+    if (weight === 0 || !data.playoffData || !includePlayoffs) return;
     
     const playoff = data.playoffData;
     const playoffWins = playoff.wins || 0;
@@ -233,10 +275,10 @@ export const calculateTeamScore = (qbSeasonData) => {
     if (isSuperBowlWin) {
       superBowlWins += weight;
       superBowlAppearances += weight;
-      careerPlayoffScore += 15 * weight; // Reduced SB win bonus (70% reduction from 50)
+      careerPlayoffScore += 18 * weight; // Reduced from 50 to 18 (64% reduction)
     } else if (isSuperBowlAppearance) {
       superBowlAppearances += weight;
-      careerPlayoffScore += 9 * weight; // Reduced SB appearance bonus (70% reduction from 30)
+      careerPlayoffScore += 12 * weight; // Reduced from 35 to 12 (66% reduction)
     }
     
     // Detect Conference Championship appearances
@@ -244,33 +286,66 @@ export const calculateTeamScore = (qbSeasonData) => {
       if (playoffWins >= 2) {
         confChampWins += weight;
         confChampAppearances += weight;
-        careerPlayoffScore += 2.4 * weight; // Further reduced bonus for conf champ wins (70% reduction from 8)
+        careerPlayoffScore += 9 * weight; // Reduced from 25 to 9 (64% reduction)
       } else if (playoffGames >= 2) {
         confChampAppearances += weight;
-        careerPlayoffScore += 1.2 * weight; // Further reduced bonus for conf champ appearances (70% reduction from 4)
+        careerPlayoffScore += 6 * weight; // Reduced from 18 to 6 (67% reduction)
       }
     }
     
-    // Base playoff participation bonus (further reduced by 70%)
-    careerPlayoffScore += playoffGames * 0.36 * weight; // 0.36 points per playoff game (reduced from 1.2)
+    // Additional bonuses for divisional round and wild card success
+    if (playoffGames >= 1) {
+      if (playoffWins >= 1) {
+        careerPlayoffScore += 4 * weight; // Reduced from 12 to 4 (67% reduction)
+      }
+      if (playoffGames >= 2) {
+        careerPlayoffScore += 3 * weight; // Reduced from 8 to 3 (62% reduction)
+      }
+    }
+    
+    // Base playoff participation bonus (generous for all playoff appearances)
+    careerPlayoffScore += playoffGames * 2 * weight; // Reduced from 6 to 2 (67% reduction)
   });
   
-  // Regular season win percentage (0-50 points, increased by 25% from 40)
-  const regSeasonScore = Math.pow(weightedWinPct, SCALING_RANGES.WIN_PCT_CURVE) * 50;
+  // Regular season win percentage (0-{teamWeights.regularSeason} points)
+  const regSeasonScore = Math.pow(weightedWinPct, SCALING_RANGES.WIN_PCT_CURVE) * teamWeights.regularSeason;
   
-  // Availability bonus (0-15 points, reduced)
-  const availabilityScore = weightedAvailability * 15;
+  // Career playoff achievement score (0-{teamWeights.playoff} points)
+  const maxPlayoffPoints = includePlayoffs ? teamWeights.playoff : 0;
+  const normalizedPlayoffScore = Math.min(maxPlayoffPoints, careerPlayoffScore);
   
-  // Career playoff achievement score (0-45 points, massively increased)
-  const normalizedPlayoffScore = Math.min(45, careerPlayoffScore);
+  // CRITICAL FIX: When playoffs are disabled, normalize regular season score to use full team weight
+  let finalRegSeasonScore = regSeasonScore;
+  if (!includePlayoffs) {
+    // If playoffs are disabled, scale regular season score to use the full weight
+    const totalTeamWeight = teamWeights.regularSeason + teamWeights.playoff;
+    finalRegSeasonScore = regSeasonScore * (totalTeamWeight / teamWeights.regularSeason);
+    
+    if (debugMode && playerName) {
+      console.log(`🔍 PLAYOFF DISABLED ADJUSTMENT:`);
+      console.log(`🔍   Original reg season score: ${regSeasonScore.toFixed(1)}`);
+      console.log(`🔍   Scale factor: ${totalTeamWeight}/${teamWeights.regularSeason} = ${(totalTeamWeight / teamWeights.regularSeason).toFixed(2)}`);
+      console.log(`🔍   Adjusted reg season score: ${finalRegSeasonScore.toFixed(1)}`);
+    }
+  }
   
-  const finalScore = regSeasonScore + availabilityScore + normalizedPlayoffScore;
+  const finalScore = finalRegSeasonScore + normalizedPlayoffScore;
+  
+  // Debug final calculation
+  if (debugMode && playerName) {
+    console.log(`🔍 FINAL CALCULATION:`);
+    console.log(`🔍   Regular Season: ${weightedWinPct.toFixed(3)}^${SCALING_RANGES.WIN_PCT_CURVE} × ${teamWeights.regularSeason} = ${finalRegSeasonScore.toFixed(1)}`);
+    console.log(`🔍   Playoff Score: ${careerPlayoffScore.toFixed(1)} → capped at ${maxPlayoffPoints} = ${normalizedPlayoffScore.toFixed(1)}`);
+    console.log(`🔍   TOTAL: ${finalRegSeasonScore.toFixed(1)} + ${normalizedPlayoffScore.toFixed(1)} = ${finalScore.toFixed(1)}`);
+    console.log(`🔍 ----------------------------------------`);
+  }
   
   // Debug for Mahomes and other elite playoff QBs
   if (qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player?.includes('Mahomes')) {
-    console.log(`🏆 MAHOMES TEAM SCORE: RegSeason(${regSeasonScore.toFixed(1)}) + Avail(${availabilityScore.toFixed(1)}) + Playoffs(${normalizedPlayoffScore.toFixed(1)}) = ${finalScore.toFixed(1)}`);
+    console.log(`🏆 MAHOMES TEAM SCORE (${teamWeights.regularSeason}/${teamWeights.playoff}): RegSeason(${finalRegSeasonScore.toFixed(1)}) + Playoffs(${normalizedPlayoffScore.toFixed(1)}) = ${finalScore.toFixed(1)}`);
     console.log(`🏆 MAHOMES PLAYOFF RESUME: ${superBowlWins.toFixed(1)} SB wins, ${superBowlAppearances.toFixed(1)} SB apps, ${confChampWins.toFixed(1)} Conf wins`);
+    console.log(`🏆 PLAYOFF DATA ${includePlayoffs ? 'INCLUDED' : 'EXCLUDED'}`);
   }
   
-  return Math.min(100, finalScore);
-}; 
+  return finalScore;
+};

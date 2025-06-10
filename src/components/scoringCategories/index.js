@@ -6,4 +6,4 @@ export { calculateDurabilityScore } from './durabilityScore.js';
 export { calculateSupportScore } from './supportScore.js';
 
 // Export shared constants
-export { SCALING_RANGES, YEAR_WEIGHTS } from './constants.js'; 
+export { SCALING_RANGES, PERFORMANCE_YEAR_WEIGHTS, STABILITY_YEAR_WEIGHTS } from './constants.js'; 

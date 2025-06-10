@@ -1,6 +1,7 @@
-// Supporting Cast Difficulty Adjustment (0-100)
-// Higher score = More "extra credit" for QB in difficult situation
-import { YEAR_WEIGHTS } from './constants.js';
+// Supporting Cast Quality Score (0-100)
+// Higher score = Better supporting cast quality
+// Updated: Inverted from difficulty adjustment to direct quality scoring
+import { PERFORMANCE_YEAR_WEIGHTS } from './constants.js';
 
 // 2024 NFL Supporting Cast Data - REALISTIC SCORING based on performance benchmarks
 const SUPPORT_DATA_2024 = {
@@ -443,7 +444,7 @@ const SUPPORTING_CAST_SUM_2022 = {
   'SEA': 36   // 6 + 26 + 4
 };
 
-const calculateWeightedSupportScore = (team, year) => {
+const calculateWeightedSupportScore = (team, year, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }) => {
   const yearData = year === 2024 ? SUPPORT_DATA_2024 : 
                    year === 2023 ? SUPPORT_DATA_2023 : 
                    SUPPORT_DATA_2022;
@@ -452,19 +453,23 @@ const calculateWeightedSupportScore = (team, year) => {
   const weapons = yearData.weapons[team] || 20;
   const defense = yearData.defense[team] || 12;
   
-  // NEW WEIGHTING: Offensive Line 55%, Weapons 30%, Defense 15%
+  // DYNAMIC WEIGHTING: Use passed-in weights (converted to decimal)
   // Normalize each component to 0-1 scale, then apply weights
   const oLineNormalized = oLine / 35;  // Max offensive line score is 35
   const weaponsNormalized = weapons / 40;  // Max weapons score is 40
   const defenseNormalized = defense / 25;  // Max defense score is 25
   
-  // Apply new weights and scale to 100
-  const weightedScore = (oLineNormalized * 0.55 + weaponsNormalized * 0.30 + defenseNormalized * 0.15) * 100;
+  // Apply dynamic weights and scale to 100
+  const weightedScore = (
+    oLineNormalized * (supportWeights.offensiveLine / 100) + 
+    weaponsNormalized * (supportWeights.weapons / 100) + 
+    defenseNormalized * (supportWeights.defense / 100)
+  ) * 100;
   
   return weightedScore;
 };
 
-export const calculateSupportScore = (qbSeasonData) => {
+export const calculateSupportScore = (qbSeasonData, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }) => {
   // Initialize scoring
   let totalWeightedSupport = 0;
   let totalWeight = 0;
@@ -474,7 +479,7 @@ export const calculateSupportScore = (qbSeasonData) => {
   const seasonTeams = [];
   
   // Process each year with actual teams played for
-  Object.entries(YEAR_WEIGHTS).forEach(([year, weight]) => {
+  Object.entries(PERFORMANCE_YEAR_WEIGHTS).forEach(([year, weight]) => {
     const yearNum = parseInt(year);
     const seasonData = qbSeasonData.years && qbSeasonData.years[year];
     
@@ -498,7 +503,7 @@ export const calculateSupportScore = (qbSeasonData) => {
       if (teamsThisYear.length > 0 && gamesStarted >= 4) {
         // For multi-team seasons, we could weight by games played, but for simplicity
         // we'll average the support scores of all teams played for in that year
-        const yearSupportScores = teamsThisYear.map(team => calculateWeightedSupportScore(team, yearNum));
+        const yearSupportScores = teamsThisYear.map(team => calculateWeightedSupportScore(team, yearNum, supportWeights));
         const avgYearSupport = yearSupportScores.reduce((sum, score) => sum + score, 0) / yearSupportScores.length;
         
         totalWeightedSupport += avgYearSupport * weight;
@@ -541,9 +546,9 @@ export const calculateSupportScore = (qbSeasonData) => {
   
   // Fallback to current team if no season data available
   if (redistributedTotalWeight === 0 && qbSeasonData.currentTeam) {
-    Object.entries(YEAR_WEIGHTS).forEach(([year, weight]) => {
+    Object.entries(PERFORMANCE_YEAR_WEIGHTS).forEach(([year, weight]) => {
       const yearNum = parseInt(year);
-      const yearSupport = calculateWeightedSupportScore(qbSeasonData.currentTeam, yearNum);
+      const yearSupport = calculateWeightedSupportScore(qbSeasonData.currentTeam, yearNum, supportWeights);
       redistributedWeightedSupport += yearSupport * weight;
       redistributedTotalWeight += weight;
     });
@@ -560,24 +565,21 @@ export const calculateSupportScore = (qbSeasonData) => {
   
   const weightedSupportQuality = redistributedTotalWeight > 0 ? redistributedWeightedSupport / redistributedTotalWeight : 50;
    
-  // CORRECT LOGIC: Poor supporting cast = Higher difficulty adjustment score
-  // Scale from 0-100 where higher score = more "extra credit" for difficult situation
-  // Teams with GOOD support (high weightedSupportQuality) should get LOW scores
-  // Teams with POOR support (low weightedSupportQuality) should get HIGH scores
+  // INVERTED LOGIC: Better supporting cast = Higher quality score
+  // Scale from 0-100 where higher score = better supporting cast
+  // Teams with GOOD support (high weightedSupportQuality) should get HIGH scores
+  // Teams with POOR support (low weightedSupportQuality) should get LOW scores
    
-  // Calculate max possible support quality (35 + 40 + 25 = 100)
-  const maxSupportQuality = 100;
-   
-  // Invert and scale: excellent support = low score, poor support = high score
-  const difficultyAdjustment = Math.max(0, Math.min(100, (maxSupportQuality - weightedSupportQuality) * (100 / maxSupportQuality)));
+  // Direct scaling: excellent support = high score, poor support = low score
+  const supportQualityScore = Math.max(0, weightedSupportQuality);
    
   // Enhanced debug for multi-team QBs or significant cases
   const playerName = qbSeasonData.name || qbSeasonData.Player || 'Unknown';
   const hasMultipleTeams = seasonTeams.some(s => s.teams.length > 1);
-  const isSignificantCase = ['Rodgers', 'Wilson', 'Mayfield', 'Cousins', 'Carr'].some(name => playerName.includes(name));
+  const isSignificantCase = ['Hurts', 'Mahomes', 'Mills', 'Lawrence', 'Young'].some(name => playerName.includes(name));
   
-  // Debug for multi-team QBs, edge cases, and problematic scores
-  const hasProblematicScore = difficultyAdjustment > 95 || difficultyAdjustment < 5; // Very high or very low scores
+  // Debug for multi-team QBs, edge cases, and significant cases
+  const hasProblematicScore = supportQualityScore > 95 || supportQualityScore < 5; // Very high or very low scores
   const forceDebug = hasMultipleTeams || isSignificantCase || hasProblematicScore || Math.random() < 0.02;
   
   if (forceDebug) {
@@ -591,7 +593,7 @@ export const calculateSupportScore = (qbSeasonData) => {
     const hasLimitedData = seasonTeams.length <= 1;
     const dataQuality = hasLimitedData ? ' [LIMITED DATA]' : '';
     
-    console.log(`🏟️ SUPPORT ${playerName}: [${debugBreakdown.join(', ')}] -> Weighted(${weightedSupportQuality.toFixed(1)}) - ${supportLevel} -> Difficulty Score(${difficultyAdjustment.toFixed(1)})${weightRedistribution}${dataQuality}`);
+    console.log(`🏟️ SUPPORT ${playerName}: [${debugBreakdown.join(', ')}] -> Weighted(${weightedSupportQuality.toFixed(1)}) - ${supportLevel} -> Quality Score(${supportQualityScore.toFixed(1)})${weightRedistribution}${dataQuality}`);
     
     // Show detailed breakdown for all debugged QBs
     if (seasonTeams.length > 0) {
@@ -604,7 +606,7 @@ export const calculateSupportScore = (qbSeasonData) => {
           const weapons = yearData.weapons[team] || 20;  
           const defense = yearData.defense[team] || 12;
           const actualWeight = redistributedTotalWeight < 1.0 ? season.weight * (1.0 / totalWeight) : season.weight;
-          console.log(`  ${season.year} ${team}: OL(${oLine}) WEP(${weapons}) DEF(${defense}) = ${calculateWeightedSupportScore(team, season.year).toFixed(1)} × ${(actualWeight*100).toFixed(0)}% [${season.gamesStarted}G]`);
+          console.log(`  ${season.year} ${team}: OL(${oLine}) WEP(${weapons}) DEF(${defense}) = ${calculateWeightedSupportScore(team, season.year, supportWeights).toFixed(1)} × ${(actualWeight*100).toFixed(0)}% [${season.gamesStarted}G]`);
         });
       });
     } else {
@@ -612,5 +614,5 @@ export const calculateSupportScore = (qbSeasonData) => {
     }
   }
    
-  return difficultyAdjustment;
+  return supportQualityScore;
 }; 

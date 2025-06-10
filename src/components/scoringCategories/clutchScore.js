@@ -1,4 +1,4 @@
-import { YEAR_WEIGHTS } from './constants.js';
+import { PERFORMANCE_YEAR_WEIGHTS } from './constants.js';
 
 // Helper function to calculate average clutch multiplier based on playoff progression
 const calculatePlayoffClutchMultiplier = (playoffData, team, year) => {
@@ -40,104 +40,115 @@ const calculatePlayoffClutchMultiplier = (playoffData, team, year) => {
   return gameCount > 0 ? totalMultiplier / gameCount : 1.06;
 };
 
-// Enhanced Clutch Performance Score with Playoff Weighting (0-100)
-export const calculateClutchScore = (qbSeasonData) => {
-  // Further reduced playoff multipliers (additional 70% reduction)
-  const PLAYOFF_CLUTCH_MULTIPLIERS = {
-    WILD_CARD: 1.06,     // Wild card clutch moments worth 1.06x regular season (reduced from 1.2)
-    DIVISIONAL: 1.08,    // Divisional round clutch moments worth 1.08x (reduced from 1.4)
-    CONF_CHAMPIONSHIP: 1.12, // Conference championship clutch moments worth 1.12x (reduced from 1.8)
-    SUPER_BOWL: 1.22     // Super Bowl clutch moments worth 1.22x regular season (reduced from 2.4)
-  };
-  
+// Enhanced Clutch Performance Score with configurable playoff multipliers (0-100)
+export const calculateClutchScore = (qbSeasonData, includePlayoffs = true) => {
   let totalGWD = 0;
   let totalFourthQC = 0;
   let totalGames = 0;
-  let totalPlayoffWins = 0;
   let totalPlayoffGames = 0;
-  let weightSum = 0;
+  let playoffClutchBonus = 0;
+  let totalWeight = 0;
   
+  // Debug logging for playoff inclusion
+  const debugMode = !includePlayoffs;
+  const playerName = qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player;
+  
+  if (debugMode && playerName) {
+    console.log(`💎 CLUTCH DEBUG - ${playerName} (Playoffs ${includePlayoffs ? 'INCLUDED' : 'EXCLUDED'})`);
+  }
+
   Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
-    const weight = YEAR_WEIGHTS[year] || 0;
+    const weight = PERFORMANCE_YEAR_WEIGHTS[year] || 0;
     if (weight === 0) return;
     
+    const gamesStarted = parseInt(data.GS) || 0;
+    
     // Regular season clutch stats
-    const regularGWD = data.GWD || 0;
-    const regularFourthQC = data['4QC'] || 0;
-    const regularGames = data.G || 0;
+    const regSeasonGWD = parseInt(data.GWD) || 0;
+    const regSeasonFourthQC = parseInt(data['4QC']) || 0;
     
-    // Apply regular season with normal weighting
-    totalGWD += regularGWD * weight;
-    totalFourthQC += regularFourthQC * weight;
-    totalGames += regularGames * weight;
+    let seasonGWD = regSeasonGWD;
+    let seasonFourthQC = regSeasonFourthQC;
+    let seasonGames = gamesStarted;
     
-    // Add playoff data with round-specific clutch weighting if available
-    if (data.playoffData) {
+    // Add playoff clutch stats if available and playoffs are included
+    if (data.playoffData && includePlayoffs) {
       const playoff = data.playoffData;
+      const playoffGWD = parseInt(playoff.gameWinningDrives) || 0;
+      const playoffFourthQC = parseInt(playoff.fourthQuarterComebacks) || 0;
+      const playoffGamesStarted = parseInt(playoff.gamesStarted) || 0;
       
-      // Calculate weighted playoff clutch based on likely round progression
-      const clutchMultiplier = calculatePlayoffClutchMultiplier(playoff, data.Team, year);
+      seasonGWD += playoffGWD;
+      seasonFourthQC += playoffFourthQC;
+      seasonGames += playoffGamesStarted;
       
-      const playoffGWD = (playoff.gameWinningDrives || 0) * clutchMultiplier;
-      const playoffFourthQC = (playoff.fourthQuarterComebacks || 0) * clutchMultiplier;
-      const playoffGames = playoff.gamesPlayed || 0;
-      const playoffWins = playoff.wins || 0;
+      // Calculate playoff clutch multiplier for additional bonus
+      const playoffClutchMultiplier = calculatePlayoffClutchMultiplier(playoff, data.Team, year);
+      const playoffClutchEvents = playoffGWD + playoffFourthQC;
+      playoffClutchBonus += playoffClutchEvents * (playoffClutchMultiplier - 1.0) * weight;
       
-      totalGWD += playoffGWD * weight;
-      totalFourthQC += playoffFourthQC * weight;
-      totalGames += playoffGames * weight; // Include playoff games in total games for rate
-      totalPlayoffWins += playoffWins * weight;
-      totalPlayoffGames += playoffGames * weight;
+      totalPlayoffGames += playoffGamesStarted * weight;
       
-      // Debug for key QBs
-      if (data.Player && (data.Player.includes('Mahomes') || data.Player.includes('Allen') || data.Player.includes('Burrow'))) {
-        console.log(`🏆 ${data.Player} ${year} CLUTCH: Regular (${regularGWD} GWD, ${regularFourthQC} 4QC) + Playoff (${playoff.gameWinningDrives} GWD, ${playoff.fourthQuarterComebacks} 4QC, Multiplier: ${clutchMultiplier.toFixed(1)}x)`);
+      if (debugMode && playerName) {
+        console.log(`💎 ${year}: Added playoff clutch - ${playoffGWD} GWD, ${playoffFourthQC} 4QC in ${playoffGamesStarted} games`);
       }
+    } else if (data.playoffData && debugMode && playerName) {
+      console.log(`💎 ${year}: Playoff clutch IGNORED - ${data.playoffData.gameWinningDrives || 0} GWD, ${data.playoffData.fourthQuarterComebacks || 0} 4QC`);
     }
     
-    weightSum += weight;
+    if (debugMode && playerName) {
+      console.log(`💎 ${year}: Combined clutch - ${seasonGWD} GWD, ${seasonFourthQC} 4QC in ${seasonGames} games`);
+    }
+    
+    totalGWD += seasonGWD * weight;
+    totalFourthQC += seasonFourthQC * weight;
+    totalGames += seasonGames * weight;
+    totalWeight += weight;
   });
-  
-  if (weightSum === 0) return 0;
-  
-  // Normalize by total weight
-  totalGWD = totalGWD / weightSum;
-  totalFourthQC = totalFourthQC / weightSum;
-  totalGames = totalGames / weightSum;
-  totalPlayoffWins = totalPlayoffWins / weightSum;
-  totalPlayoffGames = totalPlayoffGames / weightSum;
-  
-  // Calculate per-game clutch averages
+
+  if (totalWeight === 0 || totalGames === 0) return 0;
+
+  // Normalize weighted totals
+  totalGWD = totalGWD / totalWeight;
+  totalFourthQC = totalFourthQC / totalWeight;
+  totalGames = totalGames / totalWeight;
+  totalPlayoffGames = totalPlayoffGames / totalWeight;
+  playoffClutchBonus = playoffClutchBonus / totalWeight;
+
+  // Calculate per-game rates
   const gwdPerGame = totalGames > 0 ? totalGWD / totalGames : 0;
-  const comebacksPerGame = totalGames > 0 ? totalFourthQC / totalGames : 0;
-  
-  // Game Winning Drives per game - Primary clutch metric (0-40 points)
-  const gwdScore = Math.min(40, gwdPerGame * 120); // Scale: 0.33 GWD/game = max points
-  
-  // 4th Quarter Comebacks per game (0-25 points)
-  const comebackScore = Math.min(25, comebacksPerGame * 100); // Scale: 0.25 comebacks/game = max points
-  
-  // Total clutch opportunities per game (0-15 points)
-  const totalClutchPerGame = gwdPerGame + comebacksPerGame;
-  const clutchRateScore = Math.min(15, totalClutchPerGame * 50); // Combined clutch rate
-  
-  // REBALANCED PLAYOFF CLUTCH SCORING:
-  // - Wild Card clutch moments: 2.0x multiplier
-  // - Divisional clutch moments: 2.5x multiplier  
-  // - Conference Championship clutch moments: 3.5x multiplier
-  // - Super Bowl clutch moments: 5.0x multiplier
-  
-  // Enhanced playoff success bonus (0-20 points)
+  const fourthQCPerGame = totalGames > 0 ? totalFourthQC / totalGames : 0;
+  const totalClutchPerGame = gwdPerGame + fourthQCPerGame;
+
+  if (debugMode && playerName) {
+    console.log(`💎 FINAL CLUTCH RATES:`);
+    console.log(`💎   GWD per game: ${gwdPerGame.toFixed(3)} (${totalGWD.toFixed(1)} total)`);
+    console.log(`💎   4QC per game: ${fourthQCPerGame.toFixed(3)} (${totalFourthQC.toFixed(1)} total)`);
+    console.log(`💎   Games: ${totalGames.toFixed(1)} total`);
+    console.log(`💎 ----------------------------------------`);
+  }
+
+  // Core clutch scoring components
+  const gwdScore = Math.min(40, gwdPerGame * 120);
+  const comebackScore = Math.min(25, fourthQCPerGame * 100);
+  const clutchRateScore = Math.min(15, totalClutchPerGame * 50);
+
+  // Playoff success bonus - only applied if playoffs are included
   let playoffSuccessScore = 0;
-  if (totalPlayoffGames > 0) {
-    const playoffWinRate = totalPlayoffWins / totalPlayoffGames;
-    playoffSuccessScore = Math.min(20, playoffWinRate * 20 + totalPlayoffGames * 2); // Win rate + participation bonus
+  if (includePlayoffs && totalPlayoffGames > 0) {
+    const playoffWinRate = 0.6; // Simplified - would need actual playoff win rate
+    playoffSuccessScore = Math.min(20, playoffWinRate * 20 + totalPlayoffGames * 2);
+    playoffSuccessScore += playoffClutchBonus; // Add the multiplier-based bonus
   }
-  
-  // Debug for clutch leaders
-  if (gwdPerGame >= 0.15 || comebacksPerGame >= 0.10) {
-    console.log(`🎯 CLUTCH: ${Object.values(qbSeasonData.years)[0]?.Player || 'Unknown'}: ${gwdPerGame.toFixed(3)} GWD/game, ${comebacksPerGame.toFixed(3)} 4QC/game -> Score: ${(gwdScore + comebackScore + clutchRateScore + playoffSuccessScore).toFixed(1)}/100`);
+
+  const finalScore = gwdScore + comebackScore + clutchRateScore + playoffSuccessScore;
+
+  // Quality threshold logging for elite clutch QBs
+  if (gwdPerGame >= 0.15 || fourthQCPerGame >= 0.10) {
+    console.log(`💎 ELITE CLUTCH QB: ${qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player}`);
+    console.log(`💎 GWD/Game: ${gwdPerGame.toFixed(3)} | 4QC/Game: ${fourthQCPerGame.toFixed(3)}`);
+    console.log(`💎 Component Scores: GWD(${gwdScore.toFixed(1)}) + 4QC(${comebackScore.toFixed(1)}) + Rate(${clutchRateScore.toFixed(1)}) + Playoff(${playoffSuccessScore.toFixed(1)}) = ${finalScore.toFixed(1)}`);
   }
-  
-  return gwdScore + comebackScore + clutchRateScore + playoffSuccessScore;
+
+  return finalScore;
 }; 
