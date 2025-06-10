@@ -313,7 +313,7 @@ export const processQBData = (combinedQBData) => {
       // Filter for QBs with meaningful career data
       const totalGames = data.career.gamesStarted;
       const hasRecentActivity = data.seasons.some(season => season.year >= 2023);
-      return totalGames >= 10 && hasRecentActivity; // At least 10 career starts and active recently
+      return totalGames >= 15 && hasRecentActivity; // At least 15 career starts and active recently
     })
     .map(([playerName, data], index) => {
       const mostRecentSeason = data.seasons[0]; // Already sorted by year desc

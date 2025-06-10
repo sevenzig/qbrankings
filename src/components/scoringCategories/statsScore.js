@@ -76,9 +76,23 @@ export const calculateStatsScore = (qbSeasonData) => {
     const interceptions = parseFloat(data.Int) || 0;
     const sacks = parseFloat(data.Sk) || 0;
     const games = Math.max(1, parseFloat(data.G) || 1);
-    const rushingYards = parseFloat(data.RushingYds) || 0;
+    const rushingYards = parseFloat(data.RushingYards) || 0;
     const rushingTDs = parseFloat(data.RushingTDs) || 0;
     const fumbles = parseFloat(data.Fumbles) || 0;
+    
+    // Small sample size penalty - penalizes backup QBs with limited attempts
+    let sampleSizePenalty = 1.0;
+    if (attempts < 200) { // Less than ~12 games worth of attempts
+      if (attempts < 50) {
+        sampleSizePenalty = 0.3; // Heavy penalty for very small samples (backup/injury)
+      } else if (attempts < 100) {
+        sampleSizePenalty = 0.5; // Moderate penalty for small samples
+      } else if (attempts < 150) {
+        sampleSizePenalty = 0.7; // Light penalty for limited samples
+      } else {
+        sampleSizePenalty = 0.85; // Very light penalty for slightly below starter level
+      }
+    }
     
     // Calculate percentages and rates
     const rushAttempts = parseFloat(data.RushAtt) || parseFloat(data.Att_1) || 0; // Handle different CSV column names
@@ -120,19 +134,22 @@ export const calculateStatsScore = (qbSeasonData) => {
     const turnoverBurden = calculateTurnoverBurden(totalTurnovers);
     
     // Calculate total score
-    const seasonScore = anyAScore + tdRateScore + compScore + 
-                       sackScore + intScore + fumbleScore + 
-                       volumeScore + turnoverBurden;
+    const rawSeasonScore = anyAScore + tdRateScore + compScore + 
+                          sackScore + intScore + fumbleScore + 
+                          volumeScore + turnoverBurden;
+    const seasonScore = rawSeasonScore * sampleSizePenalty; // Apply sample size penalty
     
     // Debug output for key players
-    if (data.Player && (seasonScore > 85 || seasonScore < 35 || 
+    if (data.Player && (rawSeasonScore > 85 || rawSeasonScore < 35 || attempts < 100 ||
         data.Player.includes('Mahomes') || data.Player.includes('Jackson') || 
-        data.Player.includes('Darnold') || data.Player.includes('Levis'))) {
+        data.Player.includes('Darnold') || data.Player.includes('Levis') || 
+        data.Player.includes('Mariota'))) {
       console.log(`📊 ${data.Player} ${year} PERCENTILE SCORING:`);
       console.log(`  Efficiency (45): ANY/A ${anyA.toFixed(2)} (${anyAScore.toFixed(1)}) + TD% ${tdPct.toFixed(1)} (${tdRateScore.toFixed(1)}) + Comp% ${completionPct.toFixed(1)} (${compScore.toFixed(1)}) = ${(anyAScore + tdRateScore + compScore).toFixed(1)}`);
       console.log(`  Protection (25): Sack% ${sackRate.toFixed(1)} (${sackScore.toFixed(1)}) + Int% ${intPct.toFixed(1)} (${intScore.toFixed(1)}) + Fum% ${fumblePct.toFixed(1)} (${fumbleScore.toFixed(1)}) = ${(sackScore + intScore + fumbleScore).toFixed(1)}`);
       console.log(`  Volume (30): ${volumeScore.toFixed(1)} | Turnover Burden: ${turnoverBurden}`);
-      console.log(`  TOTAL: ${seasonScore.toFixed(1)}/100 points`);
+      console.log(`  Sample Size: ${attempts} attempts → ${sampleSizePenalty}× penalty`);
+      console.log(`  RAW: ${rawSeasonScore.toFixed(1)} → FINAL: ${seasonScore.toFixed(1)}/100 points`);
     }
     
     totalWeightedScore += seasonScore * weight;

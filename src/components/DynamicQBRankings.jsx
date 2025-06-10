@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQBData } from '../hooks/useQBData.js';
 import { calculateQEI } from '../utils/qbCalculations.js';
 import { getQEIColor } from '../utils/uiHelpers.js';
-import { PHILOSOPHY_PRESETS } from '../constants/teamData.js';
+import { PHILOSOPHY_PRESETS, getTeamInfo } from '../constants/teamData.js';
 
 const DynamicQBRankings = () => {
   const { qbData, loading, error, lastFetch, shouldRefreshData, fetchAllQBData } = useQBData();
@@ -45,6 +45,30 @@ const DynamicQBRankings = () => {
     }
     
     return "Custom settings";
+  };
+
+  // Helper function to get all unique teams a QB played for
+  const getQBTeams = (qb) => {
+    if (!qb.seasonData || qb.seasonData.length === 0) {
+      return [{ team: qb.team, logo: qb.teamLogo }];
+    }
+    
+    // Get unique teams from season data
+    const uniqueTeams = [];
+    const seenTeams = new Set();
+    
+    qb.seasonData.forEach(season => {
+      if (season.team && !seenTeams.has(season.team)) {
+        seenTeams.add(season.team);
+        const teamInfo = getTeamInfo(season.team);
+        uniqueTeams.push({
+          team: season.team,
+          logo: teamInfo.logo
+        });
+      }
+    });
+    
+    return uniqueTeams.length > 0 ? uniqueTeams : [{ team: qb.team, logo: qb.teamLogo }];
   };
 
   // Calculate QEI with current weights
@@ -227,11 +251,22 @@ const DynamicQBRankings = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center">
-                        {qb.teamLogo && (
-                          <img src={qb.teamLogo} alt={qb.team} className="w-6 h-6 mr-2" />
-                        )}
-                        <span className="font-bold text-white">{qb.team}</span>
+                      <div className="flex items-center justify-center flex-wrap">
+                        {getQBTeams(qb).map((teamData, teamIndex) => (
+                          <div key={teamData.team} className="flex items-center">
+                            {teamData.logo && (
+                              <img 
+                                src={teamData.logo} 
+                                alt={teamData.team} 
+                                className="w-6 h-6" 
+                                title={teamData.team}
+                              />
+                            )}
+                            {teamIndex < getQBTeams(qb).length - 1 && (
+                              <span className="text-white/50 mx-1">/</span>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
