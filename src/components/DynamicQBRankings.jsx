@@ -59,6 +59,39 @@ const DynamicQBRankings = () => {
   // Global playoff inclusion toggle - affects ALL calculations
   const [includePlayoffs, setIncludePlayoffs] = useState(true);
 
+  // Effect to automatically adjust clutch weights when playoff toggle changes
+  useEffect(() => {
+    if (!includePlayoffs) {
+      // When playoffs are disabled, set playoff bonus to 0% and redistribute to other components
+      setClutchWeights(prev => {
+        if (prev.playoffBonus === 0) return prev; // Already adjusted
+        
+        const redistributedWeight = prev.playoffBonus;
+        // Distribute the 20% across the other components proportionally
+        // New balanced defaults when no playoffs: GWD 50%, 4QC 30%, Rate 20%
+        return {
+          gameWinningDrives: 50,    // Increased from 40%
+          fourthQuarterComebacks: 30, // Increased from 25%
+          clutchRate: 20,           // Increased from 15%
+          playoffBonus: 0           // Disabled
+        };
+      });
+    } else {
+      // When playoffs are re-enabled, restore balanced defaults
+      setClutchWeights(prev => {
+        if (prev.playoffBonus > 0) return prev; // Already has playoff bonus
+        
+        // Restore original balanced defaults: GWD 40%, 4QC 25%, Rate 15%, Playoff 20%
+        return {
+          gameWinningDrives: 40,
+          fourthQuarterComebacks: 25,
+          clutchRate: 15,
+          playoffBonus: 20
+        };
+      });
+    }
+  }, [includePlayoffs]); // Run when includePlayoffs changes
+
   const updateWeight = (category, value) => {
     setWeights(prev => ({
       ...prev,
@@ -368,12 +401,12 @@ const DynamicQBRankings = () => {
     return `${baseUrl}?s=${encodedSettings}${presetParam}`;
   };
 
-  const copyShareLink = async () => {
+  const copyShareLink = async (event) => {
     const shareLink = generateShareLink();
     try {
       await navigator.clipboard.writeText(shareLink);
-      // Show temporary success message
-      const button = document.getElementById('share-button');
+      // Show temporary success message on the clicked button
+      const button = event ? event.target : document.getElementById('share-button');
       const originalText = button.textContent;
       button.textContent = '✅ Copied!';
       button.className = button.className.replace('bg-blue-500/20 hover:bg-blue-500/30', 'bg-green-500/20 hover:bg-green-500/30');
@@ -453,7 +486,7 @@ const DynamicQBRankings = () => {
   const rankedQBs = useMemo(() => {
     // First pass: Calculate all base scores
     const qbsWithBaseScores = qbData.map(qb => {
-      const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, includePlayoffs);
+      const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs);
       return {
         ...qb,
         baseScores
@@ -950,6 +983,17 @@ const DynamicQBRankings = () => {
             </div>
           )}
         </div>
+        
+        {/* Share Button Section */}
+        <div className="text-center mb-8 text-blue-300">
+          <button 
+            id="share-button-top"
+            onClick={(e) => copyShareLink(e)}
+            className="bg-blue-500/20 hover:bg-blue-500/30 px-7 py-3 rounded-lg font-bold transition-colors text-white"
+          >
+            🔗 Share Your Complete QB Philosophy
+          </button>
+        </div>
 
         {/* Live Rankings Table */}
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl overflow-hidden">
@@ -1089,7 +1133,7 @@ const DynamicQBRankings = () => {
           <div className="mt-4 space-y-2">
             <button 
               id="share-button"
-              onClick={copyShareLink}
+              onClick={(e) => copyShareLink(e)}
               className="bg-blue-500/20 hover:bg-blue-500/30 px-6 py-2 rounded-lg font-bold transition-colors"
             >
               🔗 Share Your Complete QB Philosophy

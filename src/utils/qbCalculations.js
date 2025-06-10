@@ -11,7 +11,7 @@ import {
 
 
 
-export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 65, playoff: 35 }, includePlayoffs = true) => {
+export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 65, playoff: 35 }, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, includePlayoffs = true) => {
   // Create season data structure for enhanced calculations
   const qbSeasonData = {
     years: {}
@@ -66,7 +66,7 @@ export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, wea
   const statsScore = calculateStatsScore(qbSeasonData, statsWeights, includePlayoffs);
   
   // Calculate Clutch Score
-  const clutchScore = calculateClutchScore(qbSeasonData, includePlayoffs);
+  const clutchScore = calculateClutchScore(qbSeasonData, includePlayoffs, clutchWeights);
   
   // Calculate Durability Score
   const durabilityScore = calculateDurabilityScore(qbSeasonData, includePlayoffs);

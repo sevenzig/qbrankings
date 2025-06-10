@@ -41,7 +41,7 @@ const calculatePlayoffClutchMultiplier = (playoffData, team, year) => {
 };
 
 // Enhanced Clutch Performance Score with playoff integration (0-100)
-export const calculateClutchScore = (qbSeasonData, includePlayoffs = true) => {
+export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }) => {
   let totalGWD = 0;
   let totalFourthQC = 0;
   let totalGames = 0;
@@ -161,20 +161,33 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true) => {
   const comebacksPerGame = totalFourthQC / totalGames;
   const totalClutchPerGame = gwdPerGame + comebacksPerGame;
 
-  // Calculate base score components (using generous scaling to reward clutch performers)
-  const baseGWDScore = Math.min(40, gwdPerGame * 120); // Max 40 points from GWD rate
-  const baseComebackScore = Math.min(25, comebacksPerGame * 100); // Max 25 points from 4QC rate
-  const baseClutchRateScore = Math.min(15, totalClutchPerGame * 50); // Max 15 points from combined rate
-  const baseConsistencyBonus = Math.min(20, (totalGWD + totalFourthQC) * 2); // Max 20 points from volume
+  // Calculate base score components using dynamic weights
+  // Scale the max points for each component based on the weight percentages
+  const maxGWDPoints = (clutchWeights.gameWinningDrives / 100) * 100;
+  const maxComebackPoints = (clutchWeights.fourthQuarterComebacks / 100) * 100;
+  const maxClutchRatePoints = (clutchWeights.clutchRate / 100) * 100;
+  const maxPlayoffPoints = (clutchWeights.playoffBonus / 100) * 100;
   
-  const baseScore = baseGWDScore + baseComebackScore + baseClutchRateScore + baseConsistencyBonus;
+  const baseGWDScore = Math.min(maxGWDPoints, gwdPerGame * 120 * (clutchWeights.gameWinningDrives / 40));
+  const baseComebackScore = Math.min(maxComebackPoints, comebacksPerGame * 100 * (clutchWeights.fourthQuarterComebacks / 25));
+  const baseClutchRateScore = Math.min(maxClutchRatePoints, totalClutchPerGame * 50 * (clutchWeights.clutchRate / 15));
   
-  // Apply playoff adjustment to the base score
-  const finalScore = baseScore * playoffAdjustmentFactor;
+  // Calculate playoff bonus based on component weight (replaces old consistency bonus)
+  let playoffBonusScore = 0;
+  if (clutchWeights.playoffBonus > 0 && includePlayoffs) {
+    // Apply playoff adjustment factor to the playoff component only
+    playoffBonusScore = Math.min(maxPlayoffPoints, (totalGWD + totalFourthQC) * 2 * playoffAdjustmentFactor * (clutchWeights.playoffBonus / 20));
+  }
+  
+  const baseScore = baseGWDScore + baseComebackScore + baseClutchRateScore + playoffBonusScore;
+  
+  // Final score is the base score (no additional playoff adjustment since it's built into playoff bonus)
+  const finalScore = baseScore;
 
   if (debugMode && playerName) {
-    console.log(`💎 FINAL ADJUSTED CLUTCH: Base(${baseScore.toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) = ${finalScore.toFixed(1)}`);
-    console.log(`💎 Components: GWD(${(baseGWDScore * playoffAdjustmentFactor).toFixed(1)}) + 4QC(${(baseComebackScore * playoffAdjustmentFactor).toFixed(1)}) + Rate(${(baseClutchRateScore * playoffAdjustmentFactor).toFixed(1)}) + Consistency(${(baseConsistencyBonus * playoffAdjustmentFactor).toFixed(1)})`);
+    console.log(`💎 WEIGHTED CLUTCH FINAL: ${finalScore.toFixed(1)}/100`);
+    console.log(`💎 Components: GWD(${baseGWDScore.toFixed(1)}) + 4QC(${baseComebackScore.toFixed(1)}) + Rate(${baseClutchRateScore.toFixed(1)}) + PlayoffBonus(${playoffBonusScore.toFixed(1)})`);
+    console.log(`💎 Weights: GWD(${clutchWeights.gameWinningDrives}%) + 4QC(${clutchWeights.fourthQuarterComebacks}%) + Rate(${clutchWeights.clutchRate}%) + Playoff(${clutchWeights.playoffBonus}%)`);
     console.log(`💎 Rates: ${gwdPerGame.toFixed(3)} GWD/game, ${comebacksPerGame.toFixed(3)} 4QC/game over ${totalGames.toFixed(1)} weighted games`);
   }
 
