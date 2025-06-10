@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Fix webkit text-size-adjust parsing error */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
