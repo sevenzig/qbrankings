@@ -1,8 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQBData } from '../hooks/useQBData.js';
 import { calculateQEI } from '../utils/qbCalculations.js';
 import { getQEIColor } from '../utils/uiHelpers.js';
 import { PHILOSOPHY_PRESETS, getTeamInfo } from '../constants/teamData.js';
+import { 
+  calculateTeamScore, 
+  calculateStatsScore, 
+  calculateClutchScore, 
+  calculateDurabilityScore, 
+  calculateSupportScore
+} from './scoringCategories/index.js';
 
 const DynamicQBRankings = () => {
   const { qbData, loading, error, lastFetch, shouldRefreshData, fetchAllQBData } = useQBData();
@@ -58,7 +65,20 @@ const DynamicQBRankings = () => {
     const seenTeams = new Set();
     
     qb.seasonData.forEach(season => {
-      if (season.team && !seenTeams.has(season.team)) {
+      // First check if this season has a teamsPlayed array (for multi-team seasons)
+      if (season.teamsPlayed && season.teamsPlayed.length > 0) {
+        season.teamsPlayed.forEach(team => {
+          if (!seenTeams.has(team)) {
+            seenTeams.add(team);
+            const teamInfo = getTeamInfo(team);
+            uniqueTeams.push({
+              team: team,
+              logo: teamInfo.logo
+            });
+          }
+        });
+      } else if (season.team && !seenTeams.has(season.team) && !season.team.match(/^\d+TM$/)) {
+        // Fallback to season.team if no teamsPlayed array, but skip "2TM" type entries
         seenTeams.add(season.team);
         const teamInfo = getTeamInfo(season.team);
         uniqueTeams.push({
@@ -70,6 +90,75 @@ const DynamicQBRankings = () => {
     
     return uniqueTeams.length > 0 ? uniqueTeams : [{ team: qb.team, logo: qb.teamLogo }];
   };
+
+  // URL sharing functions
+  const encodeWeights = (weights) => {
+    return `${weights.team},${weights.stats},${weights.clutch},${weights.durability},${weights.support}`;
+  };
+
+  const decodeWeights = (encodedWeights) => {
+    try {
+      const values = encodedWeights.split(',').map(v => parseInt(v));
+      if (values.length === 5 && values.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+        return {
+          team: values[0],
+          stats: values[1],
+          clutch: values[2],
+          durability: values[3],
+          support: values[4]
+        };
+      }
+    } catch (e) {
+      console.warn('Failed to decode weights from URL');
+    }
+    return null;
+  };
+
+  const generateShareLink = () => {
+    const baseUrl = window.location.origin + window.location.pathname;
+    const encodedWeights = encodeWeights(weights);
+    const presetParam = currentPreset !== 'custom' ? `&preset=${currentPreset}` : '';
+    return `${baseUrl}?w=${encodedWeights}${presetParam}`;
+  };
+
+  const copyShareLink = async () => {
+    const shareLink = generateShareLink();
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      // Show temporary success message
+      const button = document.getElementById('share-button');
+      const originalText = button.textContent;
+      button.textContent = '✅ Copied!';
+      button.className = button.className.replace('bg-blue-500/20 hover:bg-blue-500/30', 'bg-green-500/20 hover:bg-green-500/30');
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.className = button.className.replace('bg-green-500/20 hover:bg-green-500/30', 'bg-blue-500/20 hover:bg-blue-500/30');
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+      // Fallback: show the link in a prompt
+      prompt('Copy this link to share your QB philosophy:', shareLink);
+    }
+  };
+
+  // Load weights from URL on component mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const encodedWeights = urlParams.get('w');
+    const preset = urlParams.get('preset');
+    
+    if (encodedWeights) {
+      const decodedWeights = decodeWeights(encodedWeights);
+      if (decodedWeights) {
+        setWeights(decodedWeights);
+        setCurrentPreset(preset && PHILOSOPHY_PRESETS[preset] ? preset : 'custom');
+      }
+    } else if (preset && PHILOSOPHY_PRESETS[preset]) {
+      applyPreset(preset);
+    }
+  }, []);
+
+
 
   // Calculate QEI with current weights
   const rankedQBs = qbData
@@ -303,12 +392,18 @@ const DynamicQBRankings = () => {
               {shouldRefreshData() ? ' (Data may be stale)' : ' (Fresh data)'}
             </p>
           )}
-          <button 
-            onClick={fetchAllQBData}
-            className="mt-4 bg-blue-500/20 hover:bg-blue-500/30 px-6 py-2 rounded-lg font-bold transition-colors"
-          >
-            🔄 Refresh ESPN Data
-          </button>
+          <div className="mt-4 space-y-2">
+            <button 
+              id="share-button"
+              onClick={copyShareLink}
+              className="bg-blue-500/20 hover:bg-blue-500/30 px-6 py-2 rounded-lg font-bold transition-colors"
+            >
+              🔗 Share Your QB Philosophy
+            </button>
+            <p className="text-xs text-blue-400">
+              Share your custom slider settings with friends and compare QB evaluation styles!
+            </p>
+          </div>
         </div>
       </div>
     </div>
