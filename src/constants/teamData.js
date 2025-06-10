@@ -46,27 +46,27 @@ export const TEAM_MAP = {
 
 export const PHILOSOPHY_PRESETS = {
   winner: {
-    team: 55, stats: 25, clutch: 15, durability: 5, support: 0,
+    team: 65, stats: 25, clutch: 5, durability: 5, support: 0,
     description: "Winning is everything - team success dominates (NEW: Enhanced playoff round weighting)"
   },
   
   analyst: {
-    team: 10, stats: 65, clutch: 15, durability: 5, support: 5,
+    team: 10, stats: 75, clutch: 5, durability: 5, support: 5,
     description: "Numbers don't lie - statistical excellence"
   },
   
   clutch: {
-    team: 25, stats: 30, clutch: 35, durability: 5, support: 5,
+    team: 25, stats: 40, clutch: 15, durability: 5, support: 15,
     description: "Pressure makes diamonds - big moments matter most"
   },
   
   balanced: {
-    team: 30, stats: 40, clutch: 15, durability: 10, support: 5,
+    team: 35, stats: 40, clutch: 5, durability: 5, support: 15,
     description: "Well-rounded evaluation of all factors"
   },
   
   context: {
-    team: 25, stats: 35, clutch: 15, durability: 10, support: 15,
+    team: 25, stats: 35, clutch: 5, durability: 5, support: 30,
     description: "Context matters - extra credit for difficult situations"
   }
 };
