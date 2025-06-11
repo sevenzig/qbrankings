@@ -457,10 +457,11 @@ export const calculateTeamScore = (qbSeasonData, teamWeights = { regularSeason: 
     careerPlayoffScore += playoffGames * 1.5 * weight; // Participation bonus
   });
   
-  // Cap career playoff score at reasonable level
+  // Cap career playoff score at reasonable level and apply playoff weight
   const normalizedCareerPlayoffScore = Math.min(35, careerPlayoffScore);
+  const weightedCareerPlayoffScore = normalizedCareerPlayoffScore * (teamWeights.playoff / 35); // Scale by playoff weight
   
-  const finalScore = adjustedWinPctScore + offenseDVOAComponent + normalizedCareerPlayoffScore;
+  const finalScore = adjustedWinPctScore + offenseDVOAComponent + weightedCareerPlayoffScore;
   
   // Debug final calculation
   if (debugMode && playerName) {
@@ -468,21 +469,21 @@ export const calculateTeamScore = (qbSeasonData, teamWeights = { regularSeason: 
     console.log(`🔍   Win Pct: ${weightedWinPct.toFixed(3)}^${SCALING_RANGES.WIN_PCT_CURVE} × ${teamWeights.regularSeason} = ${winPctScore.toFixed(1)}`);
     console.log(`🔍   Offense DVOA: ${weightedOffenseDVOA.toFixed(1)} × ${(teamWeights.offenseDVOA / 15).toFixed(2)} = ${offenseDVOAComponent.toFixed(1)}`);
     console.log(`🔍   Playoff Adjustment: ${winPctScore.toFixed(1)} × ${playoffAdjustmentFactor.toFixed(3)} = ${adjustedWinPctScore.toFixed(1)}`);
-    console.log(`🔍   Career Playoff Bonus: ${normalizedCareerPlayoffScore.toFixed(1)} points`);
-    console.log(`🔍   Final: ${adjustedWinPctScore.toFixed(1)} + ${offenseDVOAComponent.toFixed(1)} + ${normalizedCareerPlayoffScore.toFixed(1)} = ${finalScore.toFixed(1)}`);
+    console.log(`🔍   Career Playoff: ${normalizedCareerPlayoffScore.toFixed(1)} × ${(teamWeights.playoff / 35).toFixed(2)} = ${weightedCareerPlayoffScore.toFixed(1)}`);
+    console.log(`🔍   Final: ${adjustedWinPctScore.toFixed(1)} + ${offenseDVOAComponent.toFixed(1)} + ${weightedCareerPlayoffScore.toFixed(1)} = ${finalScore.toFixed(1)}`);
     console.log(`🔍 ----------------------------------------`);
   }
   
   // Debug for Mahomes and other elite playoff QBs
   if (qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player?.includes('Mahomes')) {
-    console.log(`🏆 MAHOMES TEAM SCORE: WinPct(${winPctScore.toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) + DVOA(${offenseDVOAComponent.toFixed(1)}) + Career(${normalizedCareerPlayoffScore.toFixed(1)}) = ${finalScore.toFixed(1)}`);
-    console.log(`🏆 PLAYOFF DATA ${includePlayoffs ? 'ADJUSTMENT APPLIED' : 'EXCLUDED'} - 2024 Only: ${include2024Only}`);
+    console.log(`🏆 MAHOMES TEAM SCORE: WinPct(${winPctScore.toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) + DVOA(${offenseDVOAComponent.toFixed(1)}) + Career(${weightedCareerPlayoffScore.toFixed(1)}) = ${finalScore.toFixed(1)}`);
+    console.log(`🏆 PLAYOFF DATA ${includePlayoffs ? 'ADJUSTMENT APPLIED' : 'EXCLUDED'} - 2024 Only: ${include2024Only}, Playoff Weight: ${teamWeights.playoff}%`);
   }
   
   // Debug for Hurts and other Super Bowl winners
   if (qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player?.includes('Hurts')) {
-    console.log(`🏆 HURTS TEAM SCORE: WinPct(${winPctScore.toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) + DVOA(${offenseDVOAComponent.toFixed(1)}) + Career(${normalizedCareerPlayoffScore.toFixed(1)}) = ${finalScore.toFixed(1)}`);
-    console.log(`🏆 SUPER BOWL WINNER should get ${normalizedCareerPlayoffScore.toFixed(1)} bonus points!`);
+    console.log(`🏆 HURTS TEAM SCORE: WinPct(${winPctScore.toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) + DVOA(${offenseDVOAComponent.toFixed(1)}) + Career(${weightedCareerPlayoffScore.toFixed(1)}) = ${finalScore.toFixed(1)}`);
+    console.log(`🏆 SUPER BOWL WINNER: Raw Career(${normalizedCareerPlayoffScore.toFixed(1)}) × Weight(${(teamWeights.playoff / 35).toFixed(2)}) = ${weightedCareerPlayoffScore.toFixed(1)} weighted points!`);
   }
   
   return finalScore;

@@ -119,42 +119,14 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
   const updateSupportWeight = (component, value) => {
     const newValue = parseInt(value);
     setSupportWeights(prev => {
-      // Calculate total with the new value
-      const newWeights = { ...prev, [component]: newValue };
-      const total = Object.values(newWeights).reduce((sum, val) => sum + val, 0);
-      
-      // Allow independent operation but prevent total from exceeding 100
-      if (total <= 100) {
-        return newWeights;
-      } else {
-        // If total would exceed 100, set to max possible value
-        const otherTotal = Object.keys(prev)
-          .filter(key => key !== component)
-          .reduce((sum, key) => sum + prev[key], 0);
-        const maxValue = 100 - otherTotal;
-        return { ...prev, [component]: Math.max(0, maxValue) };
-      }
+      return { ...prev, [component]: newValue };
     });
   };
 
   const updateStatsWeight = (component, value) => {
     const newValue = parseInt(value);
     setStatsWeights(prev => {
-      // Calculate total with the new value
-      const newWeights = { ...prev, [component]: newValue };
-      const total = Object.values(newWeights).reduce((sum, val) => sum + val, 0);
-      
-      // Allow independent operation but prevent total from exceeding 100
-      if (total <= 100) {
-        return newWeights;
-      } else {
-        // If total would exceed 100, set to max possible value
-        const otherTotal = Object.keys(prev)
-          .filter(key => key !== component)
-          .reduce((sum, key) => sum + prev[key], 0);
-        const maxValue = 100 - otherTotal;
-        return { ...prev, [component]: Math.max(0, maxValue) };
-      }
+      return { ...prev, [component]: newValue };
     });
   };
 
@@ -175,21 +147,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
         };
       }
       
-      // Calculate total with the new value
-      const newWeights = { ...prev, [component]: newValue };
-      const total = Object.values(newWeights).reduce((sum, val) => sum + val, 0);
-      
-      // Allow independent operation but prevent total from exceeding 100
-      if (total <= 100) {
-        return newWeights;
-      } else {
-        // If total would exceed 100, set to max possible value
-        const otherTotal = Object.keys(prev)
-          .filter(key => key !== component)
-          .reduce((sum, key) => sum + prev[key], 0);
-        const maxValue = 100 - otherTotal;
-        return { ...prev, [component]: Math.max(0, maxValue) };
-      }
+      return { ...prev, [component]: newValue };
     });
   };
 
@@ -206,42 +164,14 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
         return prev; // Don't change anything
       }
       
-      // Calculate total with the new value
-      const newWeights = { ...prev, [component]: newValue };
-      const total = Object.values(newWeights).reduce((sum, val) => sum + val, 0);
-      
-      // Allow independent operation but prevent total from exceeding 100
-      if (total <= 100) {
-        return newWeights;
-      } else {
-        // If total would exceed 100, set to max possible value
-        const otherTotal = Object.keys(prev)
-          .filter(key => key !== component)
-          .reduce((sum, key) => sum + prev[key], 0);
-        const maxValue = 100 - otherTotal;
-        return { ...prev, [component]: Math.max(0, maxValue) };
-      }
+      return { ...prev, [component]: newValue };
     });
   };
 
   const updateDurabilityWeight = (component, value) => {
     const newValue = parseInt(value);
     setDurabilityWeights(prev => {
-      // Calculate total with the new value
-      const newWeights = { ...prev, [component]: newValue };
-      const total = Object.values(newWeights).reduce((sum, val) => sum + val, 0);
-      
-      // Allow independent operation but prevent total from exceeding 100
-      if (total <= 100) {
-        return newWeights;
-      } else {
-        // If total would exceed 100, set to max possible value
-        const otherTotal = Object.keys(prev)
-          .filter(key => key !== component)
-          .reduce((sum, key) => sum + prev[key], 0);
-        const maxValue = 100 - otherTotal;
-        return { ...prev, [component]: Math.max(0, maxValue) };
-      }
+      return { ...prev, [component]: newValue };
     });
   };
 
@@ -289,6 +219,159 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     
     setWeights(normalizedWeights);
     setCurrentPreset('custom');
+  };
+
+  // Normalization functions for sub-components
+  const normalizeSupportWeights = () => {
+    const currentTotal = Object.values(supportWeights).reduce((sum, val) => sum + val, 0);
+    
+    if (currentTotal === 0) {
+      // Reset to default if all are 0
+      setSupportWeights({ offensiveLine: 55, weapons: 30, defense: 15 });
+      return;
+    }
+    
+    if (currentTotal === 100) return;
+    
+    const normalizedWeights = {};
+    Object.entries(supportWeights).forEach(([category, value]) => {
+      normalizedWeights[category] = Math.round((value / currentTotal) * 100);
+    });
+    
+    // Handle rounding errors
+    const normalizedTotal = Object.values(normalizedWeights).reduce((sum, val) => sum + val, 0);
+    const difference = 100 - normalizedTotal;
+    
+    if (difference !== 0) {
+      const largestCategory = Object.entries(normalizedWeights)
+        .reduce((max, [category, value]) => value > max.value ? { category, value } : max, { category: null, value: 0 });
+      
+      if (largestCategory.category) {
+        normalizedWeights[largestCategory.category] += difference;
+      }
+    }
+    
+    setSupportWeights(normalizedWeights);
+  };
+
+  const normalizeStatsWeights = () => {
+    const currentTotal = Object.values(statsWeights).reduce((sum, val) => sum + val, 0);
+    
+    if (currentTotal === 0) {
+      setStatsWeights({ efficiency: 45, protection: 25, volume: 30 });
+      return;
+    }
+    
+    if (currentTotal === 100) return;
+    
+    const normalizedWeights = {};
+    Object.entries(statsWeights).forEach(([category, value]) => {
+      normalizedWeights[category] = Math.round((value / currentTotal) * 100);
+    });
+    
+    const normalizedTotal = Object.values(normalizedWeights).reduce((sum, val) => sum + val, 0);
+    const difference = 100 - normalizedTotal;
+    
+    if (difference !== 0) {
+      const largestCategory = Object.entries(normalizedWeights)
+        .reduce((max, [category, value]) => value > max.value ? { category, value } : max, { category: null, value: 0 });
+      
+      if (largestCategory.category) {
+        normalizedWeights[largestCategory.category] += difference;
+      }
+    }
+    
+    setStatsWeights(normalizedWeights);
+  };
+
+  const normalizeTeamWeights = () => {
+    const currentTotal = Object.values(teamWeights).reduce((sum, val) => sum + val, 0);
+    
+    if (currentTotal === 0) {
+      setTeamWeights({ regularSeason: 65, offenseDVOA: 15, playoff: 35 });
+      return;
+    }
+    
+    if (currentTotal === 100) return;
+    
+    const normalizedWeights = {};
+    Object.entries(teamWeights).forEach(([category, value]) => {
+      normalizedWeights[category] = Math.round((value / currentTotal) * 100);
+    });
+    
+    const normalizedTotal = Object.values(normalizedWeights).reduce((sum, val) => sum + val, 0);
+    const difference = 100 - normalizedTotal;
+    
+    if (difference !== 0) {
+      const largestCategory = Object.entries(normalizedWeights)
+        .reduce((max, [category, value]) => value > max.value ? { category, value } : max, { category: null, value: 0 });
+      
+      if (largestCategory.category) {
+        normalizedWeights[largestCategory.category] += difference;
+      }
+    }
+    
+    setTeamWeights(normalizedWeights);
+  };
+
+  const normalizeClutchWeights = () => {
+    const currentTotal = Object.values(clutchWeights).reduce((sum, val) => sum + val, 0);
+    
+    if (currentTotal === 0) {
+      setClutchWeights({ gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 });
+      return;
+    }
+    
+    if (currentTotal === 100) return;
+    
+    const normalizedWeights = {};
+    Object.entries(clutchWeights).forEach(([category, value]) => {
+      normalizedWeights[category] = Math.round((value / currentTotal) * 100);
+    });
+    
+    const normalizedTotal = Object.values(normalizedWeights).reduce((sum, val) => sum + val, 0);
+    const difference = 100 - normalizedTotal;
+    
+    if (difference !== 0) {
+      const largestCategory = Object.entries(normalizedWeights)
+        .reduce((max, [category, value]) => value > max.value ? { category, value } : max, { category: null, value: 0 });
+      
+      if (largestCategory.category) {
+        normalizedWeights[largestCategory.category] += difference;
+      }
+    }
+    
+    setClutchWeights(normalizedWeights);
+  };
+
+  const normalizeDurabilityWeights = () => {
+    const currentTotal = Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0);
+    
+    if (currentTotal === 0) {
+      setDurabilityWeights({ availability: 75, consistency: 25 });
+      return;
+    }
+    
+    if (currentTotal === 100) return;
+    
+    const normalizedWeights = {};
+    Object.entries(durabilityWeights).forEach(([category, value]) => {
+      normalizedWeights[category] = Math.round((value / currentTotal) * 100);
+    });
+    
+    const normalizedTotal = Object.values(normalizedWeights).reduce((sum, val) => sum + val, 0);
+    const difference = 100 - normalizedTotal;
+    
+    if (difference !== 0) {
+      const largestCategory = Object.entries(normalizedWeights)
+        .reduce((max, [category, value]) => value > max.value ? { category, value } : max, { category: null, value: 0 });
+      
+      if (largestCategory.category) {
+        normalizedWeights[largestCategory.category] += difference;
+      }
+    }
+    
+    setDurabilityWeights(normalizedWeights);
   };
 
   const getCurrentPresetDescription = () => {
@@ -754,9 +837,10 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="space-y-6 md:space-y-0 md:grid md:grid-cols-5 md:gap-4">
             {Object.entries(weights).map(([category, value]) => (
-              <div key={category} className="bg-white/5 rounded-lg p-4">
+              <div key={category} className="space-y-4">
+                <div className="bg-white/5 rounded-lg p-4">
                 <div className="flex justify-between items-center mb-2">
                   <label className="text-white font-medium capitalize">{category}</label>
                   <span className="bg-green-500/30 text-green-100 px-2 py-1 rounded text-sm">
@@ -775,11 +859,10 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                   <input
                     type="number"
                     min="0"
-                    max="100"
                     value={value}
                     onChange={(e) => updateWeight(category, e.target.value)}
                     className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-white text-sm text-center"
-                    placeholder="0-100"
+                    placeholder="0+"
                   />
                 </div>
                 <div className="text-xs text-blue-200 mt-1">
@@ -839,6 +922,395 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                     </div>
                   )}
                 </div>
+                </div>
+
+                {/* Component Details Inline on Mobile */}
+                <div className="md:hidden">
+                  {/* Support Component Details */}
+                  {category === 'support' && showSupportDetails && (
+                    <div className="bg-white/5 rounded-lg p-4 border-2 border-purple-500/30">
+                      <h4 className="text-white font-medium mb-3 flex items-center">
+                        🏟️ Supporting Cast Components
+                        <span className="ml-2 text-xs text-purple-200 bg-purple-500/20 px-2 py-1 rounded">
+                          Advanced Settings
+                        </span>
+                      </h4>
+                      <div className="text-xs text-blue-200 mb-4">
+                        Adjust how much each component affects the supporting cast difficulty score. All components must sum to 100%.
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {Object.entries(supportWeights).map(([component, value]) => (
+                          <div key={component} className="bg-white/5 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <label className="text-white font-medium text-sm capitalize">
+                                {component === 'offensiveLine' ? 'Offensive Line' : component}
+                              </label>
+                              <span className="bg-purple-500/30 text-purple-100 px-2 py-1 rounded text-xs">
+                                {value}%
+                              </span>
+                            </div>
+                            <div className="space-y-2">
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={value}
+                                onChange={(e) => updateSupportWeight(component, e.target.value)}
+                                className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                value={value}
+                                onChange={(e) => updateSupportWeight(component, e.target.value)}
+                                className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-white text-sm text-center"
+                                placeholder="0+"
+                              />
+                            </div>
+                            <div className="text-xs text-purple-200 mt-1">
+                              {component === 'offensiveLine' && 'Pass protection & run blocking quality'}
+                              {component === 'weapons' && 'Skill position talent & depth'}
+                              {component === 'defense' && 'Field position & game script impact'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="mt-3 text-center space-y-2">
+                        <span className={`text-sm font-bold ${Object.values(supportWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
+                          Component Total: {Object.values(supportWeights).reduce((sum, val) => sum + val, 0)}%
+                        </span>
+                        {Object.values(supportWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                          <div>
+                            <button
+                              onClick={normalizeSupportWeights}
+                              className="bg-purple-500/20 hover:bg-purple-500/30 px-3 py-1 rounded text-purple-200 hover:text-white transition-colors text-xs font-medium"
+                              title="Adjust all components proportionally to total exactly 100%"
+                            >
+                              ⚖️ Normalize to 100%
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stats Component Details */}
+                  {category === 'stats' && showStatsDetails && (
+                    <div className="bg-white/5 rounded-lg p-4 border-2 border-green-500/30">
+                      <h4 className="text-white font-medium mb-3 flex items-center">
+                        📊 Statistical Components
+                        <span className="ml-2 text-xs text-green-200 bg-green-500/20 px-2 py-1 rounded">
+                          Advanced Settings
+                        </span>
+                      </h4>
+                      <div className="text-xs text-blue-200 mb-4">
+                        Adjust how much each statistical category affects the stats score. All components must sum to 100%.
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {Object.entries(statsWeights).map(([component, value]) => (
+                          <div key={component} className="bg-white/5 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <label className="text-white font-medium text-sm capitalize">
+                                {component}
+                              </label>
+                              <span className="bg-green-500/30 text-green-100 px-2 py-1 rounded text-xs">
+                                {value}%
+                              </span>
+                            </div>
+                            <div className="space-y-2">
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={value}
+                                onChange={(e) => updateStatsWeight(component, e.target.value)}
+                                className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                value={value}
+                                onChange={(e) => updateStatsWeight(component, e.target.value)}
+                                className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-white text-sm text-center"
+                                placeholder="0+"
+                              />
+                            </div>
+                            <div className="text-xs text-green-200 mt-1">
+                              {component === 'efficiency' && 'ANY/A, TD%, Completion% - core passing metrics'}
+                              {component === 'protection' && 'Sack%, Int%, Fumble% - decision making & pocket presence'}
+                              {component === 'volume' && 'Passing yards, TDs, attempts - production & workload'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="mt-3 text-center space-y-2">
+                        <span className={`text-sm font-bold ${Object.values(statsWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
+                          Component Total: {Object.values(statsWeights).reduce((sum, val) => sum + val, 0)}%
+                        </span>
+                        {Object.values(statsWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                          <div>
+                            <button
+                              onClick={normalizeStatsWeights}
+                              className="bg-green-500/20 hover:bg-green-500/30 px-3 py-1 rounded text-green-200 hover:text-white transition-colors text-xs font-medium"
+                              title="Adjust all components proportionally to total exactly 100%"
+                            >
+                              ⚖️ Normalize to 100%
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Team Component Details */}
+                  {category === 'team' && showTeamDetails && (
+                    <div className="bg-white/5 rounded-lg p-4 border-2 border-yellow-500/30">
+                      <h4 className="text-white font-medium mb-3 flex items-center">
+                        🏆 Team Success Components
+                        <span className="ml-2 text-xs text-yellow-200 bg-yellow-500/20 px-2 py-1 rounded">
+                          Advanced Settings
+                        </span>
+                      </h4>
+                      <div className="text-xs text-blue-200 mb-4">
+                        Adjust how much each component affects the team success score. All components must sum to 100%. 
+                        <br /><em>Note: QB availability/injury resilience is covered by the Durability slider.</em>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {Object.entries(teamWeights).map(([component, value]) => (
+                          <div key={component} className="bg-white/5 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <label className="text-white font-medium text-sm capitalize">
+                                {component === 'regularSeason' ? 'Regular Season' : 
+                                 component === 'offenseDVOA' ? 'Offensive DVOA' : component}
+                              </label>
+                              <span className="bg-yellow-500/30 text-yellow-100 px-2 py-1 rounded text-xs">
+                                {value}%
+                              </span>
+                            </div>
+                            <div className="space-y-2">
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={value}
+                                onChange={(e) => updateTeamWeight(component, e.target.value)}
+                                disabled={!includePlayoffs && component === 'playoff'}
+                                className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                                  (!includePlayoffs && component === 'playoff')
+                                    ? 'bg-gray-400 cursor-not-allowed opacity-50' 
+                                    : 'bg-yellow-200'
+                                }`}
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                value={value}
+                                onChange={(e) => updateTeamWeight(component, e.target.value)}
+                                disabled={!includePlayoffs && component === 'playoff'}
+                                className={`w-full px-2 py-1 border border-white/20 rounded text-sm text-center ${
+                                  (!includePlayoffs && component === 'playoff')
+                                    ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
+                                    : 'bg-white/10 text-white'
+                                }`}
+                                placeholder="0+"
+                              />
+                            </div>
+                            <div className="text-xs text-yellow-200 mt-1">
+                              {component === 'regularSeason' && 'Win-loss record, regular season success'}
+                              {component === 'offenseDVOA' && 'Team offensive DVOA performance (defense-adjusted value over average)'}
+                              {component === 'playoff' && 'Playoff wins, deep runs, Super Bowl appearances'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="mt-3 text-center space-y-2">
+                        <span className={`text-sm font-bold ${Object.values(teamWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
+                          Component Total: {Object.values(teamWeights).reduce((sum, val) => sum + val, 0)}%
+                        </span>
+                        {!includePlayoffs && (
+                          <div className="text-xs text-orange-300 mt-1">
+                            ⚠️ Playoff component disabled - only Regular Season will be scored
+                          </div>
+                        )}
+                        {Object.values(teamWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                          <div>
+                            <button
+                              onClick={normalizeTeamWeights}
+                              className="bg-yellow-500/20 hover:bg-yellow-500/30 px-3 py-1 rounded text-yellow-200 hover:text-white transition-colors text-xs font-medium"
+                              title="Adjust all components proportionally to total exactly 100%"
+                            >
+                              ⚖️ Normalize to 100%
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Clutch Component Details */}
+                  {category === 'clutch' && showClutchDetails && (
+                    <div className="bg-white/5 rounded-lg p-4 border-2 border-red-500/30">
+                      <h4 className="text-white font-medium mb-3 flex items-center">
+                        💎 Clutch Performance Components
+                        <span className="ml-2 text-xs text-red-200 bg-red-500/20 px-2 py-1 rounded">
+                          Advanced Settings
+                        </span>
+                      </h4>
+                      <div className="text-xs text-blue-200 mb-4">
+                        Adjust how much each component affects the clutch performance score. All components must sum to 100%.
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {Object.entries(clutchWeights).map(([component, value]) => (
+                          <div key={component} className="bg-white/5 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <label className="text-white font-medium text-sm">
+                                {component === 'gameWinningDrives' ? 'Game Winning Drives' :
+                                 component === 'fourthQuarterComebacks' ? '4th Quarter Comebacks' :
+                                 component === 'clutchRate' ? 'Clutch Rate' :
+                                 component === 'playoffBonus' ? 'Playoff Bonus' : component}
+                              </label>
+                              <span className="bg-red-500/30 text-red-100 px-2 py-1 rounded text-xs">
+                                {value}%
+                              </span>
+                            </div>
+                            <div className="space-y-2">
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={value}
+                                onChange={(e) => updateClutchWeight(component, e.target.value)}
+                                disabled={!includePlayoffs && component === 'playoffBonus'}
+                                className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                                  (!includePlayoffs && component === 'playoffBonus')
+                                    ? 'bg-gray-400 cursor-not-allowed opacity-50' 
+                                    : 'bg-red-200'
+                                }`}
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                value={value}
+                                onChange={(e) => updateClutchWeight(component, e.target.value)}
+                                disabled={!includePlayoffs && component === 'playoffBonus'}
+                                className={`w-full px-2 py-1 border border-white/20 rounded text-sm text-center ${
+                                  (!includePlayoffs && component === 'playoffBonus')
+                                    ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
+                                    : 'bg-white/10 text-white'
+                                }`}
+                                placeholder="0+"
+                              />
+                            </div>
+                            <div className="text-xs text-red-200 mt-1">
+                              {component === 'gameWinningDrives' && 'Drives that directly lead to game-winning scores'}
+                              {component === 'fourthQuarterComebacks' && 'Successful comebacks initiated in 4th quarter'}
+                              {component === 'clutchRate' && 'Combined GWD and 4QC opportunities per game'}
+                              {component === 'playoffBonus' && 'Additional points for playoff clutch performance'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="mt-3 text-center space-y-2">
+                        <span className={`text-sm font-bold ${Object.values(clutchWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
+                          Component Total: {Object.values(clutchWeights).reduce((sum, val) => sum + val, 0)}%
+                        </span>
+                        {!includePlayoffs && (
+                          <div className="text-xs text-orange-300 mt-1">
+                            ⚠️ Playoff Bonus component disabled - only regular season clutch will be scored
+                          </div>
+                        )}
+                        {Object.values(clutchWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                          <div>
+                            <button
+                              onClick={normalizeClutchWeights}
+                              className="bg-red-500/20 hover:bg-red-500/30 px-3 py-1 rounded text-red-200 hover:text-white transition-colors text-xs font-medium"
+                              title="Adjust all components proportionally to total exactly 100%"
+                            >
+                              ⚖️ Normalize to 100%
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Durability Component Details */}
+                  {category === 'durability' && showDurabilityDetails && (
+                    <div className="bg-white/5 rounded-lg p-4 border-2 border-orange-500/30">
+                      <h4 className="text-white font-medium mb-3 flex items-center">
+                        ⚡ Durability Components
+                        <span className="ml-2 text-xs text-orange-200 bg-orange-500/20 px-2 py-1 rounded">
+                          Advanced Settings
+                        </span>
+                      </h4>
+                      <div className="text-xs text-blue-200 mb-4">
+                        Adjust how much each component affects the durability score. All components must sum to 100%.
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {Object.entries(durabilityWeights).map(([component, value]) => (
+                          <div key={component} className="bg-white/5 rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <label className="text-white font-medium text-sm capitalize">
+                                {component === 'availability' ? 'Season Availability' : 'Multi-Year Consistency'}
+                              </label>
+                              <span className="bg-orange-500/30 text-orange-100 px-2 py-1 rounded text-xs">
+                                {value}%
+                              </span>
+                            </div>
+                            <div className="space-y-2">
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={value}
+                                onChange={(e) => updateDurabilityWeight(component, e.target.value)}
+                                className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                value={value}
+                                onChange={(e) => updateDurabilityWeight(component, e.target.value)}
+                                className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-white text-sm text-center"
+                                placeholder="0+"
+                              />
+                            </div>
+                            <div className="text-xs text-orange-200 mt-1">
+                              {component === 'availability' && 'Games started per season, injury frequency'}
+                              {component === 'consistency' && 'Multi-year health track record, longevity factors'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="mt-3 text-center space-y-2">
+                        <span className={`text-sm font-bold ${Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
+                          Component Total: {Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0)}%
+                        </span>
+                        {Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                          <div>
+                            <button
+                              onClick={normalizeDurabilityWeights}
+                              className="bg-orange-500/20 hover:bg-orange-500/30 px-3 py-1 rounded text-orange-200 hover:text-white transition-colors text-xs font-medium"
+                              title="Adjust all components proportionally to total exactly 100%"
+                            >
+                              ⚖️ Normalize to 100%
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -860,9 +1332,9 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
             )}
           </div>
 
-          {/* Support Component Details Dropdown */}
+          {/* Support Component Details Dropdown - Desktop Only */}
           {showSupportDetails && (
-            <div className="mt-6 bg-white/5 rounded-lg p-4 border-2 border-purple-500/30">
+            <div className="hidden md:block mt-6 bg-white/5 rounded-lg p-4 border-2 border-purple-500/30">
               <h4 className="text-white font-medium mb-3 flex items-center">
                 🏟️ Supporting Cast Components
                 <span className="ml-2 text-xs text-purple-200 bg-purple-500/20 px-2 py-1 rounded">
@@ -896,11 +1368,10 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                       <input
                         type="number"
                         min="0"
-                        max="100"
                         value={value}
                         onChange={(e) => updateSupportWeight(component, e.target.value)}
                         className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-white text-sm text-center"
-                        placeholder="0-100"
+                        placeholder="0+"
                       />
                     </div>
                     <div className="text-xs text-purple-200 mt-1">
@@ -912,17 +1383,28 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                 ))}
               </div>
               
-              <div className="mt-3 text-center">
-                <span className={`text-sm font-bold ${Object.values(supportWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-red-400'}`}>
+              <div className="mt-3 text-center space-y-2">
+                <span className={`text-sm font-bold ${Object.values(supportWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
                   Component Total: {Object.values(supportWeights).reduce((sum, val) => sum + val, 0)}%
                 </span>
+                {Object.values(supportWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                  <div>
+                    <button
+                      onClick={normalizeSupportWeights}
+                      className="bg-purple-500/20 hover:bg-purple-500/30 px-3 py-1 rounded text-purple-200 hover:text-white transition-colors text-xs font-medium"
+                      title="Adjust all components proportionally to total exactly 100%"
+                    >
+                      ⚖️ Normalize to 100%
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Stats Component Details Dropdown */}
+          {/* Stats Component Details Dropdown - Desktop Only */}
           {showStatsDetails && (
-            <div className="mt-6 bg-white/5 rounded-lg p-4 border-2 border-green-500/30">
+            <div className="hidden md:block mt-6 bg-white/5 rounded-lg p-4 border-2 border-green-500/30">
               <h4 className="text-white font-medium mb-3 flex items-center">
                 📊 Statistical Components
                 <span className="ml-2 text-xs text-green-200 bg-green-500/20 px-2 py-1 rounded">
@@ -956,11 +1438,10 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                       <input
                         type="number"
                         min="0"
-                        max="100"
                         value={value}
                         onChange={(e) => updateStatsWeight(component, e.target.value)}
                         className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-white text-sm text-center"
-                        placeholder="0-100"
+                        placeholder="0+"
                       />
                     </div>
                     <div className="text-xs text-green-200 mt-1">
@@ -972,17 +1453,28 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                 ))}
               </div>
               
-              <div className="mt-3 text-center">
-                <span className={`text-sm font-bold ${Object.values(statsWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-red-400'}`}>
+              <div className="mt-3 text-center space-y-2">
+                <span className={`text-sm font-bold ${Object.values(statsWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
                   Component Total: {Object.values(statsWeights).reduce((sum, val) => sum + val, 0)}%
                 </span>
+                {Object.values(statsWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                  <div>
+                    <button
+                      onClick={normalizeStatsWeights}
+                      className="bg-green-500/20 hover:bg-green-500/30 px-3 py-1 rounded text-green-200 hover:text-white transition-colors text-xs font-medium"
+                      title="Adjust all components proportionally to total exactly 100%"
+                    >
+                      ⚖️ Normalize to 100%
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Team Component Details Dropdown */}
+          {/* Team Component Details Dropdown - Desktop Only */}
           {showTeamDetails && (
-            <div className="mt-6 bg-white/5 rounded-lg p-4 border-2 border-yellow-500/30">
+            <div className="hidden md:block mt-6 bg-white/5 rounded-lg p-4 border-2 border-yellow-500/30">
               <h4 className="text-white font-medium mb-3 flex items-center">
                 🏆 Team Success Components
                 <span className="ml-2 text-xs text-yellow-200 bg-yellow-500/20 px-2 py-1 rounded">
@@ -996,7 +1488,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
 
 
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {Object.entries(teamWeights).map(([component, value]) => (
                   <div key={component} className="bg-white/5 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
@@ -1025,7 +1517,6 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                       <input
                         type="number"
                         min="0"
-                        max="100"
                         value={value}
                         onChange={(e) => updateTeamWeight(component, e.target.value)}
                         disabled={!includePlayoffs && component === 'playoff'}
@@ -1034,7 +1525,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                             ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
                             : 'bg-white/10 text-white'
                         }`}
-                        placeholder="0-100"
+                        placeholder="0+"
                       />
                     </div>
                     <div className="text-xs text-yellow-200 mt-1">
@@ -1046,8 +1537,8 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                 ))}
               </div>
               
-              <div className="mt-3 text-center">
-                <span className={`text-sm font-bold ${Object.values(teamWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-red-400'}`}>
+              <div className="mt-3 text-center space-y-2">
+                <span className={`text-sm font-bold ${Object.values(teamWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
                   Component Total: {Object.values(teamWeights).reduce((sum, val) => sum + val, 0)}%
                 </span>
                 {!includePlayoffs && (
@@ -1055,13 +1546,24 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                     ⚠️ Playoff component disabled - only Regular Season will be scored
                   </div>
                 )}
+                {Object.values(teamWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                  <div>
+                    <button
+                      onClick={normalizeTeamWeights}
+                      className="bg-yellow-500/20 hover:bg-yellow-500/30 px-3 py-1 rounded text-yellow-200 hover:text-white transition-colors text-xs font-medium"
+                      title="Adjust all components proportionally to total exactly 100%"
+                    >
+                      ⚖️ Normalize to 100%
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Clutch Component Details Dropdown */}
+          {/* Clutch Component Details Dropdown - Desktop Only */}
           {showClutchDetails && (
-            <div className="mt-6 bg-white/5 rounded-lg p-4 border-2 border-red-500/30">
+            <div className="hidden md:block mt-6 bg-white/5 rounded-lg p-4 border-2 border-red-500/30">
               <h4 className="text-white font-medium mb-3 flex items-center">
                 💎 Clutch Performance Components
                 <span className="ml-2 text-xs text-red-200 bg-red-500/20 px-2 py-1 rounded">
@@ -1103,7 +1605,6 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                       <input
                         type="number"
                         min="0"
-                        max="100"
                         value={value}
                         onChange={(e) => updateClutchWeight(component, e.target.value)}
                         disabled={!includePlayoffs && component === 'playoffBonus'}
@@ -1112,7 +1613,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                             ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
                             : 'bg-white/10 text-white'
                         }`}
-                        placeholder="0-100"
+                        placeholder="0+"
                       />
                     </div>
                     <div className="text-xs text-red-200 mt-1">
@@ -1125,8 +1626,8 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                 ))}
               </div>
               
-              <div className="mt-3 text-center">
-                <span className={`text-sm font-bold ${Object.values(clutchWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-red-400'}`}>
+              <div className="mt-3 text-center space-y-2">
+                <span className={`text-sm font-bold ${Object.values(clutchWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
                   Component Total: {Object.values(clutchWeights).reduce((sum, val) => sum + val, 0)}%
                 </span>
                 {!includePlayoffs && (
@@ -1134,13 +1635,24 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                     ⚠️ Playoff Bonus component disabled - only regular season clutch will be scored
                   </div>
                 )}
+                {Object.values(clutchWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                  <div>
+                    <button
+                      onClick={normalizeClutchWeights}
+                      className="bg-red-500/20 hover:bg-red-500/30 px-3 py-1 rounded text-red-200 hover:text-white transition-colors text-xs font-medium"
+                      title="Adjust all components proportionally to total exactly 100%"
+                    >
+                      ⚖️ Normalize to 100%
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Durability Component Details Dropdown */}
+          {/* Durability Component Details Dropdown - Desktop Only */}
           {showDurabilityDetails && (
-            <div className="mt-6 bg-white/5 rounded-lg p-4 border-2 border-orange-500/30">
+            <div className="hidden md:block mt-6 bg-white/5 rounded-lg p-4 border-2 border-orange-500/30">
               <h4 className="text-white font-medium mb-3 flex items-center">
                 ⚡ Durability Components
                 <span className="ml-2 text-xs text-orange-200 bg-orange-500/20 px-2 py-1 rounded">
@@ -1174,11 +1686,10 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                       <input
                         type="number"
                         min="0"
-                        max="100"
                         value={value}
                         onChange={(e) => updateDurabilityWeight(component, e.target.value)}
                         className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-white text-sm text-center"
-                        placeholder="0-100"
+                        placeholder="0+"
                       />
                     </div>
                     <div className="text-xs text-orange-200 mt-1">
@@ -1189,10 +1700,21 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                 ))}
               </div>
               
-              <div className="mt-3 text-center">
-                <span className={`text-sm font-bold ${Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-red-400'}`}>
+              <div className="mt-3 text-center space-y-2">
+                <span className={`text-sm font-bold ${Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
                   Component Total: {Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0)}%
                 </span>
+                {Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                  <div>
+                    <button
+                      onClick={normalizeDurabilityWeights}
+                      className="bg-orange-500/20 hover:bg-orange-500/30 px-3 py-1 rounded text-orange-200 hover:text-white transition-colors text-xs font-medium"
+                      title="Adjust all components proportionally to total exactly 100%"
+                    >
+                      ⚖️ Normalize to 100%
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

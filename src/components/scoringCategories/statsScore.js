@@ -102,8 +102,14 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
     const regSeasonRushTDs = parseInt(data.RushingTDs) || 0;
     const regSeasonFumbles = parseInt(data.Fumbles) || 0;
     
-    // Skip seasons with insufficient data
-    if (regSeasonAtts < 100) return; // Minimum attempts threshold
+    // Skip seasons with insufficient data - use different thresholds for 2024 vs previous years
+    if (year === '2024') {
+      // For 2024: Use minimum attempts requirement (very lenient for rookies/backup roles)
+      if (regSeasonAtts < 50) return; // Minimum 50 attempts for 2024 (roughly 3-4 games as starter)
+    } else {
+      // For 2022/2023: Use more lenient threshold to account for historical data
+      if (regSeasonAtts < 100) return; // Minimum 100 attempts for previous years
+    }
     
     // Calculate regular season statistical rates
     const anyA = data['ANY/A'] || 0;
@@ -170,7 +176,9 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
       const regSeasonInts = parseInt(data.Int) || 0;
       const regSeasonGames = parseInt(data.G) || 17;
       
-      if (playoffAtts >= 15 && playoffGames > 0 && regSeasonAtts >= 100) {
+      // Apply same threshold logic to playoff calculations
+      const regSeasonThreshold = year === '2024' ? 50 : 100;
+      if (playoffAtts >= 15 && playoffGames > 0 && regSeasonAtts >= regSeasonThreshold) {
         // Calculate playoff vs regular season performance ratios
         const playoffCmpPct = (playoffCmps / playoffAtts) * 100;
         const playoffTDPct = (playoffTDs / playoffAtts) * 100;

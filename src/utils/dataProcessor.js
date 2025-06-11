@@ -335,13 +335,22 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
   return playerData;
 };
 
-export const processQBData = (combinedQBData) => {
+export const processQBData = (combinedQBData, include2024Only = false) => {
   return Object.entries(combinedQBData)
     .filter(([playerName, data]) => {
-      // Filter for QBs with meaningful career data
-      const totalGames = data.career.gamesStarted;
-      const hasRecentActivity = data.seasons.some(season => season.year >= 2023);
-      return totalGames >= 15 && hasRecentActivity; // At least 15 career starts and active recently
+      if (include2024Only) {
+        // For 2024-only mode: Much more lenient - just need any 2024 activity
+        const has2024Activity = data.seasons.some(season => season.year === 2024);
+        const total2024Games = data.seasons
+          .filter(season => season.year === 2024)
+          .reduce((sum, season) => sum + (season.gamesStarted || 0), 0);
+        return has2024Activity && total2024Games >= 1; // Just need 1+ game in 2024
+      } else {
+        // For multi-year mode: Original career-based filtering
+        const totalGames = data.career.gamesStarted;
+        const hasRecentActivity = data.seasons.some(season => season.year >= 2023);
+        return totalGames >= 15 && hasRecentActivity; // At least 15 career starts and active recently
+      }
     })
     .map(([playerName, data], index) => {
       const mostRecentSeason = data.seasons[0]; // Already sorted by year desc

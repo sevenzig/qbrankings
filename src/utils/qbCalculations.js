@@ -98,49 +98,75 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
   
   if (totalWeight === 0) return 0;
   
-  // CORRECTED SUPPORT INTEGRATION: Balanced normalization without deflation
+  // CORRECTED SUPPORT & DURABILITY INTEGRATION: Balanced normalization without deflation
   let finalScore = 0;
   
-  if (weights.support > 0 && allQBBaseScores.length > 0) {
-    // Calculate league average support quality for proper normalization
+  // Calculate base performance score (excluding contextual adjustments: support, durability)
+  const basePerformanceComponents = [
+    { score: baseScores.team, weight: weights.team },
+    { score: baseScores.stats, weight: weights.stats },
+    { score: baseScores.clutch, weight: weights.clutch }
+  ].filter(component => component.weight > 0);
+  
+  const basePerformanceWeight = basePerformanceComponents.reduce((sum, comp) => sum + comp.weight, 0);
+  const basePerformanceScore = basePerformanceComponents.reduce((sum, comp) => sum + (comp.score * comp.weight), 0) / Math.max(1, basePerformanceWeight);
+  
+  if ((weights.support > 0 || weights.durability > 0) && allQBBaseScores.length > 0) {
+    // Calculate league averages for proper normalization
     const avgSupportScore = allQBBaseScores.reduce((sum, qbScores) => sum + qbScores.support, 0) / allQBBaseScores.length;
+    const avgDurabilityScore = allQBBaseScores.reduce((sum, qbScores) => sum + qbScores.durability, 0) / allQBBaseScores.length;
     
-    // Calculate base performance score (excluding support)
-    const basePerformanceScore = (
-      (baseScores.team * weights.team) +
-      (baseScores.stats * weights.stats) +
-      (baseScores.clutch * weights.clutch) +
-      (baseScores.durability * weights.durability)
-    ) / Math.max(1, totalWeight - weights.support);
+    let adjustmentFactor = 1.0;
     
-    // BALANCED SUPPORT ADJUSTMENT: Properly centered around neutral (1.0)
-    // Poor support (below average) = bonus, Good support (above average) = penalty
-    const supportDifference = baseScores.support - avgSupportScore; // Positive = better than average support
+    // CONTEXTUAL SUPPORT ADJUSTMENT
+    if (weights.support > 0) {
+      const supportDifference = baseScores.support - avgSupportScore; // Positive = better than average support
+      
+      // Create adjustment factor that properly balances around 1.0
+      // Range: 0.80 to 1.20 (±20% max adjustment for meaningful impact)
+      // Poor support gets bonus (factor > 1.0), good support gets penalty (factor < 1.0)
+      const supportAdjustmentStrength = 0.006; // Increased sensitivity for noticeable effect
+      const supportAdjustmentFactor = Math.max(0.80, Math.min(1.20, 1.0 - (supportDifference * supportAdjustmentStrength)));
+      
+      // Apply support adjustment based on support weight
+      const supportWeight = weights.support / totalWeight;
+      adjustmentFactor = (adjustmentFactor * (1 - supportWeight)) + (supportAdjustmentFactor * supportWeight);
+    }
     
-    // Create adjustment factor that properly balances around 1.0
-    // Range: 0.85 to 1.15 (±15% max adjustment)
-    // Poor support gets bonus (factor > 1.0), good support gets penalty (factor < 1.0)
-    const maxAdjustment = 0.15; // ±15% max
-    const adjustmentStrength = 0.003; // Sensitivity factor (adjust as needed)
-    const supportAdjustmentFactor = Math.max(0.85, Math.min(1.15, 1.0 - (supportDifference * adjustmentStrength)));
+    // CONTEXTUAL DURABILITY ADJUSTMENT
+    if (weights.durability > 0) {
+      const durabilityDifference = baseScores.durability - avgDurabilityScore; // Positive = better than average durability
+      
+      // Create adjustment factor for durability
+      // Range: 0.85 to 1.15 (±15% max adjustment)
+      // Poor durability gets penalty (factor < 1.0), good durability gets bonus (factor > 1.0)
+      const durabilityAdjustmentStrength = 0.004; // Slightly less sensitive than support
+      const durabilityAdjustmentFactor = Math.max(0.85, Math.min(1.15, 1.0 + (durabilityDifference * durabilityAdjustmentStrength)));
+      
+      // Apply durability adjustment based on durability weight
+      const durabilityWeight = weights.durability / totalWeight;
+      adjustmentFactor = (adjustmentFactor * (1 - durabilityWeight)) + (durabilityAdjustmentFactor * durabilityWeight);
+    }
     
-    // Apply support adjustment to base performance
-    const adjustedPerformanceScore = basePerformanceScore * supportAdjustmentFactor;
+    // Calculate adjusted performance score
+    const adjustedPerformanceScore = basePerformanceScore * adjustmentFactor;
     
-    // Calculate final score using simple weighted average
-    // No more confusing double-inversion - just use the adjusted performance with support weight
-    const supportWeight = weights.support / totalWeight;
-    finalScore = (adjustedPerformanceScore * (1 - supportWeight)) + (baseScores.support * supportWeight);
+    // Calculate the weighted blend of base performance components (excluding contextual adjustments)
+    const performanceWeight = basePerformanceWeight / totalWeight;
+    finalScore = adjustedPerformanceScore * performanceWeight;
     
     // Debug for significant cases
     if (qb?.name && (qb.name.includes('Mahomes') || qb.name.includes('Allen') || qb.name.includes('Burrow') || qb.name.includes('Herbert') || qb.name.includes('Hurts') || Math.random() < 0.05)) {
-      const adjustmentType = supportAdjustmentFactor > 1.0 ? 'BONUS' : supportAdjustmentFactor < 1.0 ? 'PENALTY' : 'NEUTRAL';
-      console.log(`🎯 SUPPORT ${qb.name}: Quality(${baseScores.support.toFixed(1)}) vs Avg(${avgSupportScore.toFixed(1)}) -> ${adjustmentType} Factor(${supportAdjustmentFactor.toFixed(3)})`);
-      console.log(`🎯 Base Perf(${basePerformanceScore.toFixed(1)}) * Factor(${supportAdjustmentFactor.toFixed(3)}) = Adjusted(${adjustedPerformanceScore.toFixed(1)})`);
-      console.log(`🎯 Final: Adjusted(${adjustedPerformanceScore.toFixed(1)}) * ${((1-supportWeight)*100).toFixed(0)}% + Support(${baseScores.support.toFixed(1)}) * ${(supportWeight*100).toFixed(0)}% = ${finalScore.toFixed(1)}`);
+      const supportAdjustmentType = weights.support > 0 ? (baseScores.support > avgSupportScore ? 'PENALTY' : 'BONUS') : 'N/A';
+      const durabilityAdjustmentType = weights.durability > 0 ? (baseScores.durability > avgDurabilityScore ? 'BONUS' : 'PENALTY') : 'N/A';
+      console.log(`🎯 CONTEXT ADJUSTMENTS ${qb.name}:`);
+      console.log(`🎯   Support: Quality(${baseScores.support.toFixed(1)}) vs Avg(${avgSupportScore.toFixed(1)}) -> ${supportAdjustmentType}`);
+      console.log(`🎯   Durability: Quality(${baseScores.durability.toFixed(1)}) vs Avg(${avgDurabilityScore.toFixed(1)}) -> ${durabilityAdjustmentType}`);
+      console.log(`🎯   Combined Adjustment Factor: ${adjustmentFactor.toFixed(3)}`);
+      console.log(`🎯   Base Perf(${basePerformanceScore.toFixed(1)}) * Factor(${adjustmentFactor.toFixed(3)}) = Adjusted(${adjustedPerformanceScore.toFixed(1)})`);
     }
   } else {
-    // No support weighting or no comparison data - standard weighted average
+    // No contextual weighting or no comparison data - standard weighted average
     finalScore = (
       (baseScores.team * weights.team) +
       (baseScores.stats * weights.stats) +
@@ -171,9 +197,8 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
     // PLAYOFF MODE: Standard regular season boost since playoff bonuses are already in individual scores
     const nonTeamScore = (
       (baseScores.stats * weights.stats) +
-      (baseScores.clutch * weights.clutch) +
-      (baseScores.durability * weights.durability)
-    ) / Math.max(1, totalWeight - weights.team);
+      (baseScores.clutch * weights.clutch)
+    ) / Math.max(1, totalWeight - weights.team - weights.support - weights.durability);
     
     const regularSeasonBoost = Math.min(12, nonTeamScore * 0.15); // Up to 12 point boost
     adjustedScore += regularSeasonBoost;
@@ -181,9 +206,8 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
     // REGULAR SEASON ONLY MODE: Enhanced boost to compensate for missing playoff bonuses
     const nonTeamScore = (
       (baseScores.stats * weights.stats) +
-      (baseScores.clutch * weights.clutch) +
-      (baseScores.durability * weights.durability)
-    ) / Math.max(1, totalWeight - weights.team);
+      (baseScores.clutch * weights.clutch)
+    ) / Math.max(1, totalWeight - weights.team - weights.support - weights.durability);
     
     // Enhanced regular season boost to normalize the scale when playoffs are excluded
     const enhancedRegularSeasonBoost = Math.min(18, nonTeamScore * 0.22); // Up to 18 point boost (50% higher)

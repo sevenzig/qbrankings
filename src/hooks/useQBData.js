@@ -120,7 +120,7 @@ export const useQBData = () => {
       console.log(`📊 Combined data for ${Object.keys(combinedQBData).length} unique quarterbacks${!include2024Only ? ' across 3 seasons' : ' (2024 only)'}`);
       
       // Convert combined data to our QB format
-      const processedQBs = processQBData(combinedQBData);
+      const processedQBs = processQBData(combinedQBData, include2024Only);
       
       // Calculate QEI metrics
       const qbsWithMetrics = processedQBs.map(qb => {
