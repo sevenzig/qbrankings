@@ -11,7 +11,7 @@ import {
   calculateSupportScore
 } from './scoringCategories/index.js';
 
-const DynamicQBRankings = () => {
+const DynamicQBRankings = ({ onShowDocumentation }) => {
   const { qbData, loading, error, lastFetch, shouldRefreshData, fetchAllQBData } = useQBData();
   
   const [weights, setWeights] = useState({
@@ -35,7 +35,8 @@ const DynamicQBRankings = () => {
   });
   const [showStatsDetails, setShowStatsDetails] = useState(false);
   const [teamWeights, setTeamWeights] = useState({
-    regularSeason: 65,   // Regular season win percentage
+    regularSeason: 50,   // Regular season win percentage
+    offenseDVOA: 15,     // Offensive DVOA performance
     playoff: 35         // Career playoff achievement score
   });
   const [showTeamDetails, setShowTeamDetails] = useState(false);
@@ -61,6 +62,18 @@ const DynamicQBRankings = () => {
 
   // Global 2024-only toggle - affects ALL data loading and disables year-based sliders
   const [include2024Only, setInclude2024Only] = useState(false);
+
+  // Scroll to top functionality
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Effect to automatically adjust clutch weights when playoff toggle changes
   useEffect(() => {
@@ -153,10 +166,11 @@ const DynamicQBRankings = () => {
     
     const newValue = parseInt(value);
     setTeamWeights(prev => {
-      // When playoffs are disabled, automatically set playoff to 0% and regular season to 100%
+      // When playoffs are disabled, automatically set playoff to 0% and redistribute to other components
       if (!includePlayoffs) {
         return {
-          regularSeason: 100,
+          regularSeason: 85,
+          offenseDVOA: 15,
           playoff: 0
         };
       }
@@ -340,8 +354,8 @@ const DynamicQBRankings = () => {
     // Stats weights (3 values)
     const statsEnc = `${statsWeights.efficiency},${statsWeights.protection},${statsWeights.volume}`;
     
-    // Team weights (2 values)
-    const teamEnc = `${teamWeights.regularSeason},${teamWeights.playoff}`;
+    // Team weights (3 values)
+    const teamEnc = `${teamWeights.regularSeason},${teamWeights.offenseDVOA},${teamWeights.playoff}`;
     
     // Team settings (2 values: playoffs and 2024-only, 1 for true, 0 for false)
     const settingsEnc = `${includePlayoffs ? '1' : '0'},${include2024Only ? '1' : '0'}`;
@@ -412,9 +426,17 @@ const DynamicQBRankings = () => {
       // Team weights (optional)
       if (sections[3]) {
         const teamValues = sections[3].split(',').map(v => parseInt(v));
-        if (teamValues.length === 2 && teamValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+        if (teamValues.length === 3 && teamValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
           result.teamWeights = {
             regularSeason: teamValues[0],
+            offenseDVOA: teamValues[1],
+            playoff: teamValues[2]
+          };
+        } else if (teamValues.length === 2 && teamValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+          // Legacy format - convert to new format
+          result.teamWeights = {
+            regularSeason: teamValues[0],
+            offenseDVOA: 15, // Default value
             playoff: teamValues[1]
           };
         }
@@ -463,6 +485,13 @@ const DynamicQBRankings = () => {
       // Fallback: show the link in a prompt
       prompt('Copy this link to share your QB philosophy:', shareLink);
     }
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
   };
 
   // Load settings from URL on component mount
@@ -519,13 +548,15 @@ const DynamicQBRankings = () => {
   useEffect(() => {
     if (!includePlayoffs) {
       setTeamWeights({
-        regularSeason: 100,
+        regularSeason: 85,
+        offenseDVOA: 15,
         playoff: 0
       });
     } else {
-      // When playoffs are re-enabled, restore to balanced 65/35 split
+      // When playoffs are re-enabled, restore to balanced split
       setTeamWeights({
-        regularSeason: 65,
+        regularSeason: 50,
+        offenseDVOA: 15,
         playoff: 35
       });
     }
@@ -960,7 +991,7 @@ const DynamicQBRankings = () => {
               </h4>
               <div className="text-xs text-blue-200 mb-4">
                 Adjust how much each component affects the team success score. All components must sum to 100%. 
-                <br /><em>Note: Games started/injury resilience is covered by the Durability slider.</em>
+                <br /><em>Note: QB availability/injury resilience is covered by the Durability slider.</em>
               </div>
 
 
@@ -970,7 +1001,8 @@ const DynamicQBRankings = () => {
                   <div key={component} className="bg-white/5 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
                       <label className="text-white font-medium text-sm capitalize">
-                        {component === 'regularSeason' ? 'Regular Season' : component}
+                        {component === 'regularSeason' ? 'Regular Season' : 
+                         component === 'offenseDVOA' ? 'Offensive DVOA' : component}
                       </label>
                       <span className="bg-yellow-500/30 text-yellow-100 px-2 py-1 rounded text-xs">
                         {value}%
@@ -1007,6 +1039,7 @@ const DynamicQBRankings = () => {
                     </div>
                     <div className="text-xs text-yellow-200 mt-1">
                       {component === 'regularSeason' && 'Win-loss record, regular season success'}
+                      {component === 'offenseDVOA' && 'Team offensive DVOA performance (defense-adjusted value over average)'}
                       {component === 'playoff' && 'Playoff wins, deep runs, Super Bowl appearances'}
                     </div>
                   </div>
@@ -1322,9 +1355,33 @@ const DynamicQBRankings = () => {
             <p className="text-xs text-blue-400">
               Share all your custom settings including main weights and advanced component breakdowns!
             </p>
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <button 
+                onClick={onShowDocumentation}
+                className="bg-purple-500/20 hover:bg-purple-500/30 px-6 py-2 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
+              >
+                📚 View Scoring Methodology & Documentation
+              </button>
+              <p className="text-xs text-purple-300 mt-2">
+                Learn how our QB evaluation system works - from team success to clutch performance
+              </p>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Scroll to Top Button */}
+      {showScrollTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-6 right-6 bg-blue-500/20 hover:bg-blue-500/30 backdrop-blur-lg text-white p-3 rounded-full shadow-lg transition-all duration-300 z-50 border border-blue-400/30"
+          title="Scroll to top"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 };

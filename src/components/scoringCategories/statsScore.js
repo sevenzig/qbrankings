@@ -200,8 +200,8 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
         if (totalPlayoffGames >= 3 && playoffWins >= 2) {
           // Known Super Bowl results
           const knownSuperBowlWins = {
-            'PHI': [2024], // Eagles won 2024 Super Bowl
-            'KAN': [2023], // Chiefs won 2023 Super Bowl
+            'PHI': [2023], // Eagles won 2023 Super Bowl (Hurts)
+            'KAN': [2024], // Chiefs won 2024 Super Bowl (Mahomes)
             'TAM': [2022], // Bucs won 2022 Super Bowl
             'LAR': [2022] // Rams won 2022 Super Bowl
           };
@@ -227,8 +227,8 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
     // Normalize the playoff adjustment
     if (totalPlayoffWeight > 0) {
       playoffAdjustmentFactor = 1.0 + (playoffPerformanceMultiplier / totalPlayoffWeight);
-      // Cap the adjustment to prevent extreme swings
-      playoffAdjustmentFactor = Math.max(0.92, Math.min(1.12, playoffAdjustmentFactor));
+      // Cap the adjustment to prevent extreme swings - RELAXED CAPS to avoid systematic deflation
+      playoffAdjustmentFactor = Math.max(0.98, Math.min(1.20, playoffAdjustmentFactor));
     }
     
     if (debugMode && playerName) {

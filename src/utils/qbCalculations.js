@@ -98,50 +98,56 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
   
   if (totalWeight === 0) return 0;
   
-  // Calculate base weighted score without support
-  const baseWeightedScore = (
-    (baseScores.team * weights.team) +
-    (baseScores.stats * weights.stats) +
-    (baseScores.clutch * weights.clutch) +
-    (baseScores.durability * weights.durability)
-  ) / Math.max(1, totalWeight - weights.support);
+  // CORRECTED SUPPORT INTEGRATION: Balanced normalization without deflation
+  let finalScore = 0;
   
-    // Apply normalized support adjustment with proper scaling
-  let rawWeightedScore = baseWeightedScore;
-  if (weights.support > 0) {
+  if (weights.support > 0 && allQBBaseScores.length > 0) {
+    // Calculate league average support quality for proper normalization
+    const avgSupportScore = allQBBaseScores.reduce((sum, qbScores) => sum + qbScores.support, 0) / allQBBaseScores.length;
+    
+    // Calculate base performance score (excluding support)
+    const basePerformanceScore = (
+      (baseScores.team * weights.team) +
+      (baseScores.stats * weights.stats) +
+      (baseScores.clutch * weights.clutch) +
+      (baseScores.durability * weights.durability)
+    ) / Math.max(1, totalWeight - weights.support);
+    
+    // BALANCED SUPPORT ADJUSTMENT: Properly centered around neutral (1.0)
+    // Poor support (below average) = bonus, Good support (above average) = penalty
+    const supportDifference = baseScores.support - avgSupportScore; // Positive = better than average support
+    
+    // Create adjustment factor that properly balances around 1.0
+    // Range: 0.85 to 1.15 (±15% max adjustment)
+    // Poor support gets bonus (factor > 1.0), good support gets penalty (factor < 1.0)
+    const maxAdjustment = 0.15; // ±15% max
+    const adjustmentStrength = 0.003; // Sensitivity factor (adjust as needed)
+    const supportAdjustmentFactor = Math.max(0.85, Math.min(1.15, 1.0 - (supportDifference * adjustmentStrength)));
+    
+    // Apply support adjustment to base performance
+    const adjustedPerformanceScore = basePerformanceScore * supportAdjustmentFactor;
+    
+    // Calculate final score using simple weighted average
+    // No more confusing double-inversion - just use the adjusted performance with support weight
     const supportWeight = weights.support / totalWeight;
+    finalScore = (adjustedPerformanceScore * (1 - supportWeight)) + (baseScores.support * supportWeight);
     
-    if (allQBBaseScores.length > 0) {
-      // Calculate average support score across all QBs
-      const avgSupportScore = allQBBaseScores.reduce((sum, qbScores) => sum + qbScores.support, 0) / allQBBaseScores.length;
-      
-      // Support adjustment: QBs with worse support get bonus, better support get penalty
-      const supportDifference = avgSupportScore - baseScores.support;
-      const maxAdjustment = 15;
-      const supportAdjustment = Math.max(-maxAdjustment, Math.min(maxAdjustment, supportDifference * 0.3));
-      
-      rawWeightedScore = baseWeightedScore + (supportAdjustment * supportWeight);
+    // Debug for significant cases
+    if (qb?.name && (qb.name.includes('Mahomes') || qb.name.includes('Allen') || qb.name.includes('Burrow') || qb.name.includes('Herbert') || qb.name.includes('Hurts') || Math.random() < 0.05)) {
+      const adjustmentType = supportAdjustmentFactor > 1.0 ? 'BONUS' : supportAdjustmentFactor < 1.0 ? 'PENALTY' : 'NEUTRAL';
+      console.log(`🎯 SUPPORT ${qb.name}: Quality(${baseScores.support.toFixed(1)}) vs Avg(${avgSupportScore.toFixed(1)}) -> ${adjustmentType} Factor(${supportAdjustmentFactor.toFixed(3)})`);
+      console.log(`🎯 Base Perf(${basePerformanceScore.toFixed(1)}) * Factor(${supportAdjustmentFactor.toFixed(3)}) = Adjusted(${adjustedPerformanceScore.toFixed(1)})`);
+      console.log(`🎯 Final: Adjusted(${adjustedPerformanceScore.toFixed(1)}) * ${((1-supportWeight)*100).toFixed(0)}% + Support(${baseScores.support.toFixed(1)}) * ${(supportWeight*100).toFixed(0)}% = ${finalScore.toFixed(1)}`);
     }
-    
-    // SUPPORT NORMALIZATION: When support is primary component, add boost to maintain proper score range
-    if (supportWeight > 0.5) {
-      // Calculate base performance score for normalization
-      const performanceScore = (
-        (baseScores.stats * weights.stats) +
-        (baseScores.clutch * weights.clutch) +
-        (baseScores.durability * weights.durability)
-      ) / Math.max(1, totalWeight - weights.team - weights.support);
-      
-      // Support-dominant boost: Scale based on how much weight support has
-      const supportDominanceBoost = Math.min(35, performanceScore * 0.4 * supportWeight); // Up to 35 point boost
-      rawWeightedScore += supportDominanceBoost;
-      
-      // Additional scaling when support is majority/only component
-      if (supportWeight >= 0.8) { // 80%+ support weight
-        const supportOnlyScalingFactor = 1.2; // 20% boost for support-only evaluations
-        rawWeightedScore *= supportOnlyScalingFactor;
-      }
-    }
+  } else {
+    // No support weighting or no comparison data - standard weighted average
+    finalScore = (
+      (baseScores.team * weights.team) +
+      (baseScores.stats * weights.stats) +
+      (baseScores.clutch * weights.clutch) +
+      (baseScores.durability * weights.durability) +
+      (baseScores.support * weights.support)
+    ) / totalWeight;
   }
   
   // Apply experience modifier only when durability is weighted (since it's an availability factor)
@@ -158,7 +164,7 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
     // 3+ years: no penalty (1.0x modifier)
   }
   
-  let adjustedScore = rawWeightedScore * experienceModifier;
+  let adjustedScore = finalScore * experienceModifier;
   
   // DYNAMIC NORMALIZATION: Different scaling based on playoff inclusion
   if (includePlayoffs) {
@@ -195,28 +201,6 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
     // Elite tier: enhance differences at the top (only for comprehensive evaluations)
     const eliteBonus = Math.pow((adjustedScore - 85) / 15, 1.2) * 5; // Max 5 point boost
     adjustedScore = adjustedScore + eliteBonus;
-  }
-  
-  // Simple debug logging for QEI calculation
-  if (qb?.name && (qb.name.includes('Mahomes') || qb.name.includes('Allen') || qb.name.includes('Burrow') || qb.name.includes('Herbert') || qb.name.includes('Hurts'))) {
-    // Only log occasionally to avoid console spam
-    if (Math.random() < 0.1) { // 10% chance to log
-      console.log(`🎯 QEI ${qb.name} (${includePlayoffs ? 'WITH' : 'WITHOUT'} playoffs):`);
-      console.log(`🎯 Team(${baseScores.team.toFixed(1)}) Stats(${baseScores.stats.toFixed(1)}) Clutch(${baseScores.clutch.toFixed(1)}) Durability(${baseScores.durability.toFixed(1)})`);
-      if (weights.support > 0) {
-        const supportWeight = weights.support / totalWeight;
-        if (allQBBaseScores.length > 0) {
-          const avgSupportScore = allQBBaseScores.reduce((sum, qbScores) => sum + qbScores.support, 0) / allQBBaseScores.length;
-          const supportDifference = avgSupportScore - baseScores.support;
-          const supportAdjustment = Math.max(-15, Math.min(15, supportDifference * 0.3));
-          console.log(`🎯 Support: Quality(${baseScores.support.toFixed(1)}) vs Avg(${avgSupportScore.toFixed(1)}) -> Adj(${supportAdjustment.toFixed(1)})`);
-        }
-        if (supportWeight > 0.5) {
-          console.log(`🎯 Support-dominant (${(supportWeight*100).toFixed(0)}%) -> Normalization boost applied`);
-        }
-      }
-      console.log(`🎯 Base(${baseWeightedScore.toFixed(1)}) -> Raw(${rawWeightedScore.toFixed(1)}) -> Experience(${experienceModifier.toFixed(2)}) -> Final(${adjustedScore.toFixed(1)})`);
-    }
   }
    
   // Return the natural score without artificial capping - let the best QBs rise to the top

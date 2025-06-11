@@ -1,14 +1,14 @@
 # Supporting Cast Scoring System Documentation
 
 ## Overview
-The Supporting Cast Score is a **quality assessment system** that rewards quarterbacks playing with better supporting talent. This system operates with **direct logic**: excellent supporting cast quality results in higher scores, while poor supporting cast quality results in lower scores. The maximum possible score is **100 points**.
+The Supporting Cast Score is a **situational context adjustment system** that gives extra credit to quarterbacks producing in difficult situations. This system operates with **adjustment logic**: QBs with poor supporting casts get bonuses to their overall scores, while QBs with elite supporting casts get slight penalties. The system is designed to normalize QB evaluation by accounting for the talent around them.
 
 ---
 
 ## System Philosophy
 
 ### Core Concept
-**"Elite Teams, Elite Scores"** - Quarterback performance should reflect the quality of their supporting cast. A QB playing with elite weapons, protection, and defense should be recognized for having superior organizational support, while QBs with poor supporting casts receive lower support scores.
+**"Contextual Fairness"** - Quarterback evaluation should account for the quality of supporting talent. A QB producing with poor weapons, protection, and defense deserves extra credit for overcoming adversity, while QBs with elite supporting casts should be evaluated knowing they had organizational advantages.
 
 ### Direct Scoring Logic
 ```javascript

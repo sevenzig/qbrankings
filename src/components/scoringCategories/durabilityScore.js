@@ -38,11 +38,12 @@ export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, i
       if (include2024Only && year === '2024') {
         // Check known Super Bowl data for additional bonuses
         const knownSuperBowlWins = {
-          'Philadelphia Eagles': [2024]
+          'Philadelphia Eagles': [2023], // Hurts won SB in 2023
+          'Kansas City Chiefs': [2024] // Mahomes won SB in 2024
         };
         const knownSuperBowlAppearances = {
-          'Kansas City Chiefs': [2024],
-          'Philadelphia Eagles': [2024]
+          'Kansas City Chiefs': [2022, 2024], // Mahomes appeared in 2022 (loss), 2024 (win)
+          'Philadelphia Eagles': [2023] // Hurts appeared in 2023 (win)
         };
         
         // Super Bowl WINNERS get MASSIVE durability boost

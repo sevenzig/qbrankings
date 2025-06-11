@@ -124,10 +124,8 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
         if (totalPlayoffGames >= 3 && playoffWins >= 2) {
           // Known Super Bowl results for accurate detection
           const knownSuperBowlWins = {
-            'PHI': [2024], // Eagles won 2024 Super Bowl
-            'KAN': [2023], // Chiefs won 2023 Super Bowl
-            'TAM': [2022], // Bucs won 2022 Super Bowl
-            'LAR': [2022] // Rams won 2022 Super Bowl
+            'KAN': [2022, 2023], // Chiefs won 2022 and 2023 Super Bowls (Mahomes)
+            'PHI': [2024] // Eagles won 2024 Super Bowl (Hurts)
           };
           
           if (knownSuperBowlWins[data.Team] && knownSuperBowlWins[data.Team].includes(parseInt(year))) {
@@ -151,8 +149,8 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
     // Normalize the playoff clutch adjustment
     if (totalPlayoffWeight > 0) {
       playoffAdjustmentFactor = 1.0 + (playoffClutchMultiplier / totalPlayoffWeight);
-      // Cap the adjustment to prevent extreme swings
-      playoffAdjustmentFactor = Math.max(0.90, Math.min(1.15, playoffAdjustmentFactor));
+      // Cap the adjustment to prevent extreme swings - RELAXED CAPS to avoid systematic deflation
+      playoffAdjustmentFactor = Math.max(0.98, Math.min(1.20, playoffAdjustmentFactor));
     }
     
     if (debugMode && playerName) {
