@@ -97,6 +97,44 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
   const totalWeight = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
   
   if (totalWeight === 0) return 0;
+
+  // Apply penalty for limited playing time (3 or fewer starts in any year)
+  let limitedPlayTimePenalty = 1.0; // No penalty by default
+  
+  if (qb.seasonData && Array.isArray(qb.seasonData)) {
+    const yearWeights = { 2024: 0.60, 2023: 0.30, 2022: 0.10 };
+    let penaltyMultiplier = 1.0;
+    
+    qb.seasonData.forEach(season => {
+      const year = season.year;
+      const gamesStarted = season.gamesStarted || 0;
+      const yearWeight = yearWeights[year] || 0;
+      
+      // Apply penalty for years with 3 or fewer starts
+      if (yearWeight > 0 && gamesStarted <= 3) {
+        // Calculate penalty based on year importance and severity of limited play
+        let yearPenalty = 1.0;
+        
+        if (gamesStarted === 0) {
+          // No games started: significant penalty based on year weight
+          yearPenalty = 1.0 - (yearWeight * 0.40); // Up to 24% penalty for missing 2024 entirely
+        } else if (gamesStarted <= 3) {
+          // 1-3 games: moderate penalty scaled by year weight and games played
+          const gamesFactor = (4 - gamesStarted) / 4; // 0.75 for 1 game, 0.50 for 2 games, 0.25 for 3 games
+          yearPenalty = 1.0 - (yearWeight * 0.25 * gamesFactor); // Up to 15% penalty for 1 game in 2024
+        }
+        
+        penaltyMultiplier *= yearPenalty;
+        
+        // Debug logging for significant penalties
+        if ((yearWeight >= 0.30 && gamesStarted <= 3) || gamesStarted === 0) {
+          console.log(`⚠️ LIMITED PLAY PENALTY - ${qb.name}: ${year} (${gamesStarted} starts) -> ${((1 - yearPenalty) * 100).toFixed(1)}% penalty`);
+        }
+      }
+    });
+    
+    limitedPlayTimePenalty = penaltyMultiplier;
+  }
   
   // CORRECTED SUPPORT & DURABILITY INTEGRATION: Balanced normalization without deflation
   let finalScore = 0;
@@ -237,6 +275,15 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
     adjustedScore = adjustedScore + eliteBonus;
   }
    
+  // Apply limited play time penalty
+  adjustedScore *= limitedPlayTimePenalty;
+  
+  // Debug logging for significant penalties
+  if (limitedPlayTimePenalty < 0.95 && qb?.name) {
+    const penaltyPercent = ((1 - limitedPlayTimePenalty) * 100).toFixed(1);
+    console.log(`⚠️ TOTAL LIMITED PLAY PENALTY - ${qb.name}: ${penaltyPercent}% reduction (Final QEI: ${adjustedScore.toFixed(1)})`);
+  }
+  
   // Return the natural score without artificial capping - let the best QBs rise to the top
   return Math.max(0, adjustedScore);
 };

@@ -12,7 +12,7 @@
  * 4. Extracted utility functions to dedicated components to reduce main component size
  * 5. Used React.memo for all sub-components to prevent unnecessary re-renders
  */
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, startTransition } from 'react';
 import { useQBData } from '../hooks/useQBData.js';
 import { calculateQEI, calculateQBMetrics } from '../utils/qbCalculations.js';
 import { getQEIColor } from '../utils/uiHelpers.js';
@@ -32,53 +32,60 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
   const { qbData, loading, error, lastFetch, shouldRefreshData, fetchAllQBData } = useQBData();
   
   const [weights, setWeights] = useState({
-    team: 30,
-    stats: 40,
-    clutch: 15,
+    team: 35,
+    stats: 35,
+    clutch: 5,
     durability: 10,
-    support: 5
+    support: 15
   });
-  const [currentPreset, setCurrentPreset] = useState('balanced');
+  const [currentPreset, setCurrentPreset] = useState('default');
   const [isCustomizeAccordionOpen, setIsCustomizeAccordionOpen] = useState(false);
   const [supportWeights, setSupportWeights] = useState({
-    offensiveLine: 55,
-    weapons: 30,
-    defense: 15
+    offensiveLine: 34,
+    weapons: 33,
+    defense: 33
   });
   const [showSupportDetails, setShowSupportDetails] = useState(false);
   const [statsWeights, setStatsWeights] = useState({
-    efficiency: 45,      // ANY/A, TD%, Completion%
-    protection: 25,      // Sack%, Int%, Fumble%
-    volume: 30          // Volume and production metrics
+    efficiency: 34,      // ANY/A, TD%, Completion%
+    protection: 33,      // Sack%, Int%, Fumble%
+    volume: 33          // Volume and production metrics
   });
   const [showStatsDetails, setShowStatsDetails] = useState(false);
   const [teamWeights, setTeamWeights] = useState({
     regularSeason: 50,   // Regular season win percentage
-    offenseDVOA: 15,     // Offensive DVOA performance
-    playoff: 35         // Career playoff achievement score
+    offenseDVOA: 50,     // Offensive DVOA performance
+    playoff: 0         // Career playoff achievement score (disabled by default)
   });
   const [showTeamDetails, setShowTeamDetails] = useState(false);
   const [clutchWeights, setClutchWeights] = useState({
-    gameWinningDrives: 40,    // GWD score component
+    gameWinningDrives: 25,    // GWD score component
     fourthQuarterComebacks: 25, // 4QC score component
-    clutchRate: 15,           // Combined clutch rate score
-    playoffBonus: 20          // Playoff success bonus
+    clutchRate: 25,           // Combined clutch rate score
+    playoffBonus: 25          // Playoff success bonus (disabled when playoffs off)
   });
   const [showClutchDetails, setShowClutchDetails] = useState(false);
   const [durabilityWeights, setDurabilityWeights] = useState({
-    availability: 80,         // Season availability score
-    consistency: 20           // Multi-year consistency bonus
+    availability: 50,         // Season availability score
+    consistency: 50           // Multi-year consistency bonus
   });
   const [showDurabilityDetails, setShowDurabilityDetails] = useState(false);
 
   // Global playoff inclusion toggle - affects ALL calculations
-  const [includePlayoffs, setIncludePlayoffs] = useState(true);
+  const [includePlayoffs, setIncludePlayoffs] = useState(false);
 
   // Global 2024-only toggle - affects ALL data loading and disables year-based sliders
   const [include2024Only, setInclude2024Only] = useState(false);
 
   // Scroll to top functionality
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // Input validation helper function
+  const validateNumberInput = useCallback((value, min = 0, max = 100) => {
+    const numValue = parseInt(value);
+    if (isNaN(numValue)) return min;
+    return Math.max(min, Math.min(max, numValue));
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -96,8 +103,6 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
       setClutchWeights(prev => {
         if (prev.playoffBonus === 0) return prev; // Already adjusted
         
-        const redistributedWeight = prev.playoffBonus;
-        // Distribute the 20% across the other components proportionally
         // New balanced defaults when no playoffs: GWD 50%, 4QC 30%, Rate 20%
         return {
           gameWinningDrives: 50,    // Increased from 40%
@@ -123,26 +128,27 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
   }, [includePlayoffs]); // Run when includePlayoffs changes
 
   const updateWeight = useCallback((category, value) => {
+    const validatedValue = validateNumberInput(value, 0, 100);
     setWeights(prev => ({
       ...prev,
-      [category]: parseInt(value)
+      [category]: validatedValue
     }));
     setCurrentPreset('custom'); // Reset to custom when manually adjusting
-  }, []);
+  }, [validateNumberInput]);
 
   const updateSupportWeight = useCallback((component, value) => {
-    const newValue = parseInt(value);
+    const validatedValue = validateNumberInput(value, 0, 100);
     setSupportWeights(prev => {
-      return { ...prev, [component]: newValue };
+      return { ...prev, [component]: validatedValue };
     });
-  }, []);
+  }, [validateNumberInput]);
 
   const updateStatsWeight = useCallback((component, value) => {
-    const newValue = parseInt(value);
+    const validatedValue = validateNumberInput(value, 0, 100);
     setStatsWeights(prev => {
-      return { ...prev, [component]: newValue };
+      return { ...prev, [component]: validatedValue };
     });
-  }, []);
+  }, [validateNumberInput]);
 
   const updateTeamWeight = useCallback((component, value) => {
     // If playoffs are disabled, freeze the playoff slider and don't allow changes
@@ -150,7 +156,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
       return;
     }
     
-    const newValue = parseInt(value);
+    const validatedValue = validateNumberInput(value, 0, 100);
     setTeamWeights(prev => {
       // When playoffs are disabled, automatically set playoff to 0% and redistribute to other components
       if (!includePlayoffs) {
@@ -161,9 +167,9 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
         };
       }
       
-      return { ...prev, [component]: newValue };
+      return { ...prev, [component]: validatedValue };
     });
-  }, [includePlayoffs]);
+  }, [includePlayoffs, validateNumberInput]);
 
   const updateClutchWeight = useCallback((component, value) => {
     // If playoffs are disabled, freeze the playoff bonus slider and don't allow changes
@@ -171,68 +177,70 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
       return;
     }
     
-    const newValue = parseInt(value);
+    const validatedValue = validateNumberInput(value, 0, 100);
     setClutchWeights(prev => {
       // When playoffs are disabled, automatically set playoffBonus to 0%
       if (!includePlayoffs && component === 'playoffBonus') {
         return prev; // Don't change anything
       }
       
-      return { ...prev, [component]: newValue };
+      return { ...prev, [component]: validatedValue };
     });
-  }, [includePlayoffs]);
+  }, [includePlayoffs, validateNumberInput]);
 
   const updateDurabilityWeight = useCallback((component, value) => {
-    const newValue = parseInt(value);
+    const validatedValue = validateNumberInput(value, 0, 100);
     setDurabilityWeights(prev => {
-      return { ...prev, [component]: newValue };
+      return { ...prev, [component]: validatedValue };
     });
-  }, []);
+  }, [validateNumberInput]);
 
   const applyPreset = useCallback((presetName) => {
     const preset = PHILOSOPHY_PRESETS[presetName];
+    if (!preset) return;
+    
     // Extract only the weight categories, exclude the description
     const { description, ...weightCategories } = preset;
-    setWeights(weightCategories);
-    setCurrentPreset(presetName);
     
-    // Special handling for "default" preset - set all sub-components to balanced values
-    if (presetName === 'default') {
-      // Set support weights to 33/33/34
-      setSupportWeights({
-        offensiveLine: 34,
-        weapons: 33,
-        defense: 33
-      });
+    // Use startTransition to batch all state updates for better performance
+    startTransition(() => {
+      setWeights(weightCategories);
+      setCurrentPreset(presetName);
       
-      // Set stats weights to 33/33/34
-      setStatsWeights({
-        efficiency: 34,
-        protection: 33,
-        volume: 33
-      });
-      
-      // Set team weights to 50/50/0 (no playoff emphasis in default)
-      setTeamWeights({
-        regularSeason: 50,
-        offenseDVOA: 50,
-        playoff: 0
-      });
-      
-      // Set clutch weights to 25/25/25/25
-      setClutchWeights({
-        gameWinningDrives: 25,
-        fourthQuarterComebacks: 25,
-        clutchRate: 25,
-        playoffBonus: 25
-      });
-      
-      // Set durability weights to 50/50
-      setDurabilityWeights({
-        availability: 50,
-        consistency: 50
-      });
-    }
+      // Special handling for "default" preset - set all sub-components to balanced values
+      if (presetName === 'default') {
+        // Batch all sub-component weight updates
+        setSupportWeights({
+          offensiveLine: 34,
+          weapons: 33,
+          defense: 33
+        });
+        
+        setStatsWeights({
+          efficiency: 34,
+          protection: 33,
+          volume: 33
+        });
+        
+        setTeamWeights({
+          regularSeason: 50,
+          offenseDVOA: 50,
+          playoff: 0
+        });
+        
+        setClutchWeights({
+          gameWinningDrives: 25,
+          fourthQuarterComebacks: 25,
+          clutchRate: 25,
+          playoffBonus: 25
+        });
+        
+        setDurabilityWeights({
+          availability: 50,
+          consistency: 50
+        });
+      }
+    });
   }, []);
 
   const normalizeWeights = useCallback(() => {
@@ -442,7 +450,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
   }, [currentPreset]);
 
   // URL sharing functions
-  const encodeSettings = (weights, supportWeights, statsWeights, teamWeights, includePlayoffs, include2024Only) => {
+  const encodeSettings = (weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only) => {
     // Main weights (5 values)
     const mainWeights = `${weights.team},${weights.stats},${weights.clutch},${weights.durability},${weights.support}`;
     
@@ -455,10 +463,16 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     // Team weights (3 values)
     const teamEnc = `${teamWeights.regularSeason},${teamWeights.offenseDVOA},${teamWeights.playoff}`;
     
-    // Team settings (2 values: playoffs and 2024-only, 1 for true, 0 for false)
+    // Clutch weights (4 values)
+    const clutchEnc = `${clutchWeights.gameWinningDrives},${clutchWeights.fourthQuarterComebacks},${clutchWeights.clutchRate},${clutchWeights.playoffBonus}`;
+    
+    // Durability weights (2 values)
+    const durabilityEnc = `${durabilityWeights.availability},${durabilityWeights.consistency}`;
+    
+    // Global settings (2 values: playoffs and 2024-only, 1 for true, 0 for false)
     const settingsEnc = `${includePlayoffs ? '1' : '0'},${include2024Only ? '1' : '0'}`;
     
-    return `${mainWeights}|${supportEnc}|${statsEnc}|${teamEnc}|${settingsEnc}`;
+    return `${mainWeights}|${supportEnc}|${statsEnc}|${teamEnc}|${clutchEnc}|${durabilityEnc}|${settingsEnc}`;
   };
 
   const decodeSettings = (encodedSettings) => {
@@ -540,9 +554,34 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
         }
       }
 
-      // Team settings (optional)
+      // Clutch weights (optional)
       if (sections[4]) {
-        const settingValues = sections[4].split(',').map(v => parseInt(v));
+        const clutchValues = sections[4].split(',').map(v => parseInt(v));
+        if (clutchValues.length === 4 && clutchValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+          result.clutchWeights = {
+            gameWinningDrives: clutchValues[0],
+            fourthQuarterComebacks: clutchValues[1],
+            clutchRate: clutchValues[2],
+            playoffBonus: clutchValues[3]
+          };
+        }
+      }
+
+      // Durability weights (optional)
+      if (sections[5]) {
+        const durabilityValues = sections[5].split(',').map(v => parseInt(v));
+        if (durabilityValues.length === 2 && durabilityValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+          result.durabilityWeights = {
+            availability: durabilityValues[0],
+            consistency: durabilityValues[1]
+          };
+        }
+      }
+
+      // Global settings (optional) - now at index 6 in new format, but also check index 4 for old format
+      const settingsIndex = sections.length === 7 ? 6 : sections.length === 5 ? 4 : -1;
+      if (settingsIndex >= 0 && sections[settingsIndex]) {
+        const settingValues = sections[settingsIndex].split(',').map(v => parseInt(v));
         if (settingValues.length >= 1 && !isNaN(settingValues[0])) {
           result.includePlayoffs = settingValues[0] === 1;
         }
@@ -553,17 +592,17 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
 
       return result;
     } catch (e) {
-      console.warn('Failed to decode settings from URL');
+      console.warn('Failed to decode settings from URL', e);
     }
     return null;
   };
 
   const generateShareLink = useCallback(() => {
     const baseUrl = window.location.origin + window.location.pathname;
-    const encodedSettings = encodeSettings(weights, supportWeights, statsWeights, teamWeights, includePlayoffs, include2024Only);
+    const encodedSettings = encodeSettings(weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only);
     const presetParam = currentPreset !== 'custom' ? `&preset=${currentPreset}` : '';
     return `${baseUrl}?s=${encodedSettings}${presetParam}`;
-  }, [weights, supportWeights, statsWeights, teamWeights, includePlayoffs, include2024Only, currentPreset]);
+  }, [weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only, currentPreset]);
 
   const copyShareLink = useCallback(async (event) => {
     const shareLink = generateShareLink();
@@ -625,7 +664,17 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
           setTeamWeights(decodedSettings.teamWeights);
         }
         
-        // Apply team settings if present
+        // Apply clutch weights if present
+        if (decodedSettings.clutchWeights) {
+          setClutchWeights(decodedSettings.clutchWeights);
+        }
+        
+        // Apply durability weights if present
+        if (decodedSettings.durabilityWeights) {
+          setDurabilityWeights(decodedSettings.durabilityWeights);
+        }
+        
+        // Apply global settings if present
         if (decodedSettings.includePlayoffs !== undefined) {
           setIncludePlayoffs(decodedSettings.includePlayoffs);
         }
@@ -638,9 +687,50 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
         setCurrentPreset(preset && PHILOSOPHY_PRESETS[preset] ? preset : 'custom');
       }
     } else if (preset && PHILOSOPHY_PRESETS[preset]) {
-      applyPreset(preset);
+      // Call applyPreset directly here instead of using it as a dependency
+      const presetData = PHILOSOPHY_PRESETS[preset];
+      if (presetData) {
+        const { description, ...weightCategories } = presetData;
+        
+        startTransition(() => {
+          setWeights(weightCategories);
+          setCurrentPreset(preset);
+          
+          if (preset === 'default') {
+            setSupportWeights({
+              offensiveLine: 34,
+              weapons: 33,
+              defense: 33
+            });
+            
+            setStatsWeights({
+              efficiency: 34,
+              protection: 33,
+              volume: 33
+            });
+            
+            setTeamWeights({
+              regularSeason: 50,
+              offenseDVOA: 50,
+              playoff: 0
+            });
+            
+            setClutchWeights({
+              gameWinningDrives: 25,
+              fourthQuarterComebacks: 25,
+              clutchRate: 25,
+              playoffBonus: 25
+            });
+            
+            setDurabilityWeights({
+              availability: 50,
+              consistency: 50
+            });
+          }
+        });
+      }
     }
-  }, []);
+  }, []); // Only run once on mount - removed problematic dependency
 
   // Auto-adjust team weights when playoff toggle changes
   useEffect(() => {
@@ -665,7 +755,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     if (fetchAllQBData) {
       fetchAllQBData(include2024Only);
     }
-  }, [include2024Only]);
+  }, [include2024Only]); // Removed fetchAllQBData dependency to prevent infinite loop
 
   // Calculate QEI with current weights and dynamic component calculations
   const rankedQBs = useMemo(() => {
@@ -688,7 +778,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
         qei: calculateQEI(qb.baseScores, qb, weights, includePlayoffs, allQBBaseScores, include2024Only)
       }))
       .sort((a, b) => b.qei - a.qei);
-  }, [qbData, weights, supportWeights, statsWeights, teamWeights, includePlayoffs, include2024Only]);
+  }, [qbData, weights, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only]); // Added missing dependencies
 
   const totalWeight = useMemo(() => 
     Object.values(weights).reduce((a, b) => a + b, 0), 
@@ -864,6 +954,23 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                   onNormalizeWeights={normalizeWeights}
                   showDetails={showDetailsState}
                   onShowDetails={showDetailsHandlers}
+                  // Sub-component weights and handlers
+                  supportWeights={supportWeights}
+                  onUpdateSupportWeight={updateSupportWeight}
+                  onNormalizeSupportWeights={normalizeSupportWeights}
+                  statsWeights={statsWeights}
+                  onUpdateStatsWeight={updateStatsWeight}
+                  onNormalizeStatsWeights={normalizeStatsWeights}
+                  teamWeights={teamWeights}
+                  onUpdateTeamWeight={updateTeamWeight}
+                  onNormalizeTeamWeights={normalizeTeamWeights}
+                  clutchWeights={clutchWeights}
+                  onUpdateClutchWeight={updateClutchWeight}
+                  onNormalizeClutchWeights={normalizeClutchWeights}
+                  durabilityWeights={durabilityWeights}
+                  onUpdateDurabilityWeight={updateDurabilityWeight}
+                  onNormalizeDurabilityWeights={normalizeDurabilityWeights}
+                  includePlayoffs={includePlayoffs}
                 />
               </div>
             </div>
