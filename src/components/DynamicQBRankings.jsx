@@ -991,7 +991,8 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
         {/* Live Rankings Table */}
         <QBRankingsTable 
           rankedQBs={rankedQBs} 
-          includePlayoffs={includePlayoffs} 
+          includePlayoffs={includePlayoffs}
+          include2024Only={include2024Only}
         />
 
         {/* Footer */}

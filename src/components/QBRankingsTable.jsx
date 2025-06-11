@@ -2,7 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { getQEIColor } from '../utils/uiHelpers.js';
 import { getTeamInfo } from '../constants/teamData.js';
 
-const QBRankingsTable = memo(({ rankedQBs, includePlayoffs }) => {
+const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = false }) => {
   // Helper function to get all unique teams a QB played for
   const getQBTeams = useCallback((qb) => {
     if (!qb.seasonData || qb.seasonData.length === 0) {
@@ -40,12 +40,17 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs }) => {
     return uniqueTeams.length > 0 ? uniqueTeams : [{ team: qb.team, logo: qb.teamLogo }];
   }, []);
 
-  const calculatePlayoffRecord = useCallback((qb) => {
+  const calculatePlayoffRecord = useCallback((qb, include2024Only = false) => {
     let totalPlayoffWins = 0;
     let totalPlayoffLosses = 0;
     
     if (qb.seasonData) {
-      qb.seasonData.forEach(season => {
+      // Filter to only 2024 seasons if include2024Only is enabled
+      const seasonsToProcess = include2024Only 
+        ? qb.seasonData.filter(season => season.year === 2024)
+        : qb.seasonData;
+        
+      seasonsToProcess.forEach(season => {
         if (season.playoffData) {
           totalPlayoffWins += season.playoffData.wins || 0;
           totalPlayoffLosses += season.playoffData.losses || 0;
@@ -56,11 +61,16 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs }) => {
     return { wins: totalPlayoffWins, losses: totalPlayoffLosses };
   }, []);
 
-  const calculatePlayoffStarts = useCallback((qb) => {
+  const calculatePlayoffStarts = useCallback((qb, include2024Only = false) => {
     let totalPlayoffStarts = 0;
     
     if (qb.seasonData) {
-      qb.seasonData.forEach(season => {
+      // Filter to only 2024 seasons if include2024Only is enabled
+      const seasonsToProcess = include2024Only 
+        ? qb.seasonData.filter(season => season.year === 2024)
+        : qb.seasonData;
+        
+      seasonsToProcess.forEach(season => {
         if (season.playoffData) {
           totalPlayoffStarts += season.playoffData.gamesStarted || 0;
         }
@@ -110,8 +120,8 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs }) => {
           </thead>
           <tbody>
             {rankedQBs.map((qb, index) => {
-              const playoffRecord = calculatePlayoffRecord(qb);
-              const playoffStarts = calculatePlayoffStarts(qb);
+              const playoffRecord = calculatePlayoffRecord(qb, include2024Only);
+              const playoffStarts = calculatePlayoffStarts(qb, include2024Only);
               const hasPlayoffRecord = playoffRecord.wins > 0 || playoffRecord.losses > 0;
               
               return (
