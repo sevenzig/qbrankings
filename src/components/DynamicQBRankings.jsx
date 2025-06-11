@@ -158,12 +158,12 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     
     const validatedValue = validateNumberInput(value, 0, 100);
     setTeamWeights(prev => {
-      // When playoffs are disabled, automatically set playoff to 0% and redistribute to other components
+      // When playoffs are disabled, ensure playoff stays at 0% but allow other components to be updated
       if (!includePlayoffs) {
-        return {
-          regularSeason: 85,
-          offenseDVOA: 15,
-          playoff: 0
+        return { 
+          ...prev, 
+          [component]: validatedValue,
+          playoff: 0  // Keep playoff at 0 when disabled
         };
       }
       
