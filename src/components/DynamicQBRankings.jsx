@@ -595,40 +595,44 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     return "Custom settings";
   }, [currentPreset]);
 
-  // URL sharing functions
-  const encodeSettings = (weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only) => {
-    // Main weights (5 values)
-    const mainWeights = `${weights.team},${weights.stats},${weights.clutch},${weights.durability},${weights.support}`;
-    
-    // Support weights (3 values)
-    const supportEnc = `${supportWeights.offensiveLine},${supportWeights.weapons},${supportWeights.defense}`;
-    
-    // Stats weights (3 values)
-    const statsEnc = `${statsWeights.efficiency},${statsWeights.protection},${statsWeights.volume}`;
-    
-    // Team weights (3 values)
-    const teamEnc = `${teamWeights.regularSeason},${teamWeights.offenseDVOA},${teamWeights.playoff}`;
-    
-    // Clutch weights (4 values)
-    const clutchEnc = `${clutchWeights.gameWinningDrives},${clutchWeights.fourthQuarterComebacks},${clutchWeights.clutchRate},${clutchWeights.playoffBonus}`;
-    
-    // Durability weights (2 values)
-    const durabilityEnc = `${durabilityWeights.availability},${durabilityWeights.consistency}`;
-    
-    // Global settings (2 values: playoffs and 2024-only, 1 for true, 0 for false)
-    const settingsEnc = `${includePlayoffs ? '1' : '0'},${include2024Only ? '1' : '0'}`;
-    
-    return `${mainWeights}|${supportEnc}|${statsEnc}|${teamEnc}|${clutchEnc}|${durabilityEnc}|${settingsEnc}`;
+  // URL sharing functions - COMPACT: Much shorter URLs focusing on essentials
+  const encodeSettings = (weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only, fullDetail = false) => {
+    if (fullDetail) {
+      // Full detail mode - includes all sub-component weights (longer URLs)
+      const settingsObj = {
+        w: [weights.team, weights.stats, weights.clutch, weights.durability, weights.support],
+        sp: [supportWeights.offensiveLine, supportWeights.weapons, supportWeights.defense],
+        st: [statsWeights.efficiency, statsWeights.protection, statsWeights.volume],
+        tm: [teamWeights.regularSeason, teamWeights.offenseDVOA, teamWeights.playoff],
+        cl: [clutchWeights.gameWinningDrives, clutchWeights.fourthQuarterComebacks, clutchWeights.clutchRate, clutchWeights.playoffBonus],
+        dr: [durabilityWeights.availability, durabilityWeights.consistency],
+        pf: includePlayoffs ? 1 : 0,
+        y24: include2024Only ? 1 : 0
+      };
+      
+      const jsonString = JSON.stringify(settingsObj);
+      return btoa(jsonString).replace(/[+/]/g, c => c === '+' ? '-' : '_').replace(/=+$/, '');
+    } else {
+      // Compact mode - only main weights and global settings (much shorter)
+      const compactArray = [
+        weights.team, weights.stats, weights.clutch, weights.durability, weights.support,
+        includePlayoffs ? 1 : 0,
+        include2024Only ? 1 : 0
+      ];
+      
+      // Convert to compact string format: "35.35.5.10.15.0.0"
+      return compactArray.join('.');
+    }
   };
 
   const decodeSettings = (encodedSettings) => {
     try {
-      const sections = encodedSettings.split('|');
-      if (sections.length < 2) {
-        // Legacy format - just main weights
-        const values = encodedSettings.split(',').map(v => parseInt(v));
-        if (values.length === 5 && values.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
-          return {
+      // Handle multiple formats: dots (new compact), pipes (old), or Base64 (full detail)
+      if (encodedSettings.includes('.') && !encodedSettings.includes('|')) {
+        // New compact format: "35.35.5.10.15.0.0"
+        const values = encodedSettings.split('.').map(v => parseInt(v));
+        if (values.length >= 5 && values.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+          const result = {
             weights: {
               team: values[0],
               stats: values[1],
@@ -637,131 +641,234 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
               support: values[4]
             }
           };
+          
+          // Global settings if present
+          if (values.length >= 6) {
+            result.includePlayoffs = values[5] === 1;
+          }
+          if (values.length >= 7) {
+            result.include2024Only = values[6] === 1;
+          }
+          
+          return result;
         }
         return null;
-      }
-
-      // New format with all components
-      const mainValues = sections[0].split(',').map(v => parseInt(v));
-      if (mainValues.length !== 5 || !mainValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
-        return null;
-      }
-
-      const result = {
-        weights: {
-          team: mainValues[0],
-          stats: mainValues[1],
-          clutch: mainValues[2],
-          durability: mainValues[3],
-          support: mainValues[4]
+      } else if (encodedSettings.includes('|')) {
+        // Legacy pipe format - keep existing decode logic
+        const sections = encodedSettings.split('|');
+        if (sections.length < 2) {
+          // Legacy format - just main weights
+          const values = encodedSettings.split(',').map(v => parseInt(v));
+          if (values.length === 5 && values.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+            return {
+              weights: {
+                team: values[0],
+                stats: values[1],
+                clutch: values[2],
+                durability: values[3],
+                support: values[4]
+              }
+            };
+          }
+          return null;
         }
-      };
 
-      // Support weights (optional)
-      if (sections[1]) {
-        const supportValues = sections[1].split(',').map(v => parseInt(v));
-        if (supportValues.length === 3 && supportValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+        // Old pipe-separated format
+        const mainValues = sections[0].split(',').map(v => parseInt(v));
+        if (mainValues.length !== 5 || !mainValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+          return null;
+        }
+
+        const result = {
+          weights: {
+            team: mainValues[0],
+            stats: mainValues[1],
+            clutch: mainValues[2],
+            durability: mainValues[3],
+            support: mainValues[4]
+          }
+        };
+
+        // Support weights (optional)
+        if (sections[1]) {
+          const supportValues = sections[1].split(',').map(v => parseInt(v));
+          if (supportValues.length === 3 && supportValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+            result.supportWeights = {
+              offensiveLine: supportValues[0],
+              weapons: supportValues[1],
+              defense: supportValues[2]
+            };
+          }
+        }
+
+        // Stats weights (optional)
+        if (sections[2]) {
+          const statsValues = sections[2].split(',').map(v => parseInt(v));
+          if (statsValues.length === 3 && statsValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+            result.statsWeights = {
+              efficiency: statsValues[0],
+              protection: statsValues[1],
+              volume: statsValues[2]
+            };
+          }
+        }
+
+        // Team weights (optional)
+        if (sections[3]) {
+          const teamValues = sections[3].split(',').map(v => parseInt(v));
+          if (teamValues.length === 3 && teamValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+            result.teamWeights = {
+              regularSeason: teamValues[0],
+              offenseDVOA: teamValues[1],
+              playoff: teamValues[2]
+            };
+          } else if (teamValues.length === 2 && teamValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+            // Legacy format - convert to new format
+            result.teamWeights = {
+              regularSeason: teamValues[0],
+              offenseDVOA: 15, // Default value
+              playoff: teamValues[1]
+            };
+          }
+        }
+
+        // Clutch weights (optional)
+        if (sections[4]) {
+          const clutchValues = sections[4].split(',').map(v => parseInt(v));
+          if (clutchValues.length === 4 && clutchValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+            result.clutchWeights = {
+              gameWinningDrives: clutchValues[0],
+              fourthQuarterComebacks: clutchValues[1],
+              clutchRate: clutchValues[2],
+              playoffBonus: clutchValues[3]
+            };
+          }
+        }
+
+        // Durability weights (optional)
+        if (sections[5]) {
+          const durabilityValues = sections[5].split(',').map(v => parseInt(v));
+          if (durabilityValues.length === 2 && durabilityValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+            result.durabilityWeights = {
+              availability: durabilityValues[0],
+              consistency: durabilityValues[1]
+            };
+          }
+        }
+
+        // Global settings (optional) - now at index 6 in new format, but also check index 4 for old format
+        const settingsIndex = sections.length === 7 ? 6 : sections.length === 5 ? 4 : -1;
+        if (settingsIndex >= 0 && sections[settingsIndex]) {
+          const settingValues = sections[settingsIndex].split(',').map(v => parseInt(v));
+          if (settingValues.length >= 1 && !isNaN(settingValues[0])) {
+            result.includePlayoffs = settingValues[0] === 1;
+          }
+          if (settingValues.length >= 2 && !isNaN(settingValues[1])) {
+            result.include2024Only = settingValues[1] === 1;
+          }
+        }
+
+        return result;
+      } else {
+        // Base64 format (full detail)
+        // Restore padding and reverse URL-safe characters
+        const padded = encodedSettings + '='.repeat((4 - encodedSettings.length % 4) % 4);
+        const base64 = padded.replace(/[-_]/g, c => c === '-' ? '+' : '/');
+        
+        const jsonString = atob(base64);
+        const settingsObj = JSON.parse(jsonString);
+        
+        // Validate the structure
+        if (!settingsObj.w || !Array.isArray(settingsObj.w) || settingsObj.w.length !== 5) {
+          return null;
+        }
+        
+        const result = {
+          weights: {
+            team: settingsObj.w[0],
+            stats: settingsObj.w[1],
+            clutch: settingsObj.w[2],
+            durability: settingsObj.w[3],
+            support: settingsObj.w[4]
+          }
+        };
+        
+        // Apply sub-component weights if present
+        if (settingsObj.sp && Array.isArray(settingsObj.sp) && settingsObj.sp.length === 3) {
           result.supportWeights = {
-            offensiveLine: supportValues[0],
-            weapons: supportValues[1],
-            defense: supportValues[2]
+            offensiveLine: settingsObj.sp[0],
+            weapons: settingsObj.sp[1],
+            defense: settingsObj.sp[2]
           };
         }
-      }
-
-      // Stats weights (optional)
-      if (sections[2]) {
-        const statsValues = sections[2].split(',').map(v => parseInt(v));
-        if (statsValues.length === 3 && statsValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+        
+        if (settingsObj.st && Array.isArray(settingsObj.st) && settingsObj.st.length === 3) {
           result.statsWeights = {
-            efficiency: statsValues[0],
-            protection: statsValues[1],
-            volume: statsValues[2]
+            efficiency: settingsObj.st[0],
+            protection: settingsObj.st[1],
+            volume: settingsObj.st[2]
           };
         }
-      }
-
-      // Team weights (optional)
-      if (sections[3]) {
-        const teamValues = sections[3].split(',').map(v => parseInt(v));
-        if (teamValues.length === 3 && teamValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+        
+        if (settingsObj.tm && Array.isArray(settingsObj.tm) && settingsObj.tm.length === 3) {
           result.teamWeights = {
-            regularSeason: teamValues[0],
-            offenseDVOA: teamValues[1],
-            playoff: teamValues[2]
-          };
-        } else if (teamValues.length === 2 && teamValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
-          // Legacy format - convert to new format
-          result.teamWeights = {
-            regularSeason: teamValues[0],
-            offenseDVOA: 15, // Default value
-            playoff: teamValues[1]
+            regularSeason: settingsObj.tm[0],
+            offenseDVOA: settingsObj.tm[1],
+            playoff: settingsObj.tm[2]
           };
         }
-      }
-
-      // Clutch weights (optional)
-      if (sections[4]) {
-        const clutchValues = sections[4].split(',').map(v => parseInt(v));
-        if (clutchValues.length === 4 && clutchValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+        
+        if (settingsObj.cl && Array.isArray(settingsObj.cl) && settingsObj.cl.length === 4) {
           result.clutchWeights = {
-            gameWinningDrives: clutchValues[0],
-            fourthQuarterComebacks: clutchValues[1],
-            clutchRate: clutchValues[2],
-            playoffBonus: clutchValues[3]
+            gameWinningDrives: settingsObj.cl[0],
+            fourthQuarterComebacks: settingsObj.cl[1],
+            clutchRate: settingsObj.cl[2],
+            playoffBonus: settingsObj.cl[3]
           };
         }
-      }
-
-      // Durability weights (optional)
-      if (sections[5]) {
-        const durabilityValues = sections[5].split(',').map(v => parseInt(v));
-        if (durabilityValues.length === 2 && durabilityValues.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
+        
+        if (settingsObj.dr && Array.isArray(settingsObj.dr) && settingsObj.dr.length === 2) {
           result.durabilityWeights = {
-            availability: durabilityValues[0],
-            consistency: durabilityValues[1]
+            availability: settingsObj.dr[0],
+            consistency: settingsObj.dr[1]
           };
         }
-      }
-
-      // Global settings (optional) - now at index 6 in new format, but also check index 4 for old format
-      const settingsIndex = sections.length === 7 ? 6 : sections.length === 5 ? 4 : -1;
-      if (settingsIndex >= 0 && sections[settingsIndex]) {
-        const settingValues = sections[settingsIndex].split(',').map(v => parseInt(v));
-        if (settingValues.length >= 1 && !isNaN(settingValues[0])) {
-          result.includePlayoffs = settingValues[0] === 1;
+        
+        if (settingsObj.pf !== undefined) {
+          result.includePlayoffs = settingsObj.pf === 1;
         }
-        if (settingValues.length >= 2 && !isNaN(settingValues[1])) {
-          result.include2024Only = settingValues[1] === 1;
+        
+        if (settingsObj.y24 !== undefined) {
+          result.include2024Only = settingsObj.y24 === 1;
         }
+        
+        return result;
       }
-
-      return result;
     } catch (e) {
       console.warn('Failed to decode settings from URL', e);
     }
     return null;
   };
 
-  const generateShareLink = useCallback(() => {
+  const generateShareLink = useCallback((fullDetail = false) => {
     const baseUrl = window.location.origin + window.location.pathname;
-    const encodedSettings = encodeSettings(weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only);
+    const encodedSettings = encodeSettings(weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only, fullDetail);
     const presetParam = currentPreset !== 'custom' ? `&preset=${currentPreset}` : '';
     return `${baseUrl}?s=${encodedSettings}${presetParam}`;
   }, [weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only, currentPreset]);
 
-  const copyShareLink = useCallback(async (event) => {
-    const shareLink = generateShareLink();
+  const copyShareLink = useCallback(async (event, fullDetail = false) => {
+    const shareLink = generateShareLink(fullDetail);
     try {
       await navigator.clipboard.writeText(shareLink);
       // Show temporary success message on the clicked button
       const button = event ? event.target : document.getElementById('share-button');
       const originalText = button.textContent;
       button.textContent = '✅ Copied!';
-      button.className = button.className.replace('bg-blue-500/20 hover:bg-blue-500/30', 'bg-green-500/20 hover:bg-green-500/30');
+      button.className = button.className.replace('bg-blue-500/20 hover:bg-blue-500/30', 'bg-green-500/20 hover:bg-green-500/30').replace('bg-purple-500/20 hover:bg-purple-500/30', 'bg-green-500/20 hover:bg-green-500/30');
       setTimeout(() => {
         button.textContent = originalText;
-        button.className = button.className.replace('bg-green-500/20 hover:bg-green-500/30', 'bg-blue-500/20 hover:bg-blue-500/30');
+        button.className = button.className.replace('bg-green-500/20 hover:bg-green-500/30', 'bg-blue-500/20 hover:bg-blue-500/30').replace('bg-green-500/20 hover:bg-green-500/30', 'bg-purple-500/20 hover:bg-purple-500/30');
       }, 2000);
     } catch (err) {
       console.error('Failed to copy link:', err);
@@ -1140,13 +1247,25 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
 
         {/* Share Button Section */}
         <div className="text-center mb-8 text-blue-300">
-          <button 
-            id="share-button-top"
-            onClick={(e) => copyShareLink(e)}
-            className="bg-blue-500/20 hover:bg-blue-500/30 px-7 py-3 rounded-lg font-bold transition-colors text-white"
-          >
-            🔗 Share Your Complete QB Philosophy
-          </button>
+          <div className="flex flex-wrap justify-center gap-3 mb-2">
+            <button 
+              id="share-button-top"
+              onClick={(e) => copyShareLink(e, false)}
+              className="bg-blue-500/20 hover:bg-blue-500/30 px-6 py-3 rounded-lg font-bold transition-colors text-white"
+            >
+              🔗 Quick Share
+            </button>
+            <button 
+              onClick={(e) => copyShareLink(e, true)}
+              className="bg-purple-500/20 hover:bg-purple-500/30 px-6 py-3 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
+            >
+              📋 Full Detail Share
+            </button>
+          </div>
+          <p className="text-xs text-blue-400">
+            🚀 <strong>Quick Share</strong>: Super short URLs (main weights only) • 
+            📊 <strong>Full Detail</strong>: All sub-component weights included
+          </p>
         </div>
 
         {/* Live Rankings Table */}
@@ -1166,15 +1285,24 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
             </p>
           )}
           <div className="mt-4 space-y-2">
-            <button 
-              id="share-button"
-              onClick={(e) => copyShareLink(e)}
-              className="bg-blue-500/20 hover:bg-blue-500/30 px-6 py-2 rounded-lg font-bold transition-colors"
-            >
-              🔗 Share Your Complete QB Philosophy
-            </button>
+            <div className="flex flex-wrap justify-center gap-3 mb-2">
+              <button 
+                id="share-button"
+                onClick={(e) => copyShareLink(e, false)}
+                className="bg-blue-500/20 hover:bg-blue-500/30 px-5 py-2 rounded-lg font-bold transition-colors"
+              >
+                🔗 Quick Share
+              </button>
+              <button 
+                onClick={(e) => copyShareLink(e, true)}
+                className="bg-purple-500/20 hover:bg-purple-500/30 px-5 py-2 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
+              >
+                📋 Full Detail Share
+              </button>
+            </div>
             <p className="text-xs text-blue-400">
-              Share all your custom settings including main weights and advanced component breakdowns!
+              🚀 <strong>Quick Share</strong>: Ultra-short URLs perfect for chat apps 
+              <br />📊 <strong>Full Detail</strong>: Includes all sub-component weight customizations
             </p>
             <div className="mt-4 pt-4 border-t border-white/10">
               <button 
