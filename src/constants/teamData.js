@@ -45,6 +45,11 @@ export const TEAM_MAP = {
 };
 
 export const PHILOSOPHY_PRESETS = {
+  default: {
+    team: 35, stats: 35, clutch: 5, durability: 10, support: 15,
+    description: "Balanced default configuration with equal team/stats emphasis"
+  },
+  
   winner: {
     team: 65, stats: 25, clutch: 5, durability: 5, support: 0,
     description: "Winning is everything - team success dominates (NEW: Enhanced playoff round weighting)"

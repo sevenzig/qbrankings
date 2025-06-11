@@ -111,7 +111,7 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
   const basePerformanceWeight = basePerformanceComponents.reduce((sum, comp) => sum + comp.weight, 0);
   const basePerformanceScore = basePerformanceComponents.reduce((sum, comp) => sum + (comp.score * comp.weight), 0) / Math.max(1, basePerformanceWeight);
   
-  if ((weights.support > 0 || weights.durability > 0) && allQBBaseScores.length > 0) {
+  if ((weights.support > 0 || weights.durability > 0) && allQBBaseScores.length > 0 && basePerformanceWeight > 0) {
     // Calculate league averages for proper normalization
     const avgSupportScore = allQBBaseScores.reduce((sum, qbScores) => sum + qbScores.support, 0) / allQBBaseScores.length;
     const avgDurabilityScore = allQBBaseScores.reduce((sum, qbScores) => sum + qbScores.durability, 0) / allQBBaseScores.length;
@@ -122,11 +122,20 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
     if (weights.support > 0) {
       const supportDifference = baseScores.support - avgSupportScore; // Positive = better than average support
       
-      // Create adjustment factor that properly balances around 1.0
-      // Range: 0.80 to 1.20 (±20% max adjustment for meaningful impact)
-      // Poor support gets bonus (factor > 1.0), good support gets penalty (factor < 1.0)
-      const supportAdjustmentStrength = 0.006; // Increased sensitivity for noticeable effect
-      const supportAdjustmentFactor = Math.max(0.80, Math.min(1.20, 1.0 - (supportDifference * supportAdjustmentStrength)));
+      // AGGRESSIVE REBALANCING: Strong boost for poor support, moderate penalty for good support
+      // Range: 0.60 to 1.50 (±40% max adjustment for meaningful rebalancing)
+      // Poor support gets major bonus (factor up to 1.50), good support gets moderate penalty (factor down to 0.60)
+      const supportAdjustmentStrength = 0.012; // Doubled sensitivity for stronger effect
+      let supportAdjustmentFactor = 1.0 - (supportDifference * supportAdjustmentStrength);
+      
+      // Apply asymmetric scaling: More generous boosts for poor support, more conservative penalties for good support
+      if (supportAdjustmentFactor > 1.0) {
+        // Poor support bonus: Scale up more aggressively (up to +50%)
+        supportAdjustmentFactor = Math.min(1.50, 1.0 + ((supportAdjustmentFactor - 1.0) * 1.5));
+      } else {
+        // Good support penalty: Scale down more conservatively (down to -40%)
+        supportAdjustmentFactor = Math.max(0.60, supportAdjustmentFactor);
+      }
       
       // Apply support adjustment based on support weight
       const supportWeight = weights.support / totalWeight;
@@ -151,22 +160,23 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
     // Calculate adjusted performance score
     const adjustedPerformanceScore = basePerformanceScore * adjustmentFactor;
     
-    // Calculate the weighted blend of base performance components (excluding contextual adjustments)
-    const performanceWeight = basePerformanceWeight / totalWeight;
-    finalScore = adjustedPerformanceScore * performanceWeight;
+    // TRUE REBALANCING: Use the full adjusted performance as the final score
+    // This ensures that contextual adjustments actually redistribute scores rather than just reduce them
+    finalScore = adjustedPerformanceScore;
     
     // Debug for significant cases
     if (qb?.name && (qb.name.includes('Mahomes') || qb.name.includes('Allen') || qb.name.includes('Burrow') || qb.name.includes('Herbert') || qb.name.includes('Hurts') || Math.random() < 0.05)) {
       const supportAdjustmentType = weights.support > 0 ? (baseScores.support > avgSupportScore ? 'PENALTY' : 'BONUS') : 'N/A';
       const durabilityAdjustmentType = weights.durability > 0 ? (baseScores.durability > avgDurabilityScore ? 'BONUS' : 'PENALTY') : 'N/A';
-      console.log(`🎯 CONTEXT ADJUSTMENTS ${qb.name}:`);
-      console.log(`🎯   Support: Quality(${baseScores.support.toFixed(1)}) vs Avg(${avgSupportScore.toFixed(1)}) -> ${supportAdjustmentType}`);
+      const supportAdjustmentMagnitude = weights.support > 0 ? Math.abs(1.0 - adjustmentFactor) * 100 : 0;
+      console.log(`🎯 AGGRESSIVE REBALANCING ${qb.name}:`);
+      console.log(`🎯   Support: Quality(${baseScores.support.toFixed(1)}) vs Avg(${avgSupportScore.toFixed(1)}) -> ${supportAdjustmentType} (${supportAdjustmentMagnitude.toFixed(1)}%)`);
       console.log(`🎯   Durability: Quality(${baseScores.durability.toFixed(1)}) vs Avg(${avgDurabilityScore.toFixed(1)}) -> ${durabilityAdjustmentType}`);
-      console.log(`🎯   Combined Adjustment Factor: ${adjustmentFactor.toFixed(3)}`);
+      console.log(`🎯   Combined Adjustment Factor: ${adjustmentFactor.toFixed(3)} (${adjustmentFactor > 1.0 ? '+' : ''}${((adjustmentFactor - 1.0) * 100).toFixed(1)}%)`);
       console.log(`🎯   Base Perf(${basePerformanceScore.toFixed(1)}) * Factor(${adjustmentFactor.toFixed(3)}) = Adjusted(${adjustedPerformanceScore.toFixed(1)})`);
     }
   } else {
-    // No contextual weighting or no comparison data - standard weighted average
+    // No contextual weighting, no comparison data, or no base performance components - use standard weighted average
     finalScore = (
       (baseScores.team * weights.team) +
       (baseScores.stats * weights.stats) +
