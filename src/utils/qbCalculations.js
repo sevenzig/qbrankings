@@ -11,15 +11,21 @@ import {
 
 
 
-export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 65, playoff: 35 }, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, includePlayoffs = true) => {
+export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 65, playoff: 35 }, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, includePlayoffs = true, include2024Only = false) => {
   // Create season data structure for enhanced calculations
   const qbSeasonData = {
     years: {}
   };
   
   // Convert season data to expected format (including playoff data)
-  if (qb.seasonData && qb.seasonData.length > 0) {
-    qb.seasonData.forEach(season => {
+  // Filter season data for 2024-only mode if enabled
+  let seasonsToProcess = qb.seasonData || [];
+  if (include2024Only) {
+    seasonsToProcess = seasonsToProcess.filter(season => season.year === 2024);
+  }
+  
+  if (seasonsToProcess.length > 0) {
+    seasonsToProcess.forEach(season => {
       qbSeasonData.years[season.year] = {
         // Regular season data
         G: season.gamesStarted,
@@ -57,25 +63,25 @@ export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, wea
   }
 
   // Create team settings object for backward compatibility
-  const teamSettings = { includePlayoffs };
+  const teamSettings = { includePlayoffs, include2024Only };
 
   // Calculate Team Score
   const teamScore = calculateTeamScore(qbSeasonData, teamWeights, teamSettings);
   
   // Calculate Stats Score using season data
-  const statsScore = calculateStatsScore(qbSeasonData, statsWeights, includePlayoffs);
+  const statsScore = calculateStatsScore(qbSeasonData, statsWeights, includePlayoffs, include2024Only);
   
   // Calculate Clutch Score
-  const clutchScore = calculateClutchScore(qbSeasonData, includePlayoffs, clutchWeights);
+  const clutchScore = calculateClutchScore(qbSeasonData, includePlayoffs, clutchWeights, include2024Only);
   
   // Calculate Durability Score
-  const durabilityScore = calculateDurabilityScore(qbSeasonData, includePlayoffs);
+  const durabilityScore = calculateDurabilityScore(qbSeasonData, includePlayoffs, include2024Only);
   
   // Calculate Support Score (quality assessment) - pass season data structure for year-specific calculations
   // Add current team and player name to season data for fallback scenarios
   qbSeasonData.currentTeam = qb.team;
   qbSeasonData.name = qb.name;
-  const supportScore = calculateSupportScore(qbSeasonData, supportWeights);
+  const supportScore = calculateSupportScore(qbSeasonData, supportWeights, include2024Only);
   
   return {
     team: teamScore,
@@ -86,7 +92,7 @@ export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, wea
   };
 };
 
-export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, allQBBaseScores = []) => {
+export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, allQBBaseScores = [], include2024Only = false) => {
   // Calculate total weight for normalization
   const totalWeight = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
   

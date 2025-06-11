@@ -59,6 +59,9 @@ const DynamicQBRankings = () => {
   // Global playoff inclusion toggle - affects ALL calculations
   const [includePlayoffs, setIncludePlayoffs] = useState(true);
 
+  // Global 2024-only toggle - affects ALL data loading and disables year-based sliders
+  const [include2024Only, setInclude2024Only] = useState(false);
+
   // Effect to automatically adjust clutch weights when playoff toggle changes
   useEffect(() => {
     if (!includePlayoffs) {
@@ -236,6 +239,44 @@ const DynamicQBRankings = () => {
     setCurrentPreset(presetName);
   };
 
+  const normalizeWeights = () => {
+    const currentTotal = Object.values(weights).reduce((sum, val) => sum + val, 0);
+    
+    if (currentTotal === 0) {
+      // If all weights are 0, reset to balanced preset
+      applyPreset('balanced');
+      return;
+    }
+    
+    if (currentTotal === 100) {
+      // Already at 100%, no need to normalize
+      return;
+    }
+    
+    // Calculate normalized weights preserving ratios
+    const normalizedWeights = {};
+    Object.entries(weights).forEach(([category, value]) => {
+      normalizedWeights[category] = Math.round((value / currentTotal) * 100);
+    });
+    
+    // Handle rounding errors - ensure total is exactly 100
+    const normalizedTotal = Object.values(normalizedWeights).reduce((sum, val) => sum + val, 0);
+    const difference = 100 - normalizedTotal;
+    
+    if (difference !== 0) {
+      // Adjust the largest weight to make total exactly 100
+      const largestCategory = Object.entries(normalizedWeights)
+        .reduce((max, [category, value]) => value > max.value ? { category, value } : max, { category: null, value: 0 });
+      
+      if (largestCategory.category) {
+        normalizedWeights[largestCategory.category] += difference;
+      }
+    }
+    
+    setWeights(normalizedWeights);
+    setCurrentPreset('custom');
+  };
+
   const getCurrentPresetDescription = () => {
     console.log('Current preset:', currentPreset);
     
@@ -289,7 +330,7 @@ const DynamicQBRankings = () => {
   };
 
   // URL sharing functions
-  const encodeSettings = (weights, supportWeights, statsWeights, teamWeights, includePlayoffs) => {
+  const encodeSettings = (weights, supportWeights, statsWeights, teamWeights, includePlayoffs, include2024Only) => {
     // Main weights (5 values)
     const mainWeights = `${weights.team},${weights.stats},${weights.clutch},${weights.durability},${weights.support}`;
     
@@ -302,8 +343,8 @@ const DynamicQBRankings = () => {
     // Team weights (2 values)
     const teamEnc = `${teamWeights.regularSeason},${teamWeights.playoff}`;
     
-    // Team settings (1 value: 1 for true, 0 for false)
-    const settingsEnc = includePlayoffs ? '1' : '0';
+    // Team settings (2 values: playoffs and 2024-only, 1 for true, 0 for false)
+    const settingsEnc = `${includePlayoffs ? '1' : '0'},${include2024Only ? '1' : '0'}`;
     
     return `${mainWeights}|${supportEnc}|${statsEnc}|${teamEnc}|${settingsEnc}`;
   };
@@ -381,9 +422,12 @@ const DynamicQBRankings = () => {
 
       // Team settings (optional)
       if (sections[4]) {
-        const settingValue = parseInt(sections[4]);
-        if (!isNaN(settingValue)) {
-          result.includePlayoffs = settingValue === 1;
+        const settingValues = sections[4].split(',').map(v => parseInt(v));
+        if (settingValues.length >= 1 && !isNaN(settingValues[0])) {
+          result.includePlayoffs = settingValues[0] === 1;
+        }
+        if (settingValues.length >= 2 && !isNaN(settingValues[1])) {
+          result.include2024Only = settingValues[1] === 1;
         }
       }
 
@@ -396,7 +440,7 @@ const DynamicQBRankings = () => {
 
   const generateShareLink = () => {
     const baseUrl = window.location.origin + window.location.pathname;
-    const encodedSettings = encodeSettings(weights, supportWeights, statsWeights, teamWeights, includePlayoffs);
+    const encodedSettings = encodeSettings(weights, supportWeights, statsWeights, teamWeights, includePlayoffs, include2024Only);
     const presetParam = currentPreset !== 'custom' ? `&preset=${currentPreset}` : '';
     return `${baseUrl}?s=${encodedSettings}${presetParam}`;
   };
@@ -459,6 +503,11 @@ const DynamicQBRankings = () => {
           setIncludePlayoffs(decodedSettings.includePlayoffs);
         }
         
+        // Apply 2024-only setting if present
+        if (decodedSettings.include2024Only !== undefined) {
+          setInclude2024Only(decodedSettings.include2024Only);
+        }
+        
         setCurrentPreset(preset && PHILOSOPHY_PRESETS[preset] ? preset : 'custom');
       }
     } else if (preset && PHILOSOPHY_PRESETS[preset]) {
@@ -482,11 +531,18 @@ const DynamicQBRankings = () => {
     }
   }, [includePlayoffs]);
 
+  // Refetch data when 2024-only toggle changes
+  useEffect(() => {
+    if (fetchAllQBData) {
+      fetchAllQBData(include2024Only);
+    }
+  }, [include2024Only]);
+
   // Calculate QEI with current weights and dynamic component calculations
   const rankedQBs = useMemo(() => {
     // First pass: Calculate all base scores
     const qbsWithBaseScores = qbData.map(qb => {
-      const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs);
+      const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only);
       return {
         ...qb,
         baseScores
@@ -500,10 +556,10 @@ const DynamicQBRankings = () => {
     return qbsWithBaseScores
       .map(qb => ({
         ...qb,
-        qei: calculateQEI(qb.baseScores, qb, weights, includePlayoffs, allQBBaseScores)
+        qei: calculateQEI(qb.baseScores, qb, weights, includePlayoffs, allQBBaseScores, include2024Only)
       }))
       .sort((a, b) => b.qei - a.qei);
-  }, [qbData, weights, supportWeights, statsWeights, teamWeights, includePlayoffs]);
+  }, [qbData, weights, supportWeights, statsWeights, teamWeights, includePlayoffs, include2024Only]);
 
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
 
@@ -551,9 +607,16 @@ const DynamicQBRankings = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">🏈 NFL QB Rankings</h1>
-          <p className="text-blue-200">3-Year NFL analysis (2022-2024) • Career quarterback rankings • Dynamic QEI</p>
+          <p className="text-blue-200">
+            {include2024Only ? '2024 NFL season analysis • Single-year quarterback rankings • Dynamic QEI' : '3-Year NFL analysis (2022-2024) • Career quarterback rankings • Dynamic QEI'}
+          </p>
           <div className="mt-4 text-sm text-blue-300">
-            📊 {rankedQBs.length} Active Quarterbacks • 🎛️ Customizable Weights • 📈 Multi-Year Career Data
+            📊 {rankedQBs.length} Active Quarterbacks • 🎛️ Customizable Weights • 📈 {include2024Only ? '2024 Season Data' : 'Multi-Year Career Data'}
+            {include2024Only && (
+              <div className="mt-1 text-xs text-orange-300">
+                📅 Currently showing 2024-only data analysis
+              </div>
+            )}
           </div>
         </div>
 
@@ -561,31 +624,62 @@ const DynamicQBRankings = () => {
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 mb-8">
           <h3 className="text-xl font-bold text-white mb-4">🎯 Customize Your QB Philosophy</h3>
           
-          {/* Global Playoff Toggle */}
-          <div className="mb-6 bg-white/5 rounded-lg p-4 border-2 border-yellow-500/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="text-white font-medium text-lg flex items-center">
-                  🏆 Include Playoff Performance
-                  <span className="ml-2 text-xs text-yellow-200 bg-yellow-500/20 px-2 py-1 rounded">
-                    Global Setting
-                  </span>
-                </h4>
-                <div className="text-sm text-yellow-200 mt-1">
-                  When enabled: All stats include regular season + playoffs (games, records, averages, etc.)
-                  <br />
-                  When disabled: All stats are purely regular season
+          {/* Global Settings */}
+          <div className="mb-6 space-y-4">
+            {/* Global Playoff Toggle */}
+            <div className="bg-white/5 rounded-lg p-4 border-2 border-yellow-500/30">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-white font-medium text-lg flex items-center">
+                    🏆 Include Playoff Performance
+                    <span className="ml-2 text-xs text-yellow-200 bg-yellow-500/20 px-2 py-1 rounded">
+                      Global Setting
+                    </span>
+                  </h4>
+                  <div className="text-sm text-yellow-200 mt-1">
+                    When enabled: All stats include regular season + playoffs (games, records, averages, etc.)
+                    <br />
+                    When disabled: All stats are purely regular season
+                  </div>
                 </div>
+                <label className="relative inline-flex items-center cursor-pointer ml-4">
+                  <input
+                    type="checkbox"
+                    checked={includePlayoffs}
+                    onChange={(e) => setIncludePlayoffs(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-12 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500"></div>
+                </label>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer ml-4">
-                <input
-                  type="checkbox"
-                  checked={includePlayoffs}
-                  onChange={(e) => setIncludePlayoffs(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-12 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-500"></div>
-              </label>
+            </div>
+
+            {/* Global 2024-Only Toggle */}
+            <div className="bg-white/5 rounded-lg p-4 border-2 border-orange-500/30">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-white font-medium text-lg flex items-center">
+                    📅 Include 2024 Only
+                    <span className="ml-2 text-xs text-orange-200 bg-orange-500/20 px-2 py-1 rounded">
+                      Global Setting
+                    </span>
+                  </h4>
+                  <div className="text-sm text-orange-200 mt-1">
+                    When enabled: Only uses 2024 data with focused analysis
+                    <br />
+                    When disabled: Uses 3-year data (2022-2024) with year-based weightings
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer ml-4">
+                  <input
+                    type="checkbox"
+                    checked={include2024Only}
+                    onChange={(e) => setInclude2024Only(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-12 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
+                </label>
+              </div>
             </div>
           </div>
           
@@ -595,31 +689,31 @@ const DynamicQBRankings = () => {
             <div className="flex flex-wrap gap-2 mb-3">
               <button
                 onClick={() => applyPreset('winner')}
-                className="bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-200 px-4 py-2 rounded-lg font-medium transition-colors"
+                className="px-4 py-2 rounded-lg font-medium transition-colors bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-200"
               >
                 🏆 Winner
               </button>
               <button
                 onClick={() => applyPreset('analyst')}
-                className="bg-green-600/20 hover:bg-green-600/30 text-green-200 px-4 py-2 rounded-lg font-medium transition-colors"
+                className="px-4 py-2 rounded-lg font-medium transition-colors bg-green-600/20 hover:bg-green-600/30 text-green-200"
               >
                 📊 Analyst
               </button>
               <button
                 onClick={() => applyPreset('clutch')}
-                className="bg-red-600/20 hover:bg-red-600/30 text-red-200 px-4 py-2 rounded-lg font-medium transition-colors"
+                className="px-4 py-2 rounded-lg font-medium transition-colors bg-red-600/20 hover:bg-red-600/30 text-red-200"
               >
                 💎 Clutch
               </button>
               <button
                 onClick={() => applyPreset('balanced')}
-                className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-200 px-4 py-2 rounded-lg font-medium transition-colors"
+                className="px-4 py-2 rounded-lg font-medium transition-colors bg-blue-600/20 hover:bg-blue-600/30 text-blue-200"
               >
                 ⚖️ Balanced
               </button>
               <button
                 onClick={() => applyPreset('context')}
-                className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-200 px-4 py-2 rounded-lg font-medium transition-colors"
+                className="px-4 py-2 rounded-lg font-medium transition-colors bg-purple-600/20 hover:bg-purple-600/30 text-purple-200"
               >
                 🏢 Context
               </button>
@@ -638,14 +732,25 @@ const DynamicQBRankings = () => {
                     {value}%
                   </span>
                 </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={value}
-                  onChange={(e) => updateWeight(category, e.target.value)}
-                  className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
-                />
+                <div className="space-y-2">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={value}
+                    onChange={(e) => updateWeight(category, e.target.value)}
+                    className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={value}
+                    onChange={(e) => updateWeight(category, e.target.value)}
+                    className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-white text-sm text-center"
+                    placeholder="0-100"
+                  />
+                </div>
                 <div className="text-xs text-blue-200 mt-1">
                   {category === 'team' && (
                     <div>
@@ -707,10 +812,21 @@ const DynamicQBRankings = () => {
             ))}
           </div>
           
-          <div className="mt-4 text-center">
+          <div className="mt-4 text-center space-y-2">
             <span className={`text-lg font-bold ${totalWeight === 100 ? 'text-green-400' : 'text-red-400'}`}>
               Total Weight: {totalWeight}%
             </span>
+            {totalWeight !== 100 && (
+              <div>
+                <button
+                  onClick={normalizeWeights}
+                  className="bg-blue-500/20 hover:bg-blue-500/30 px-4 py-2 rounded-lg text-blue-200 hover:text-white transition-colors text-sm font-medium"
+                  title="Adjust all weights proportionally to total exactly 100%"
+                >
+                  ⚖️ Normalize to 100%
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Support Component Details Dropdown */}
@@ -737,14 +853,25 @@ const DynamicQBRankings = () => {
                         {value}%
                       </span>
                     </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={value}
-                      onChange={(e) => updateSupportWeight(component, e.target.value)}
-                      className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
-                    />
+                    <div className="space-y-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={value}
+                        onChange={(e) => updateSupportWeight(component, e.target.value)}
+                        className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={value}
+                        onChange={(e) => updateSupportWeight(component, e.target.value)}
+                        className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-white text-sm text-center"
+                        placeholder="0-100"
+                      />
+                    </div>
                     <div className="text-xs text-purple-200 mt-1">
                       {component === 'offensiveLine' && 'Pass protection & run blocking quality'}
                       {component === 'weapons' && 'Skill position talent & depth'}
@@ -786,14 +913,25 @@ const DynamicQBRankings = () => {
                         {value}%
                       </span>
                     </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={value}
-                      onChange={(e) => updateStatsWeight(component, e.target.value)}
-                      className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
-                    />
+                    <div className="space-y-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={value}
+                        onChange={(e) => updateStatsWeight(component, e.target.value)}
+                        className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={value}
+                        onChange={(e) => updateStatsWeight(component, e.target.value)}
+                        className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-white text-sm text-center"
+                        placeholder="0-100"
+                      />
+                    </div>
                     <div className="text-xs text-green-200 mt-1">
                       {component === 'efficiency' && 'ANY/A, TD%, Completion% - core passing metrics'}
                       {component === 'protection' && 'Sack%, Int%, Fumble% - decision making & pocket presence'}
@@ -838,19 +976,35 @@ const DynamicQBRankings = () => {
                         {value}%
                       </span>
                     </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={value}
-                      onChange={(e) => updateTeamWeight(component, e.target.value)}
-                      disabled={!includePlayoffs && component === 'playoff'}
-                      className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
-                        !includePlayoffs && component === 'playoff' 
-                          ? 'bg-gray-400 cursor-not-allowed opacity-50' 
-                          : 'bg-yellow-200'
-                      }`}
-                    />
+                    <div className="space-y-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={value}
+                        onChange={(e) => updateTeamWeight(component, e.target.value)}
+                        disabled={!includePlayoffs && component === 'playoff'}
+                        className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                          (!includePlayoffs && component === 'playoff')
+                            ? 'bg-gray-400 cursor-not-allowed opacity-50' 
+                            : 'bg-yellow-200'
+                        }`}
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={value}
+                        onChange={(e) => updateTeamWeight(component, e.target.value)}
+                        disabled={!includePlayoffs && component === 'playoff'}
+                        className={`w-full px-2 py-1 border border-white/20 rounded text-sm text-center ${
+                          (!includePlayoffs && component === 'playoff')
+                            ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
+                            : 'bg-white/10 text-white'
+                        }`}
+                        placeholder="0-100"
+                      />
+                    </div>
                     <div className="text-xs text-yellow-200 mt-1">
                       {component === 'regularSeason' && 'Win-loss record, regular season success'}
                       {component === 'playoff' && 'Playoff wins, deep runs, Super Bowl appearances'}
@@ -899,19 +1053,35 @@ const DynamicQBRankings = () => {
                         {value}%
                       </span>
                     </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={value}
-                      onChange={(e) => updateClutchWeight(component, e.target.value)}
-                      disabled={!includePlayoffs && component === 'playoffBonus'}
-                      className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
-                        !includePlayoffs && component === 'playoffBonus' 
-                          ? 'bg-gray-400 cursor-not-allowed opacity-50' 
-                          : 'bg-red-200'
-                      }`}
-                    />
+                    <div className="space-y-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={value}
+                        onChange={(e) => updateClutchWeight(component, e.target.value)}
+                        disabled={!includePlayoffs && component === 'playoffBonus'}
+                        className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                          (!includePlayoffs && component === 'playoffBonus')
+                            ? 'bg-gray-400 cursor-not-allowed opacity-50' 
+                            : 'bg-red-200'
+                        }`}
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={value}
+                        onChange={(e) => updateClutchWeight(component, e.target.value)}
+                        disabled={!includePlayoffs && component === 'playoffBonus'}
+                        className={`w-full px-2 py-1 border border-white/20 rounded text-sm text-center ${
+                          (!includePlayoffs && component === 'playoffBonus')
+                            ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
+                            : 'bg-white/10 text-white'
+                        }`}
+                        placeholder="0-100"
+                      />
+                    </div>
                     <div className="text-xs text-red-200 mt-1">
                       {component === 'gameWinningDrives' && 'Drives that directly lead to game-winning scores'}
                       {component === 'fourthQuarterComebacks' && 'Successful comebacks initiated in 4th quarter'}
@@ -959,14 +1129,25 @@ const DynamicQBRankings = () => {
                         {value}%
                       </span>
                     </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={value}
-                      onChange={(e) => updateDurabilityWeight(component, e.target.value)}
-                      className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
-                    />
+                    <div className="space-y-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={value}
+                        onChange={(e) => updateDurabilityWeight(component, e.target.value)}
+                        className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={value}
+                        onChange={(e) => updateDurabilityWeight(component, e.target.value)}
+                        className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-white text-sm text-center"
+                        placeholder="0-100"
+                      />
+                    </div>
                     <div className="text-xs text-orange-200 mt-1">
                       {component === 'availability' && 'Weighted average games started across all seasons'}
                       {component === 'consistency' && 'Bonus points for sustained availability and longevity'}

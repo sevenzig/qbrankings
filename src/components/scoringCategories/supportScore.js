@@ -469,7 +469,7 @@ const calculateWeightedSupportScore = (team, year, supportWeights = { offensiveL
   return weightedScore;
 };
 
-export const calculateSupportScore = (qbSeasonData, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }) => {
+export const calculateSupportScore = (qbSeasonData, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, include2024Only = false) => {
   // Initialize scoring
   let totalWeightedSupport = 0;
   let totalWeight = 0;
@@ -479,7 +479,10 @@ export const calculateSupportScore = (qbSeasonData, supportWeights = { offensive
   const seasonTeams = [];
   
   // Process each year with actual teams played for
-  Object.entries(PERFORMANCE_YEAR_WEIGHTS).forEach(([year, weight]) => {
+  // In 2024-only mode, only process 2024 data with 100% weight
+  const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+  
+  Object.entries(yearWeights).forEach(([year, weight]) => {
     const yearNum = parseInt(year);
     const seasonData = qbSeasonData.years && qbSeasonData.years[year];
     
@@ -546,7 +549,7 @@ export const calculateSupportScore = (qbSeasonData, supportWeights = { offensive
   
   // Fallback to current team if no season data available
   if (redistributedTotalWeight === 0 && qbSeasonData.currentTeam) {
-    Object.entries(PERFORMANCE_YEAR_WEIGHTS).forEach(([year, weight]) => {
+    Object.entries(yearWeights).forEach(([year, weight]) => {
       const yearNum = parseInt(year);
       const yearSupport = calculateWeightedSupportScore(qbSeasonData.currentTeam, yearNum, supportWeights);
       redistributedWeightedSupport += yearSupport * weight;

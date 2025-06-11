@@ -41,7 +41,7 @@ const calculatePlayoffClutchMultiplier = (playoffData, team, year) => {
 };
 
 // Enhanced Clutch Performance Score with playoff integration (0-100)
-export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }) => {
+export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, include2024Only = false) => {
   let totalGWD = 0;
   let totalFourthQC = 0;
   let totalGames = 0;
@@ -57,8 +57,11 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
   }
   
   // First Pass: Calculate strong regular season base scores
+  // In 2024-only mode, only process 2024 data with 100% weight
+  const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+  
   Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
-    const weight = PERFORMANCE_YEAR_WEIGHTS[year] || 0;
+    const weight = yearWeights[year] || 0;
     if (weight === 0 || !data.GWD || !data['4QC']) return;
     
     // Regular season clutch stats only for base calculation
@@ -85,7 +88,7 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
     let playoffClutchMultiplier = 1.0;
     
     Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
-      const weight = PERFORMANCE_YEAR_WEIGHTS[year] || 0;
+      const weight = yearWeights[year] || 0;
       if (weight === 0 || !data.playoffData) return;
       
       const playoff = data.playoffData;
@@ -121,15 +124,16 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
         if (totalPlayoffGames >= 3 && playoffWins >= 2) {
           // Known Super Bowl results for accurate detection
           const knownSuperBowlWins = {
-            'KAN': [2023, 2024], 
-            'TAM': [2022], 
-            'LAR': [2022]
+            'PHI': [2024], // Eagles won 2024 Super Bowl
+            'KAN': [2023], // Chiefs won 2023 Super Bowl
+            'TAM': [2022], // Bucs won 2022 Super Bowl
+            'LAR': [2022] // Rams won 2022 Super Bowl
           };
           
           if (knownSuperBowlWins[data.Team] && knownSuperBowlWins[data.Team].includes(parseInt(year))) {
-            roundImportanceBonus = 1.10; // 10% bonus for Super Bowl wins with good clutch performance
+            roundImportanceBonus = include2024Only ? 1.40 : 1.10; // ENHANCED 40% bonus for SB wins in 2024-only mode
           } else if (playoffWins >= 2) {
-            roundImportanceBonus = 1.05; // 5% bonus for deep playoff clutch moments
+            roundImportanceBonus = include2024Only ? 1.25 : 1.05; // Enhanced 25% bonus for deep playoff runs in 2024-only mode
           }
         }
         

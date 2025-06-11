@@ -1,7 +1,7 @@
 import { STABILITY_YEAR_WEIGHTS } from './constants.js';
 
 // Enhanced Durability Score with comprehensive availability tracking (0-100)
-export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true) => {
+export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, include2024Only = false) => {
   let weightedAvailability = 0;
   let fullSeasonCount = 0;
   let nearFullSeasonCount = 0;
@@ -16,8 +16,11 @@ export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true) =
     console.log(`⚡ DURABILITY DEBUG - ${playerName} (Playoffs ${includePlayoffs ? 'INCLUDED' : 'EXCLUDED'})`);
   }
 
+  // In 2024-only mode, only process 2024 data with 100% weight
+  const yearWeights = include2024Only ? { '2024': 1.0 } : STABILITY_YEAR_WEIGHTS;
+  
   Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
-    const weight = STABILITY_YEAR_WEIGHTS[year] || 0;
+    const weight = yearWeights[year] || 0;
     if (weight === 0) return;
     
     const gamesStarted = parseInt(data.GS) || 0;
@@ -28,7 +31,34 @@ export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true) =
     if (data.playoffData && includePlayoffs) {
       const playoff = data.playoffData;
       const playoffGamesStarted = parseInt(playoff.gamesStarted) || 0;
+      const playoffWins = parseInt(playoff.wins) || 0;
       totalGames += playoffGamesStarted;
+      
+      // In 2024-only mode, give extra credit for deep playoff runs
+      if (include2024Only && year === '2024') {
+        // Check known Super Bowl data for additional bonuses
+        const knownSuperBowlWins = {
+          'Philadelphia Eagles': [2024]
+        };
+        const knownSuperBowlAppearances = {
+          'Kansas City Chiefs': [2024],
+          'Philadelphia Eagles': [2024]
+        };
+        
+        // Super Bowl WINNERS get MASSIVE durability boost
+        if (knownSuperBowlWins[data.Team] && knownSuperBowlWins[data.Team].includes(parseInt(year))) {
+          totalGames += 4; // BONUS equivalent to 4 extra games for SB WINNERS
+        }
+        // Super Bowl participants get big durability boost
+        else if ((playoffWins >= 3 || (playoffWins >= 2 && playoffGamesStarted >= 3)) ||
+                 (knownSuperBowlAppearances[data.Team] && knownSuperBowlAppearances[data.Team].includes(parseInt(year)))) {
+          totalGames += 2; // Bonus equivalent to 2 extra games for SB teams
+        }
+        // Conference Championship teams get moderate boost  
+        else if (playoffWins >= 2) {
+          totalGames += 1; // Bonus equivalent to 1 extra game for CCG teams
+        }
+      }
       
       // Teams that make playoffs can potentially play up to 4 additional games
       const maxPlayoffGames = 4;

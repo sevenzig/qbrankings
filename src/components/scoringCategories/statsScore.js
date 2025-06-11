@@ -60,7 +60,7 @@ const calculateTurnoverBurden = (totalTurnovers) => {
 };
 
 // Enhanced Statistical Performance Score with detailed component breakdown (0-100)
-export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, includePlayoffs = true) => {
+export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, includePlayoffs = true, include2024Only = false) => {
   let weightedAnyA = 0;
   let weightedTDPct = 0;
   let weightedIntPct = 0;
@@ -84,8 +84,11 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
   }
   
   // First Pass: Calculate strong regular season base scores
+  // In 2024-only mode, only process 2024 data with 100% weight
+  const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+  
   Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
-    const weight = PERFORMANCE_YEAR_WEIGHTS[year] || 0;
+    const weight = yearWeights[year] || 0;
     if (weight === 0) return;
     
     // Regular season stats only for base calculation
@@ -148,7 +151,7 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
     let playoffPerformanceMultiplier = 1.0;
     
     Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
-      const weight = PERFORMANCE_YEAR_WEIGHTS[year] || 0;
+      const weight = yearWeights[year] || 0;
       if (weight === 0 || !data.playoffData) return;
       
       const playoff = data.playoffData;
@@ -197,15 +200,16 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
         if (totalPlayoffGames >= 3 && playoffWins >= 2) {
           // Known Super Bowl results
           const knownSuperBowlWins = {
-            'KAN': [2023, 2024], 
-            'TAM': [2022], 
-            'LAR': [2022]
+            'PHI': [2024], // Eagles won 2024 Super Bowl
+            'KAN': [2023], // Chiefs won 2023 Super Bowl
+            'TAM': [2022], // Bucs won 2022 Super Bowl
+            'LAR': [2022] // Rams won 2022 Super Bowl
           };
           
           if (knownSuperBowlWins[data.Team] && knownSuperBowlWins[data.Team].includes(parseInt(year))) {
-            roundImportanceBonus = 1.08; // 8% bonus for Super Bowl wins with good performance
+            roundImportanceBonus = include2024Only ? 1.35 : 1.08; // ENHANCED 35% bonus for SB wins in 2024-only mode
           } else if (playoffWins >= 2) {
-            roundImportanceBonus = 1.04; // 4% bonus for deep playoff runs
+            roundImportanceBonus = include2024Only ? 1.20 : 1.04; // Enhanced 20% bonus for deep playoff runs in 2024-only mode
           }
         }
         

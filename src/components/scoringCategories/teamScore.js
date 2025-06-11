@@ -1,15 +1,22 @@
 import { SCALING_RANGES, PLAYOFF_YEAR_WEIGHTS, REGULAR_SEASON_YEAR_WEIGHTS, STABILITY_YEAR_WEIGHTS } from './constants.js';
 
 // Helper function to calculate weighted playoff wins based on round progression
-const calculatePlayoffWeightedWins = (playoffData, team, year) => {
+const calculatePlayoffWeightedWins = (playoffData, team, year, include2024Only = false) => {
   const wins = playoffData.wins || 0;
   const losses = playoffData.losses || 0;
   const totalGames = wins + losses;
   
   if (totalGames === 0) return 0;
   
-  // Define playoff weights object (additional 70% reduction)
-  const WEIGHTS = {
+  // Define playoff weights object - enhanced for 2024-only mode
+  const WEIGHTS = include2024Only ? {
+    // 2024-only mode: Significantly increased playoff bonuses
+    SUPER_BOWL_WIN: 3.0, SUPER_BOWL_LOSS: 1.8, // 5x increase from 0.6/0.3
+    CONF_CHAMPIONSHIP_WIN: 2.1, CONF_CHAMPIONSHIP_LOSS: 1.2, // 5x increase from 0.42/0.21
+    DIVISIONAL_WIN: 1.5, DIVISIONAL_LOSS: 0.8, // 5x increase from 0.3/0.15
+    WILD_CARD_WIN: 1.0, WILD_CARD_LOSS: 0.6 // ~5x increase from 0.21/0.12
+  } : {
+    // Normal mode: Current reduced values
     SUPER_BOWL_WIN: 0.6, SUPER_BOWL_LOSS: 0.3, // Further reduced from 2.0/1.0
     CONF_CHAMPIONSHIP_WIN: 0.42, CONF_CHAMPIONSHIP_LOSS: 0.21, // Further reduced from 1.4/0.7
     DIVISIONAL_WIN: 0.3, DIVISIONAL_LOSS: 0.15, // Further reduced from 1.0/0.5
@@ -64,7 +71,7 @@ const calculatePlayoffWeightedWins = (playoffData, team, year) => {
 };
 
 // Helper function to calculate bye week bonus for QBs who earned their team a first-round bye
-const calculateByeWeekBonus = (playoffData, team, year) => {
+const calculateByeWeekBonus = (playoffData, team, year, include2024Only = false) => {
   const totalGames = (playoffData.wins || 0) + (playoffData.losses || 0);
   
   // Teams that earned bye weeks typically play 3 games instead of 4 to reach same level
@@ -78,7 +85,7 @@ const calculateByeWeekBonus = (playoffData, team, year) => {
     };
     
     if (byeWeekTeams[year] && byeWeekTeams[year].includes(team)) {
-      return 0.21; // Further reduced by 70% from 0.7 - they "earned" that win by getting the bye
+      return include2024Only ? 1.0 : 0.21; // Enhanced bye bonus for 2024-only mode
     }
   }
   
@@ -86,9 +93,10 @@ const calculateByeWeekBonus = (playoffData, team, year) => {
 };
 
 // Enhanced Team Success Score with configurable weights and playoff toggle (0-100)
-export const calculateTeamScore = (qbSeasonData, teamWeights = { regularSeason: 65, playoff: 35 }, teamSettings = { includePlayoffs: true }) => {
+export const calculateTeamScore = (qbSeasonData, teamWeights = { regularSeason: 65, playoff: 35 }, teamSettings = { includePlayoffs: true, include2024Only: false }) => {
   // Debug logging for when playoffs are disabled
   const includePlayoffs = teamSettings.includePlayoffs;
+  const include2024Only = teamSettings.include2024Only;
   const debugMode = !includePlayoffs;
   const playerName = qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player;
   
@@ -105,8 +113,11 @@ export const calculateTeamScore = (qbSeasonData, teamWeights = { regularSeason: 
   let debugRegularSeasonData = [];
   
   // First Pass: Calculate strong regular season base scores
+  // In 2024-only mode, only process 2024 data with 100% weight
+  const regularSeasonYearWeights = include2024Only ? { '2024': 1.0 } : REGULAR_SEASON_YEAR_WEIGHTS;
+  
   Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
-    const weight = REGULAR_SEASON_YEAR_WEIGHTS[year] || 0;
+    const weight = regularSeasonYearWeights[year] || 0;
     if (weight === 0 || !data.QBrec) return;
     
     // Parse regular season QB record (format: "14-3-0")
@@ -148,9 +159,10 @@ export const calculateTeamScore = (qbSeasonData, teamWeights = { regularSeason: 
   if (includePlayoffs) {
     let totalPlayoffWeight = 0;
     let playoffPerformanceMultiplier = 1.0;
+    const playoffYearWeights = include2024Only ? { '2024': 1.0 } : PLAYOFF_YEAR_WEIGHTS;
     
     Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
-      const weight = PLAYOFF_YEAR_WEIGHTS[year] || 0;
+      const weight = playoffYearWeights[year] || 0;
       if (weight === 0 || !data.playoffData || !data.QBrec) return;
       
       const playoff = data.playoffData;
@@ -170,29 +182,30 @@ export const calculateTeamScore = (qbSeasonData, teamWeights = { regularSeason: 
         // Performance comparison ratio (capped for sanity)
         const performanceRatio = Math.max(0.85, Math.min(1.20, playoffWinPct / Math.max(regWinPct, 0.3)));
         
-        // Apply round progression modifier (modest impact)
+        // Apply round progression modifier - enhanced for 2024-only mode
         let roundImportanceBonus = 1.0;
         if (playoffGames >= 3 && playoffWins >= 2) {
           // Known Super Bowl results for accurate detection
           const knownSuperBowlWins = {
-            'KAN': [2023, 2024], 
-            'TAM': [2022], 
-            'LAR': [2022]
+            'PHI': [2024], // Eagles won 2024 Super Bowl
+            'KAN': [2023], // Chiefs won 2023 Super Bowl
+            'TAM': [2022], // Bucs won 2022 Super Bowl
+            'LAR': [2022] // Rams won 2022 Super Bowl
           };
           
           const knownSuperBowlAppearances = {
-            'KAN': [2022, 2023, 2024], 
-            'PHI': [2023], 
-            'CIN': [2022], 
-            'SFO': [2023]
+            'PHI': [2023, 2024], // Eagles appeared in 2023 (loss) and 2024 (win)
+            'KAN': [2022, 2023], // Chiefs appeared in 2022 (loss) and 2023 (win)
+            'CIN': [2022], // Bengals appeared in 2022 (loss)
+            'SFO': [2023] // 49ers appeared in 2023 (loss)
           };
           
           if (knownSuperBowlWins[data.Team] && knownSuperBowlWins[data.Team].includes(parseInt(year))) {
-            roundImportanceBonus = 1.08; // 8% bonus for Super Bowl wins with good performance
+            roundImportanceBonus = include2024Only ? 1.50 : 1.08; // MASSIVE 50% bonus for SB wins in 2024-only mode
           } else if (knownSuperBowlAppearances[data.Team] && knownSuperBowlAppearances[data.Team].includes(parseInt(year))) {
-            roundImportanceBonus = 1.04; // 4% bonus for Super Bowl appearances
+            roundImportanceBonus = include2024Only ? 1.30 : 1.04; // 30% bonus for SB appearances in 2024-only mode
           } else if (playoffWins >= 2) {
-            roundImportanceBonus = 1.02; // 2% bonus for conference championship level
+            roundImportanceBonus = include2024Only ? 1.20 : 1.02; // 20% bonus for CCG level in 2024-only mode
           }
         }
         
@@ -241,7 +254,7 @@ export const calculateTeamScore = (qbSeasonData, teamWeights = { regularSeason: 
   // Debug for Mahomes and other elite playoff QBs
   if (qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player?.includes('Mahomes')) {
     console.log(`🏆 MAHOMES ADJUSTED TEAM SCORE: Base(${baseScore.toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) = ${finalScore.toFixed(1)}`);
-    console.log(`🏆 PLAYOFF DATA ${includePlayoffs ? 'ADJUSTMENT APPLIED' : 'EXCLUDED'}`);
+    console.log(`🏆 PLAYOFF DATA ${includePlayoffs ? 'ADJUSTMENT APPLIED' : 'EXCLUDED'} - 2024 Only: ${include2024Only}`);
   }
   
   return finalScore;
