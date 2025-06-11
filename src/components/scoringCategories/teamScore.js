@@ -305,7 +305,7 @@ export const calculateTeamScore = (qbSeasonData, teamWeights = { regularSeason: 
   
   if (debugMode && playerName) {
     console.log(`🔍 DEBUG TEAM SCORE - ${playerName} (Playoffs ${includePlayoffs ? 'ADJUSTMENT MODE' : 'DISABLED'})`);
-    console.log(`🔍 Team Weights: RegSeason=${teamWeights.regularSeason}, OffDVOA=${teamWeights.offenseDVOA}, Playoff=${teamWeights.playoff}`);
+    console.log(`🔍 Team Weights: RegSeason=${teamWeights.regularSeason}, OffOutput=${teamWeights.offenseDVOA}, Playoff=${teamWeights.playoff}`);
   }
   
   let weightedWinPct = 0;
@@ -451,60 +451,44 @@ export const calculateTeamScore = (qbSeasonData, teamWeights = { regularSeason: 
     debugRegularSeasonData.forEach(season => {
       console.log(`🔍   ${season.year}: ${season.record} (${season.winPct}) weight=${season.weight} playoff=${season.hasPlayoffData}`);
     });
-    console.log(`🔍 OFFENSIVE DVOA DATA:`);
+    console.log(`🔍 OFFENSIVE OUTPUT DATA:`);
     debugOffenseDVOAData.forEach(season => {
-      console.log(`🔍   ${season.year}: ${season.team} DVOA Score=${season.dvoaScore} weight=${season.weight}`);
+      console.log(`🔍   ${season.year}: ${season.team} Output Score=${season.dvoaScore} weight=${season.weight}`);
     });
     console.log(`🔍 BASE WIN PCT: ${weightedWinPct.toFixed(3)} (total weight: ${totalWeight.toFixed(2)})`);
-    console.log(`🔍 BASE OFFENSE DVOA: ${weightedOffenseDVOA.toFixed(1)} (total weight: ${totalWeight.toFixed(2)})`);
+    console.log(`🔍 BASE OFFENSE OUTPUT: ${weightedOffenseDVOA.toFixed(1)} (total weight: ${totalWeight.toFixed(2)})`);
   }
   
-  // Calculate final score using context-aware component weighting (like stats scoring)
-  // Each component contributes meaningfully regardless of weight distribution
-  
-  // Regular Season Component: Base score scaled by weight (0 to teamWeight points)
-  const baseRegularSeasonScore = Math.pow(weightedWinPct, SCALING_RANGES.WIN_PCT_CURVE) * 100;
-  const regularSeasonComponent = Math.max(0, Math.min(teamWeights.regularSeason, baseRegularSeasonScore * (teamWeights.regularSeason / 100)));
-  
-  // Offensive DVOA Component: Base score scaled by weight (0 to teamWeight points)
-  // Scale DVOA score to 0-100 range for consistent base scoring
-  const normalizedOffenseDVOA = (weightedOffenseDVOA / 15) * 100;
-  const offenseDVOAComponent = Math.max(0, Math.min(teamWeights.offenseDVOA, normalizedOffenseDVOA * (teamWeights.offenseDVOA / 100)));
-  
-  // FIXED: Apply playoff adjustment only to regular season component (where we have playoff data)
-  // Leave DVOA component unaffected since we don't have playoff offensive DVOA data
-  const adjustedRegularSeasonScore = regularSeasonComponent * playoffAdjustmentFactor;
-  
-  // CAREER PLAYOFF ACHIEVEMENT BONUS: Reward Super Bowl winners and deep playoff runs
+    // CAREER PLAYOFF ACHIEVEMENT BONUS: Calculate for use in normalized scoring
   let careerPlayoffScore = 0;
   const achievementYearWeights = include2024Only ? { '2024': 1.0 } : REGULAR_SEASON_YEAR_WEIGHTS;
-  
+
   Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
     const weight = achievementYearWeights[year] || 0;
     if (weight === 0 || !data.playoffData) return;
-    
+
     const playoff = data.playoffData;
     const playoffWins = playoff.wins || 0;
     const playoffLosses = playoff.losses || 0;
     const playoffGames = playoffWins + playoffLosses;
-    
+
     if (playoffGames === 0) return;
-    
+
     // Super Bowl detection with known results
     let isSuperBowlWin = false;
     let isSuperBowlAppearance = false;
-    
-              const knownSuperBowlWins = {
-            'KAN': [2022, 2023], // Chiefs won 2022 and 2023 Super Bowls (Mahomes)
-            'PHI': [2024] // Eagles won 2024 Super Bowl (Hurts)
-          };
-    
-              const knownSuperBowlAppearances = {
-            'PHI': [2022, 2024], // Eagles appeared in 2022 (lost to KC), 2024 (won vs KC - Hurts)
-            'KAN': [2022, 2023, 2024], // Chiefs appeared in 2022 (won), 2023 (won), 2024 (lost to PHI - Mahomes)
-            'SFO': [2023] // 49ers appeared in 2023 (lost to KC)
-          };
-    
+
+    const knownSuperBowlWins = {
+      'KAN': [2022, 2023], // Chiefs won 2022 and 2023 Super Bowls (Mahomes)
+      'PHI': [2024] // Eagles won 2024 Super Bowl (Hurts)
+    };
+
+    const knownSuperBowlAppearances = {
+      'PHI': [2022, 2024], // Eagles appeared in 2022 (lost to KC), 2024 (won vs KC - Hurts)
+      'KAN': [2022, 2023, 2024], // Chiefs appeared in 2022 (won), 2023 (won), 2024 (lost to PHI - Mahomes)
+      'SFO': [2023] // 49ers appeared in 2023 (lost to KC)
+    };
+
     // Check known cases first
     if (knownSuperBowlWins[data.Team] && knownSuperBowlWins[data.Team].includes(parseInt(year))) {
       isSuperBowlWin = true;
@@ -522,55 +506,71 @@ export const calculateTeamScore = (qbSeasonData, teamWeights = { regularSeason: 
         }
       }
     }
-    
+
     if (isSuperBowlWin) {
       careerPlayoffScore += 25 * weight; // MASSIVE Super Bowl win bonus
     } else if (isSuperBowlAppearance) {
       careerPlayoffScore += 15 * weight; // Significant SB appearance bonus
     }
-    
+
     // Conference Championship bonus
     if (playoffGames >= 2 && playoffWins >= 2) {
       careerPlayoffScore += 8 * weight; // Conference Championship win bonus
     } else if (playoffGames >= 2 && playoffWins >= 1) {
       careerPlayoffScore += 4 * weight; // Conference Championship appearance bonus
     }
-    
+
     // Base playoff participation bonus
     careerPlayoffScore += playoffGames * 1.5 * weight; // Participation bonus
   });
-  
-  // Cap career playoff score at reasonable level and apply playoff weight
+
+  // Cap career playoff score at reasonable level
   const normalizedCareerPlayoffScore = Math.min(35, careerPlayoffScore);
+
+  // CONTEXT-AWARE TEAM COMPONENT SCALING - Normalized to 0-100 base scoring
+  // Calculate individual normalized scores (0-100 scale) for each team metric
+  const regularSeasonNormalized = Math.max(0, Math.min(100, Math.pow(weightedWinPct, SCALING_RANGES.WIN_PCT_CURVE) * 100));
+  const offenseDVOANormalized = Math.max(0, Math.min(100, (weightedOffenseDVOA / 15) * 100));
+  const careerPlayoffNormalized = Math.max(0, Math.min(100, (normalizedCareerPlayoffScore / 35) * 100));
+
+  // Calculate weighted average of normalized scores using sub-component weights
+  // This ensures that regardless of weight distribution, elite performance can reach ~100 points
+  const totalTeamSubWeights = teamWeights.regularSeason + teamWeights.offenseDVOA + teamWeights.playoff;
+
+  let teamCompositeScore = 0;
+  if (totalTeamSubWeights > 0) {
+    teamCompositeScore = ((regularSeasonNormalized * teamWeights.regularSeason) +
+                         (offenseDVOANormalized * teamWeights.offenseDVOA) +
+                         (careerPlayoffNormalized * teamWeights.playoff)) / totalTeamSubWeights;
+  }
   
-  // Career Playoff Component: Base score scaled by weight (0 to teamWeight points)
-  // Scale career playoff score to 0-100 range for consistent base scoring
-  const normalizedCareerPlayoff = (normalizedCareerPlayoffScore / 35) * 100;
-  const careerPlayoffComponent = Math.max(0, Math.min(teamWeights.playoff, normalizedCareerPlayoff * (teamWeights.playoff / 100)));
+  // Apply playoff adjustment to the composite score (affects all components proportionally)
+  const adjustedTeamCompositeScore = teamCompositeScore * playoffAdjustmentFactor;
   
-  const finalScore = adjustedRegularSeasonScore + offenseDVOAComponent + careerPlayoffComponent;
+  const finalScore = adjustedTeamCompositeScore;
   
-  // Debug final calculation
+    // Debug final calculation
   if (debugMode && playerName) {
     console.log(`🔍 FINAL CALCULATION:`);
-    console.log(`🔍   Regular Season: ${weightedWinPct.toFixed(3)}^${SCALING_RANGES.WIN_PCT_CURVE} × 100 × ${teamWeights.regularSeason}% = ${baseRegularSeasonScore.toFixed(1)} × ${(teamWeights.regularSeason/100).toFixed(2)} = ${regularSeasonComponent.toFixed(1)}`);
-    console.log(`🔍   Offense DVOA: ${weightedOffenseDVOA.toFixed(1)}/15 × 100 × ${teamWeights.offenseDVOA}% = ${normalizedOffenseDVOA.toFixed(1)} × ${(teamWeights.offenseDVOA/100).toFixed(2)} = ${offenseDVOAComponent.toFixed(1)}`);
-    console.log(`🔍   Playoff Adjustment: ${regularSeasonComponent.toFixed(1)} × ${playoffAdjustmentFactor.toFixed(3)} = ${adjustedRegularSeasonScore.toFixed(1)}`);
-    console.log(`🔍   Career Playoff: ${normalizedCareerPlayoffScore.toFixed(1)}/35 × 100 = ${normalizedCareerPlayoff.toFixed(1)} → capped at ${teamWeights.playoff} = ${careerPlayoffComponent.toFixed(1)}`);
-    console.log(`🔍   Final: ${adjustedRegularSeasonScore.toFixed(1)} + ${offenseDVOAComponent.toFixed(1)} + ${careerPlayoffComponent.toFixed(1)} = ${finalScore.toFixed(1)}`);
+    console.log(`🔍   Regular Season: ${weightedWinPct.toFixed(3)}^${SCALING_RANGES.WIN_PCT_CURVE} × 100 = ${regularSeasonNormalized.toFixed(1)} (weight: ${teamWeights.regularSeason}%)`);
+    console.log(`🔍   Offense Output: ${weightedOffenseDVOA.toFixed(1)}/15 × 100 = ${offenseDVOANormalized.toFixed(1)} (weight: ${teamWeights.offenseDVOA}%)`);
+    console.log(`🔍   Career Playoff: ${normalizedCareerPlayoffScore.toFixed(1)}/35 × 100 = ${careerPlayoffNormalized.toFixed(1)} (weight: ${teamWeights.playoff}%)`);
+    console.log(`🔍   Composite Score: (${regularSeasonNormalized.toFixed(1)} × ${teamWeights.regularSeason} + ${offenseDVOANormalized.toFixed(1)} × ${teamWeights.offenseDVOA} + ${careerPlayoffNormalized.toFixed(1)} × ${teamWeights.playoff}) / ${totalTeamSubWeights} = ${teamCompositeScore.toFixed(1)}`);
+    console.log(`🔍   Playoff Adjustment: ${teamCompositeScore.toFixed(1)} × ${playoffAdjustmentFactor.toFixed(3)} = ${adjustedTeamCompositeScore.toFixed(1)}`);
+    console.log(`🔍   Final Score: ${finalScore.toFixed(1)}`);
     console.log(`🔍 ----------------------------------------`);
   }
-  
+
   // Debug for Mahomes and other elite playoff QBs
   if (qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player?.includes('Mahomes')) {
-    console.log(`🏆 MAHOMES TEAM SCORE: RegSeason(${regularSeasonComponent.toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) + DVOA(${offenseDVOAComponent.toFixed(1)}) + Career(${careerPlayoffComponent.toFixed(1)}) = ${finalScore.toFixed(1)}`);
+    console.log(`🏆 MAHOMES TEAM SCORE: RegSeason(${regularSeasonNormalized.toFixed(1)}) + Output(${offenseDVOANormalized.toFixed(1)}) + Career(${careerPlayoffNormalized.toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) = ${finalScore.toFixed(1)}`);
     console.log(`🏆 PLAYOFF DATA ${includePlayoffs ? 'ADJUSTMENT APPLIED' : 'EXCLUDED'} - 2024 Only: ${include2024Only}, Playoff Weight: ${teamWeights.playoff}%`);
   }
-  
+
   // Debug for Hurts and other Super Bowl winners
   if (qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player?.includes('Hurts')) {
-    console.log(`🏆 HURTS TEAM SCORE: RegSeason(${regularSeasonComponent.toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) + DVOA(${offenseDVOAComponent.toFixed(1)}) + Career(${careerPlayoffComponent.toFixed(1)}) = ${finalScore.toFixed(1)}`);
-    console.log(`🏆 SUPER BOWL WINNER: Raw Career(${normalizedCareerPlayoffScore.toFixed(1)}) normalized to ${careerPlayoffComponent.toFixed(1)} weighted points!`);
+    console.log(`🏆 HURTS TEAM SCORE: RegSeason(${regularSeasonNormalized.toFixed(1)}) + Output(${offenseDVOANormalized.toFixed(1)}) + Career(${careerPlayoffNormalized.toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) = ${finalScore.toFixed(1)}`);
+    console.log(`🏆 SUPER BOWL WINNER: Raw Career(${normalizedCareerPlayoffScore.toFixed(1)}) normalized to ${careerPlayoffNormalized.toFixed(1)} points!`);
   }
   
   return Math.min(100, finalScore);

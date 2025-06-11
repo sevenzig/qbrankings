@@ -163,32 +163,31 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
   const comebacksPerGame = totalFourthQC / totalGames;
   const totalClutchPerGame = gwdPerGame + comebacksPerGame;
 
-  // Calculate base score components using dynamic weights
-  // Scale the max points for each component based on the weight percentages
-  const maxGWDPoints = (clutchWeights.gameWinningDrives / 100) * 100;
-  const maxComebackPoints = (clutchWeights.fourthQuarterComebacks / 100) * 100;
-  const maxClutchRatePoints = (clutchWeights.clutchRate / 100) * 100;
-  const maxPlayoffPoints = (clutchWeights.playoffBonus / 100) * 100;
+  // CONTEXT-AWARE CLUTCH COMPONENT SCALING - Normalized to 0-100 base scoring
+  // Calculate individual normalized scores (0-100 scale) for each clutch metric
+  const gwdNormalized = Math.max(0, Math.min(100, gwdPerGame * 300)); // 0-100 scale for GWD (0.33/game gives 100 points)
+  const comebackNormalized = Math.max(0, Math.min(100, comebacksPerGame * 400)); // 0-100 scale for 4QC (0.25/game gives 100 points)
+  const clutchRateNormalized = Math.max(0, Math.min(100, totalClutchPerGame * 200)); // 0-100 scale for combined rate
+  const playoffBonusNormalized = Math.max(0, Math.min(100, (totalGWD + totalFourthQC) * 10 * playoffAdjustmentFactor)); // 0-100 scale for playoff bonus
   
-  const baseGWDScore = Math.min(maxGWDPoints, gwdPerGame * 120 * (clutchWeights.gameWinningDrives / 40));
-  const baseComebackScore = Math.min(maxComebackPoints, comebacksPerGame * 100 * (clutchWeights.fourthQuarterComebacks / 25));
-  const baseClutchRateScore = Math.min(maxClutchRatePoints, totalClutchPerGame * 50 * (clutchWeights.clutchRate / 15));
+  // Calculate weighted average of normalized scores using sub-component weights
+  // This ensures that regardless of weight distribution, elite performance can reach ~100 points
+  const totalClutchSubWeights = clutchWeights.gameWinningDrives + clutchWeights.fourthQuarterComebacks + 
+                               clutchWeights.clutchRate + clutchWeights.playoffBonus;
   
-  // Calculate playoff bonus based on component weight (replaces old consistency bonus)
-  let playoffBonusScore = 0;
-  if (clutchWeights.playoffBonus > 0 && includePlayoffs) {
-    // Apply playoff adjustment factor to the playoff component only
-    playoffBonusScore = Math.min(maxPlayoffPoints, (totalGWD + totalFourthQC) * 2 * playoffAdjustmentFactor * (clutchWeights.playoffBonus / 20));
+  let clutchCompositeScore = 0;
+  if (totalClutchSubWeights > 0) {
+    clutchCompositeScore = ((gwdNormalized * clutchWeights.gameWinningDrives) +
+                           (comebackNormalized * clutchWeights.fourthQuarterComebacks) +
+                           (clutchRateNormalized * clutchWeights.clutchRate) +
+                           (playoffBonusNormalized * clutchWeights.playoffBonus)) / totalClutchSubWeights;
   }
   
-  const baseScore = baseGWDScore + baseComebackScore + baseClutchRateScore + playoffBonusScore;
-  
-  // Final score is the base score (no additional playoff adjustment since it's built into playoff bonus)
-  const finalScore = baseScore;
+  const finalScore = clutchCompositeScore;
 
   if (debugMode && playerName) {
-    console.log(`💎 WEIGHTED CLUTCH FINAL: ${finalScore.toFixed(1)}/100`);
-    console.log(`💎 Components: GWD(${baseGWDScore.toFixed(1)}) + 4QC(${baseComebackScore.toFixed(1)}) + Rate(${baseClutchRateScore.toFixed(1)}) + PlayoffBonus(${playoffBonusScore.toFixed(1)})`);
+    console.log(`💎 CONTEXT-AWARE CLUTCH FINAL: ${finalScore.toFixed(1)}/100`);
+    console.log(`💎 Components: GWD(${gwdNormalized.toFixed(1)}) + 4QC(${comebackNormalized.toFixed(1)}) + Rate(${clutchRateNormalized.toFixed(1)}) + PlayoffBonus(${playoffBonusNormalized.toFixed(1)})`);
     console.log(`💎 Weights: GWD(${clutchWeights.gameWinningDrives}%) + 4QC(${clutchWeights.fourthQuarterComebacks}%) + Rate(${clutchWeights.clutchRate}%) + Playoff(${clutchWeights.playoffBonus}%)`);
     console.log(`💎 Rates: ${gwdPerGame.toFixed(3)} GWD/game, ${comebacksPerGame.toFixed(3)} 4QC/game over ${totalGames.toFixed(1)} weighted games`);
   }

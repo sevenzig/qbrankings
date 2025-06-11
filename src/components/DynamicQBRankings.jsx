@@ -52,9 +52,30 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     volume: 33          // Volume and production metrics
   });
   const [showStatsDetails, setShowStatsDetails] = useState(false);
+  const [showEfficiencyDetails, setShowEfficiencyDetails] = useState(false);
+  const [showProtectionDetails, setShowProtectionDetails] = useState(false);
+  const [showVolumeDetails, setShowVolumeDetails] = useState(false);
+  
+  // Sub-component weights for stats categories
+  const [efficiencyWeights, setEfficiencyWeights] = useState({
+    anyA: 45,           // Adjusted Net Yards per Attempt
+    tdPct: 30,          // Touchdown percentage
+    completionPct: 25   // Completion percentage
+  });
+  const [protectionWeights, setProtectionWeights] = useState({
+    sackPct: 60,        // Sack percentage
+    turnoverRate: 40    // Combined turnover rate (attempts/turnovers)
+  });
+  const [volumeWeights, setVolumeWeights] = useState({
+    passYards: 25,      // Passing yards
+    passTDs: 25,        // Passing touchdowns
+    rushYards: 20,      // Rushing yards
+    rushTDs: 15,        // Rushing touchdowns
+    totalAttempts: 15   // Total attempts (pass + rush)
+  });
   const [teamWeights, setTeamWeights] = useState({
     regularSeason: 50,   // Regular season win percentage
-    offenseDVOA: 50,     // Offensive DVOA performance
+    offenseDVOA: 50,     // Offensive output performance
     playoff: 0         // Career playoff achievement score (disabled by default)
   });
   const [showTeamDetails, setShowTeamDetails] = useState(false);
@@ -150,6 +171,27 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     });
   }, [validateNumberInput]);
 
+  const updateEfficiencyWeight = useCallback((component, value) => {
+    const validatedValue = validateNumberInput(value, 0, 100);
+    setEfficiencyWeights(prev => {
+      return { ...prev, [component]: validatedValue };
+    });
+  }, [validateNumberInput]);
+
+  const updateProtectionWeight = useCallback((component, value) => {
+    const validatedValue = validateNumberInput(value, 0, 100);
+    setProtectionWeights(prev => {
+      return { ...prev, [component]: validatedValue };
+    });
+  }, [validateNumberInput]);
+
+  const updateVolumeWeight = useCallback((component, value) => {
+    const validatedValue = validateNumberInput(value, 0, 100);
+    setVolumeWeights(prev => {
+      return { ...prev, [component]: validatedValue };
+    });
+  }, [validateNumberInput]);
+
   const updateTeamWeight = useCallback((component, value) => {
     // If playoffs are disabled, freeze the playoff slider and don't allow changes
     if (!includePlayoffs && component === 'playoff') {
@@ -220,6 +262,26 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
           efficiency: 34,
           protection: 33,
           volume: 33
+        });
+        
+        // Set sub-component weights for stats categories
+        setEfficiencyWeights({
+          anyA: 45,
+          tdPct: 30,
+          completionPct: 25
+        });
+        
+        setProtectionWeights({
+          sackPct: 60,
+          turnoverRate: 40
+        });
+        
+        setVolumeWeights({
+          passYards: 25,
+          passTDs: 25,
+          rushYards: 20,
+          rushTDs: 15,
+          totalAttempts: 15
         });
         
         setTeamWeights({
@@ -343,6 +405,90 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     
     setStatsWeights(normalizedWeights);
   }, [statsWeights]);
+
+  const normalizeEfficiencyWeights = useCallback(() => {
+    const currentTotal = Object.values(efficiencyWeights).reduce((sum, val) => sum + val, 0);
+    if (currentTotal === 0) {
+      setEfficiencyWeights({ anyA: 45, tdPct: 30, completionPct: 25 });
+      return;
+    }
+    if (currentTotal === 100) return;
+    
+    const normalizedWeights = {};
+    Object.entries(efficiencyWeights).forEach(([category, value]) => {
+      normalizedWeights[category] = Math.round((value / currentTotal) * 100);
+    });
+    
+    const normalizedTotal = Object.values(normalizedWeights).reduce((sum, val) => sum + val, 0);
+    const difference = 100 - normalizedTotal;
+    
+    if (difference !== 0) {
+      const largestCategory = Object.entries(normalizedWeights)
+        .reduce((max, [category, value]) => value > max.value ? { category, value } : max, { category: null, value: 0 });
+      
+      if (largestCategory.category) {
+        normalizedWeights[largestCategory.category] += difference;
+      }
+    }
+    
+    setEfficiencyWeights(normalizedWeights);
+  }, [efficiencyWeights]);
+
+  const normalizeProtectionWeights = useCallback(() => {
+    const currentTotal = Object.values(protectionWeights).reduce((sum, val) => sum + val, 0);
+    if (currentTotal === 0) {
+      setProtectionWeights({ sackPct: 60, turnoverRate: 40 });
+      return;
+    }
+    if (currentTotal === 100) return;
+    
+    const normalizedWeights = {};
+    Object.entries(protectionWeights).forEach(([category, value]) => {
+      normalizedWeights[category] = Math.round((value / currentTotal) * 100);
+    });
+    
+    const normalizedTotal = Object.values(normalizedWeights).reduce((sum, val) => sum + val, 0);
+    const difference = 100 - normalizedTotal;
+    
+    if (difference !== 0) {
+      const largestCategory = Object.entries(normalizedWeights)
+        .reduce((max, [category, value]) => value > max.value ? { category, value } : max, { category: null, value: 0 });
+      
+      if (largestCategory.category) {
+        normalizedWeights[largestCategory.category] += difference;
+      }
+    }
+    
+    setProtectionWeights(normalizedWeights);
+  }, [protectionWeights]);
+
+  const normalizeVolumeWeights = useCallback(() => {
+    const currentTotal = Object.values(volumeWeights).reduce((sum, val) => sum + val, 0);
+    if (currentTotal === 0) {
+      setVolumeWeights({ passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 });
+      return;
+    }
+    if (currentTotal === 100) return;
+    
+    const normalizedWeights = {};
+    Object.entries(volumeWeights).forEach(([category, value]) => {
+      normalizedWeights[category] = Math.round((value / currentTotal) * 100);
+    });
+    
+    const normalizedTotal = Object.values(normalizedWeights).reduce((sum, val) => sum + val, 0);
+    const difference = 100 - normalizedTotal;
+    
+    if (difference !== 0) {
+      const largestCategory = Object.entries(normalizedWeights)
+        .reduce((max, [category, value]) => value > max.value ? { category, value } : max, { category: null, value: 0 });
+      
+      if (largestCategory.category) {
+        normalizedWeights[largestCategory.category] += difference;
+      }
+    }
+    
+    setVolumeWeights(normalizedWeights);
+  }, [volumeWeights]);
 
   const normalizeTeamWeights = useCallback(() => {
     const currentTotal = Object.values(teamWeights).reduce((sum, val) => sum + val, 0);
@@ -761,7 +907,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
   const rankedQBs = useMemo(() => {
     // First pass: Calculate all base scores
     const qbsWithBaseScores = qbData.map(qb => {
-      const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only);
+              const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights);
       return {
         ...qb,
         baseScores
@@ -778,7 +924,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
         qei: calculateQEI(qb.baseScores, qb, weights, includePlayoffs, allQBBaseScores, include2024Only)
       }))
       .sort((a, b) => b.qei - a.qei);
-  }, [qbData, weights, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only]); // Added missing dependencies
+  }, [qbData, weights, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights]); // Added missing durabilityWeights dependency
 
   const totalWeight = useMemo(() => 
     Object.values(weights).reduce((a, b) => a + b, 0), 
@@ -791,16 +937,22 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     stats: () => setShowStatsDetails(!showStatsDetails),
     clutch: () => setShowClutchDetails(!showClutchDetails),
     durability: () => setShowDurabilityDetails(!showDurabilityDetails),
-    support: () => setShowSupportDetails(!showSupportDetails)
-  }), [showTeamDetails, showStatsDetails, showClutchDetails, showDurabilityDetails, showSupportDetails]);
+    support: () => setShowSupportDetails(!showSupportDetails),
+    efficiency: () => setShowEfficiencyDetails(!showEfficiencyDetails),
+    protection: () => setShowProtectionDetails(!showProtectionDetails),
+    volume: () => setShowVolumeDetails(!showVolumeDetails)
+  }), [showTeamDetails, showStatsDetails, showClutchDetails, showDurabilityDetails, showSupportDetails, showEfficiencyDetails, showProtectionDetails, showVolumeDetails]);
 
   const showDetailsState = useMemo(() => ({
     team: showTeamDetails,
     stats: showStatsDetails,
     clutch: showClutchDetails,
     durability: showDurabilityDetails,
-    support: showSupportDetails
-  }), [showTeamDetails, showStatsDetails, showClutchDetails, showDurabilityDetails, showSupportDetails]);
+    support: showSupportDetails,
+    efficiency: showEfficiencyDetails,
+    protection: showProtectionDetails,
+    volume: showVolumeDetails
+  }), [showTeamDetails, showStatsDetails, showClutchDetails, showDurabilityDetails, showSupportDetails, showEfficiencyDetails, showProtectionDetails, showVolumeDetails]);
 
   if (loading) {
     return (
@@ -958,9 +1110,18 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
                   supportWeights={supportWeights}
                   onUpdateSupportWeight={updateSupportWeight}
                   onNormalizeSupportWeights={normalizeSupportWeights}
-                  statsWeights={statsWeights}
-                  onUpdateStatsWeight={updateStatsWeight}
-                  onNormalizeStatsWeights={normalizeStatsWeights}
+                            statsWeights={statsWeights}
+          onUpdateStatsWeight={updateStatsWeight}
+          onNormalizeStatsWeights={normalizeStatsWeights}
+          efficiencyWeights={efficiencyWeights}
+          onUpdateEfficiencyWeight={updateEfficiencyWeight}
+          onNormalizeEfficiencyWeights={normalizeEfficiencyWeights}
+          protectionWeights={protectionWeights}
+          onUpdateProtectionWeight={updateProtectionWeight}
+          onNormalizeProtectionWeights={normalizeProtectionWeights}
+          volumeWeights={volumeWeights}
+          onUpdateVolumeWeight={updateVolumeWeight}
+          onNormalizeVolumeWeights={normalizeVolumeWeights}
                   teamWeights={teamWeights}
                   onUpdateTeamWeight={updateTeamWeight}
                   onNormalizeTeamWeights={normalizeTeamWeights}

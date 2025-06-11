@@ -1,7 +1,7 @@
 import { STABILITY_YEAR_WEIGHTS } from './constants.js';
 
 // Enhanced Durability Score with comprehensive availability tracking (0-100)
-export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, include2024Only = false) => {
+export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, include2024Only = false, durabilityWeights = { availability: 75, consistency: 25 }) => {
   let weightedAvailability = 0;
   let fullSeasonCount = 0;
   let nearFullSeasonCount = 0;
@@ -106,23 +106,29 @@ export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, i
     console.log(`⚡ ----------------------------------------`);
   }
 
-  // Core availability score (0-80 points)
-  const availabilityScore = weightedAvailability * 80;
-
-  // Consistency bonuses (0-20 points total)
-  const fullSeasonBonus = Math.min(10, fullSeasonCount * 5); // Up to 10 points for full seasons
-  const nearFullSeasonBonus = Math.min(5, nearFullSeasonCount * 2.5); // Up to 5 points for near-full seasons
+  // Calculate normalized component scores (0-100 scale each)
+  const availabilityNormalized = Math.max(0, Math.min(100, weightedAvailability * 100)); // 0-100 scale for availability
   
-  // Multi-year consistency bonus (0-5 points)
-  const multiYearBonus = totalSeasonsPlayed >= 3 ? 5 : 0;
+  // Consistency component (0-100 scale)
+  const fullSeasonBonus = Math.min(50, fullSeasonCount * 25); // Up to 50 points for full seasons
+  const nearFullSeasonBonus = Math.min(25, nearFullSeasonCount * 12.5); // Up to 25 points for near-full seasons
+  const multiYearBonus = totalSeasonsPlayed >= 3 ? 25 : 0; // Up to 25 points for multi-year consistency
+  const consistencyNormalized = Math.max(0, Math.min(100, fullSeasonBonus + nearFullSeasonBonus + multiYearBonus));
 
-  const consistencyScore = fullSeasonBonus + nearFullSeasonBonus + multiYearBonus;
-  const finalScore = availabilityScore + consistencyScore;
+  // Calculate weighted average of normalized scores using sub-component weights
+  const totalDurabilitySubWeights = durabilityWeights.availability + durabilityWeights.consistency;
+  
+  let finalScore = 0;
+  if (totalDurabilitySubWeights > 0) {
+    finalScore = ((availabilityNormalized * durabilityWeights.availability) +
+                  (consistencyNormalized * durabilityWeights.consistency)) / totalDurabilitySubWeights;
+  }
 
   // Debug for durability leaders or concerning cases
-  if (availabilityScore >= 80 || availabilityScore < 40) {
+  if (availabilityNormalized >= 80 || availabilityNormalized < 40) {
     console.log(`⚡ DURABILITY: ${playerName}: ${(weightedAvailability * 100).toFixed(1)}% availability → ${finalScore.toFixed(1)}/100 points`);
-    console.log(`⚡   Breakdown: Availability(${availabilityScore.toFixed(1)}) + Consistency(${consistencyScore.toFixed(1)}) = ${finalScore.toFixed(1)}`);
+    console.log(`⚡   Components: Availability(${availabilityNormalized.toFixed(1)}) + Consistency(${consistencyNormalized.toFixed(1)})`);
+    console.log(`⚡   Weights: Availability(${durabilityWeights.availability}%) + Consistency(${durabilityWeights.consistency}%)`);
   }
 
   return finalScore;

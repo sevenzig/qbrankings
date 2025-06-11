@@ -11,7 +11,7 @@ import {
 
 
 
-export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 65, playoff: 35 }, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, includePlayoffs = true, include2024Only = false) => {
+export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 65, playoff: 35 }, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, includePlayoffs = true, include2024Only = false, efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 }, protectionWeights = { sackPct: 60, turnoverRate: 40 }, volumeWeights = { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, durabilityWeights = { availability: 75, consistency: 25 }) => {
   // Create season data structure for enhanced calculations
   const qbSeasonData = {
     years: {}
@@ -69,13 +69,13 @@ export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, wea
   const teamScore = calculateTeamScore(qbSeasonData, teamWeights, teamSettings);
   
   // Calculate Stats Score using season data
-  const statsScore = calculateStatsScore(qbSeasonData, statsWeights, includePlayoffs, include2024Only);
+  const statsScore = calculateStatsScore(qbSeasonData, statsWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights);
   
   // Calculate Clutch Score
   const clutchScore = calculateClutchScore(qbSeasonData, includePlayoffs, clutchWeights, include2024Only);
   
   // Calculate Durability Score
-  const durabilityScore = calculateDurabilityScore(qbSeasonData, includePlayoffs, include2024Only);
+  const durabilityScore = calculateDurabilityScore(qbSeasonData, includePlayoffs, include2024Only, durabilityWeights);
   
   // Calculate Support Score (quality assessment) - pass season data structure for year-specific calculations
   // Add current team and player name to season data for fallback scenarios

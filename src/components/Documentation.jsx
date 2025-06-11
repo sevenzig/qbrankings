@@ -124,9 +124,9 @@ const Documentation = ({ onBack }) => {
                     </p>
                   </div>
                   <div className="bg-white/5 p-3 rounded">
-                    <h4 className="font-bold text-yellow-300">Offensive DVOA Score</h4>
+                    <h4 className="font-bold text-yellow-300">Offensive Output Score</h4>
                     <p className="text-sm text-blue-200 mt-2">
-                      0-15 points. Based on team offensive DVOA performance (Defense-adjusted Value Over Average).
+                      0-15 points. Based on team offensive performance - measuring overall offensive success and efficiency.
                     </p>
                   </div>
                   <div className="bg-white/5 p-3 rounded">
