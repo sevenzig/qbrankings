@@ -156,7 +156,7 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
                   </td>
                   <td className="px-4 py-3 text-center">
                     <div className={`inline-block px-3 py-1 rounded-lg ${getQEIColor(qb.qei)}`}>
-                      <span className="text-xl font-bold">{qb.qei.toFixed(1)}</span>
+                      <span className="text-xl font-bold">{qb.qei.toFixed(2)}</span>
                       <div className="text-xs opacity-75">
                         {getQEILabel(qb.qei)}
                       </div>
