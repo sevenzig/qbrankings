@@ -1,9 +1,8 @@
-// api/s/[id].js - Redirect handler
 import { createClient } from 'redis';
 
-export const config = {
-  runtime: 'nodejs18.x',
-};
+// Configure for Node.js runtime (needed for Redis)
+export const runtime = 'nodejs';
+export const maxDuration = 30;
 
 // Redis client singleton
 let redis = null;
@@ -24,11 +23,11 @@ async function getRedisClient() {
   return redis;
 }
 
-export default async function redirectHandler(req, res) {
-  const { id } = req.query;
+export async function GET(request, { params }) {
+  const { id } = params;
 
   if (!id) {
-    return res.status(404).json({ error: 'Short ID not found' });
+    return Response.json({ error: 'Short ID not found' }, { status: 404 });
   }
 
   try {
@@ -36,17 +35,17 @@ export default async function redirectHandler(req, res) {
     const originalUrl = await client.get(`short:${id}`);
     
     if (!originalUrl) {
-      return res.status(404).json({ error: 'Short URL not found or expired' });
+      return Response.json({ error: 'Short URL not found or expired' }, { status: 404 });
     }
 
     // Optional: Track analytics
     await client.incr(`clicks:${id}`);
 
     // Redirect to original URL
-    return res.redirect(302, originalUrl);
+    return Response.redirect(originalUrl, 302);
 
   } catch (error) {
     console.error('Error redirecting:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return Response.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 

@@ -1,9 +1,8 @@
-// api/shorten.js
 import { createClient } from 'redis';
 
-export const config = {
-  runtime: 'nodejs18.x', // Use Node.js runtime for Redis client compatibility
-};
+// Configure for Node.js runtime (needed for Redis)
+export const runtime = 'nodejs';
+export const maxDuration = 30;
 
 // Redis client singleton
 let redis = null;
@@ -34,16 +33,12 @@ function generateShortId(length = 6) {
   return result;
 }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+export async function POST(request) {
   try {
-    const { url } = req.body;
+    const { url } = await request.json();
     
     if (!url || !url.startsWith('https://qbrankings.vercel.app/')) {
-      return res.status(400).json({ error: 'Invalid URL' });
+      return Response.json({ error: 'Invalid URL' }, { status: 400 });
     }
 
     const client = await getRedisClient();
@@ -63,9 +58,9 @@ export default async function handler(req, res) {
     // Store the mapping with 30 days expiration (2592000 seconds)
     await client.setEx(`short:${shortId}`, 2592000, url);
 
-    const shortUrl = `https://${req.headers.host}/s/${shortId}`;
+    const shortUrl = `https://${request.headers.get('host')}/s/${shortId}`;
     
-    return res.status(200).json({ 
+    return Response.json({ 
       shortUrl, 
       originalUrl: url,
       shortId,
@@ -74,6 +69,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error creating short URL:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return Response.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 
