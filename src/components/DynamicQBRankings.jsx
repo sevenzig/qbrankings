@@ -29,6 +29,7 @@ import WeightControls from './WeightControls.jsx';
 import QBRankingsTable from './QBRankingsTable.jsx';
 import ShareModal from './ShareModal.jsx';
 import { captureTop10QBsScreenshot } from '../utils/screenshotUtils.js';
+import { URLShortener } from '../utils/urlShortener.js';
 
 const DynamicQBRankings = ({ onShowDocumentation }) => {
   const { qbData, loading, error, lastFetch, shouldRefreshData, fetchAllQBData } = useQBData();
@@ -819,11 +820,19 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     return null;
   };
 
-  const generateShareLink = useCallback((fullDetail = false) => {
+  const generateShareLink = useCallback(async (fullDetail = false, useShortening = true) => {
     const baseUrl = window.location.origin + window.location.pathname;
     const encodedSettings = encodeSettings(weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only, fullDetail);
-    const presetParam = currentPreset !== 'custom' ? `&preset=${currentPreset}` : '';
-    return `${baseUrl}?s=${encodedSettings}${presetParam}`;
+    
+    // Use URL shortener utility
+    const result = await URLShortener.generateShareLink(
+      baseUrl, 
+      encodedSettings, 
+      currentPreset,
+      useShortening
+    );
+
+    return result;
   }, [weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only, currentPreset]);
 
   // Helper: Normalize QEI scores so median = 65, with mode-specific scaling
@@ -929,17 +938,41 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
   const handleShare = useCallback(async (shareType = 'quick') => {
     try {
       setIsScreenshotLoading(true);
-      const shareLink = generateShareLink(shareType === 'quick' ? 'quick' : 'full');
       
+      // Generate share link with URL shortening
+      const linkResult = await generateShareLink(
+        shareType === 'full', // fullDetail
+        true // useShortening
+      );
+      
+      if (!linkResult.success) {
+        throw new Error(linkResult.error || 'Failed to generate share link');
+      }
+
       // Take screenshot
       const { blobUrl } = await captureTop10QBsScreenshot(rankedQBs, { includePlayoffs, include2024Only });
+      
       setShareModalScreenshotUrl(blobUrl);
-      setShareModalLink(shareLink);
+      setShareModalLink(linkResult.url);
       setShareModalType(shareType === 'quick' ? 'quick' : 'full');
+      
+      // Store additional info for the modal
+      const modalData = {
+        url: linkResult.url,
+        isShortened: linkResult.isShortened,
+        originalLength: linkResult.originalLength,
+        shortenedLength: linkResult.shortenedLength,
+        expiresIn: linkResult.expiresIn,
+        shareType: shareType,
+      };
+      
+      // You can store this in state if you want to show shortening info in the modal
+      console.log('Share link generated:', modalData);
+      
       setIsShareModalOpen(true);
     } catch (err) {
       console.error('Failed to share:', err);
-      alert('Failed to generate screenshot or copy link.');
+      alert(`Failed to generate ${linkResult?.fallbackUsed ? 'short URL (using full URL instead)' : 'screenshot or link'}.`);
     } finally {
       setIsScreenshotLoading(false);
     }
