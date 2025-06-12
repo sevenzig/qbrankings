@@ -80,7 +80,8 @@ export async function POST(request) {
     // Store the mapping with 30 days expiration (2592000 seconds)
     await client.setEx(`short:${shortId}`, 2592000, url);
 
-    const shortUrl = `https://${request.headers.get('host')}/s/${shortId}`;
+    // Always use www.quarterbackranking.com for short URLs to match where the API is deployed
+    const shortUrl = `https://www.quarterbackranking.com/s/${shortId}`;
     
     return Response.json({ 
       shortUrl, 
