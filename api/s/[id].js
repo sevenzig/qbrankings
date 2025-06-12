@@ -23,32 +23,39 @@ async function getRedisClient() {
   return redis;
 }
 
-export async function GET(request, context) {
-  // Debug logging
+export async function GET(request, { params = {} } = {}) {
   console.log('=== REDIRECT DEBUG ===');
   console.log('Request URL:', request.url);
-  console.log('Context:', JSON.stringify(context));
-  console.log('Context params:', context?.params);
+  console.log('Params object:', JSON.stringify(params, null, 2));
   
-  // Extract ID from URL or context
-  let id;
-  if (context?.params?.id) {
-    id = context.params.id;
-  } else {
-    // Fallback: extract from URL
-    const url = new URL(request.url);
-    const pathParts = url.pathname.split('/');
-    id = pathParts[pathParts.length - 1];
-  }
-  
-  console.log('Extracted ID:', id);
-  console.log('=== END REDIRECT DEBUG ===');
-
-  if (!id) {
-    return Response.json({ error: 'Short ID not found', debug: { url: request.url, context } }, { status: 404 });
-  }
-
   try {
+    // Try to get ID from params first, then fallback to URL parsing
+    let id = params.id;
+    
+    if (!id) {
+      // Fallback: Extract ID from URL path
+      const url = new URL(request.url);
+      const pathParts = url.pathname.split('/').filter(part => part.length > 0);
+      console.log('URL path parts:', pathParts);
+      
+      // Should be ['s', 'shortId'] or ['api', 's', 'shortId']
+      id = pathParts[pathParts.length - 1];
+    }
+    
+    console.log('Final extracted ID:', id);
+    console.log('=== END REDIRECT DEBUG ===');
+
+    if (!id || id === 's') {
+      return Response.json({ 
+        error: 'Short ID not found', 
+        debug: { 
+          url: request.url, 
+          paramsId: params.id,
+          extractedId: id
+        } 
+      }, { status: 404 });
+    }
+
     const client = await getRedisClient();
     const originalUrl = await client.get(`short:${id}`);
     
@@ -56,7 +63,11 @@ export async function GET(request, context) {
     console.log(`Found URL: ${originalUrl}`);
     
     if (!originalUrl) {
-      return Response.json({ error: 'Short URL not found or expired', shortId: id }, { status: 404 });
+      return Response.json({ 
+        error: 'Short URL not found or expired', 
+        shortId: id,
+        redisKey: `short:${id}`
+      }, { status: 404 });
     }
 
     // Optional: Track analytics
@@ -67,11 +78,12 @@ export async function GET(request, context) {
     return Response.redirect(originalUrl, 302);
 
   } catch (error) {
-    console.error('Error redirecting:', error);
+    console.error('Error in redirect handler:', error);
+    console.error('Error stack:', error.stack);
     return Response.json({ 
       error: 'Internal server error', 
-      shortId: id,
-      details: error.message 
+      details: error.message,
+      stack: error.stack 
     }, { status: 500 });
   }
 } 
