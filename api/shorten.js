@@ -35,13 +35,28 @@ function generateShortId(length = 6) {
 
 export async function POST(request) {
   try {
-    const { url } = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (jsonError) {
+      console.error('JSON parsing error:', jsonError);
+      return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+    }
+    
+    const { url } = body;
     
     // Debug logging
+    console.log('=== URL SHORTENING DEBUG ===');
+    console.log('Full request body:', JSON.stringify(body));
     console.log('Received URL:', url);
     console.log('URL type:', typeof url);
-    console.log('Starts with quarterbackranking.com?', url?.startsWith('https://quarterbackranking.com/'));
-    console.log('Starts with www.quarterbackranking.com?', url?.startsWith('https://www.quarterbackranking.com/'));
+    console.log('URL length:', url?.length);
+    if (url) {
+      console.log('First 100 chars:', url.substring(0, 100));
+      console.log('Starts with https://quarterbackranking.com/?', url.startsWith('https://quarterbackranking.com/'));
+      console.log('Starts with https://www.quarterbackranking.com/?', url.startsWith('https://www.quarterbackranking.com/'));
+    }
+    console.log('=== END DEBUG ===');
     
     if (!url || !(url.startsWith('https://quarterbackranking.com/') || url.startsWith('https://www.quarterbackranking.com/'))) {
       console.log('URL validation failed for:', url);
