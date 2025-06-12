@@ -37,8 +37,15 @@ export async function POST(request) {
   try {
     const { url } = await request.json();
     
-    if (!url || !url.startsWith('https://qbrankings.vercel.app/')) {
-      return Response.json({ error: 'Invalid URL' }, { status: 400 });
+    // Debug logging
+    console.log('Received URL:', url);
+    console.log('URL type:', typeof url);
+    console.log('Starts with quarterbackranking.com?', url?.startsWith('https://quarterbackranking.com/'));
+    console.log('Starts with www.quarterbackranking.com?', url?.startsWith('https://www.quarterbackranking.com/'));
+    
+    if (!url || !(url.startsWith('https://quarterbackranking.com/') || url.startsWith('https://www.quarterbackranking.com/'))) {
+      console.log('URL validation failed for:', url);
+      return Response.json({ error: 'Invalid URL', receivedUrl: url }, { status: 400 });
     }
 
     const client = await getRedisClient();
@@ -69,6 +76,10 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Error creating short URL:', error);
-    return Response.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Error details:', error.message, error.stack);
+    return Response.json({ 
+      error: 'Internal server error', 
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined 
+    }, { status: 500 });
   }
 } 
