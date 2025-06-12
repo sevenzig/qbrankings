@@ -1,6 +1,84 @@
 import React, { memo } from 'react';
 import WeightSlider from './WeightSlider.jsx';
 
+// Moved CompactWeightComponent outside of WeightControls to prevent re-renders
+// This is a stable component now, which will fix the slider dragging issue
+const CompactWeightComponent = memo(({ component, value, onChange, className, description, min = "0", max = "100", disabled = false, includePlayoffs }) => {
+  const isDisabled = disabled || (!includePlayoffs && (component === 'playoff' || component === 'playoffBonus'));
+  
+  return (
+    <div className="bg-white/5 rounded-lg p-2">
+      <div className="flex justify-between items-center mb-1">
+        <label className="text-white font-medium text-xs">
+          {component === 'offensiveLine' ? 'O-Line' :
+           component === 'gameWinningDrives' ? 'GWD' :
+           component === 'fourthQuarterComebacks' ? '4QC' :
+           component === 'clutchRate' ? 'Rate' :
+           component === 'playoffBonus' ? 'Playoff' :
+           component === 'anyA' ? 'ANY/A' :
+           component === 'tdPct' ? 'TD%' :
+           component === 'completionPct' ? 'Comp%' :
+           component === 'sackPct' ? 'Sack%' :
+           component === 'turnoverRate' ? 'TO Rate' :
+           component === 'passYards' ? 'Pass Yds' :
+           component === 'passTDs' ? 'Pass TDs' :
+           component === 'rushYards' ? 'Rush Yds' :
+           component === 'rushTDs' ? 'Rush TDs' :
+           component === 'totalAttempts' ? 'Attempts' :
+           component === 'availability' ? 'Available' :
+           component === 'consistency' ? 'Consistent' :
+           component === 'regularSeason' ? 'Regular Season' :
+           component === 'offenseDVOA' ? 'Offensive Output' :
+           component === 'playoff' ? 'Playoffs' :
+           component}
+        </label>
+        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${className}`}>
+          {value}%
+        </span>
+      </div>
+      <div className="flex gap-1 items-center">
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => onChange(component, e.target.value)}
+          disabled={isDisabled}
+          className={`flex-1 h-2 rounded-lg ${
+            isDisabled 
+              ? 'bg-gray-400 cursor-not-allowed opacity-50' 
+              : 'bg-gray-200 cursor-pointer'
+          }`}
+        />
+        <input
+          type="number"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => onChange(component, e.target.value)}
+          disabled={isDisabled}
+          className={`w-12 px-1 py-0.5 border border-white/20 rounded text-xs text-center ${
+            isDisabled 
+              ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
+              : 'bg-white/10 text-white'
+          }`}
+        />
+      </div>
+      {description && (
+        <div className="text-xs text-blue-200 mt-1 opacity-75">
+          {description}
+        </div>
+      )}
+      {!includePlayoffs && (component === 'playoff' || component === 'playoffBonus') && (
+        <div className="text-xs text-orange-300 mt-1 text-center">
+          ⚠️ Disabled (Playoffs off)
+        </div>
+      )}
+    </div>
+  );
+});
+CompactWeightComponent.displayName = 'CompactWeightComponent';
+
 const WeightControls = memo(({ 
   weights, 
   onUpdateWeight, 
@@ -46,8 +124,177 @@ const WeightControls = memo(({
 
   return (
     <div className="space-y-6">
-      {/* Main Weight Sliders */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-stretch">
+      {/* Main Weight Sliders - Different layouts for mobile vs desktop */}
+      
+      {/* Mobile Layout: Stacked with inline sub-components */}
+      <div className="md:hidden space-y-4">
+        {Object.entries(weights).map(([category, value]) => (
+          <div key={category} className="w-full">
+            <WeightSlider
+              category={category}
+              value={value}
+              onUpdateWeight={onUpdateWeight}
+              onShowDetails={category === 'team' ? () => onShowDetails.team() :
+                            category === 'stats' ? () => onShowDetails.stats() :
+                            category === 'clutch' ? () => onShowDetails.clutch() :
+                            category === 'durability' ? () => onShowDetails.durability() :
+                            category === 'support' ? () => onShowDetails.support() :
+                            null}
+              showDetails={showDetails[category]}
+              description={weightDescriptions[category]}
+            />
+
+            {/* Mobile sub-components - directly under each slider */}
+            {category === 'support' && showDetails.support && (
+              <div className="mt-3 bg-white/5 rounded-lg p-3 border border-purple-500/30" onClick={(e) => e.stopPropagation()}>
+                <h5 className="text-purple-200 font-medium mb-2 text-sm">🏟️ Support Components</h5>
+                <div className="space-y-2">
+                  {Object.entries(supportWeights).map(([component, value]) => (
+                    <CompactWeightComponent
+                      key={component}
+                      component={component}
+                      value={value}
+                      onChange={onUpdateSupportWeight}
+                      className="bg-purple-500/30 text-purple-100"
+                      includePlayoffs={includePlayoffs}
+                    />
+                  ))}
+                  <div className="text-center pt-1">
+                    <span className={`text-xs ${Object.values(supportWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
+                      Total: {Object.values(supportWeights).reduce((sum, val) => sum + val, 0)}%
+                    </span>
+                    {Object.values(supportWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                      <button
+                        onClick={onNormalizeSupportWeights}
+                        className="ml-2 bg-purple-500/20 hover:bg-purple-500/30 px-3 py-2 rounded text-purple-200 text-sm font-medium"
+                        title="Normalize"
+                      >
+                        ⚖️ Normalize
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {category === 'team' && showDetails.team && (
+              <div className="mt-3 bg-white/5 rounded-lg p-3 border border-yellow-500/30" onClick={(e) => e.stopPropagation()}>
+                <h5 className="text-yellow-200 font-medium mb-2 text-sm">🏆 Team Components</h5>
+                <div className="space-y-2">
+                  {Object.entries(teamWeights).map(([component, value]) => (
+                    <CompactWeightComponent
+                      key={component}
+                      component={component}
+                      value={value}
+                      onChange={onUpdateTeamWeight}
+                      className={`${(!includePlayoffs && component === 'playoff') ? 'bg-gray-500/30 text-gray-400' : 'bg-yellow-500/30 text-yellow-100'}`}
+                      disabled={!includePlayoffs && component === 'playoff'}
+                      includePlayoffs={includePlayoffs}
+                    />
+                  ))}
+                  <div className="text-center pt-1">
+                    <span className={`text-xs ${Object.values(teamWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
+                      Total: {Object.values(teamWeights).reduce((sum, val) => sum + val, 0)}%
+                    </span>
+                    {Object.values(teamWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                      <button
+                        onClick={onNormalizeTeamWeights}
+                        className="ml-2 bg-yellow-500/20 hover:bg-yellow-500/30 px-3 py-2 rounded text-yellow-200 text-sm font-medium"
+                        title="Normalize"
+                      >
+                        ⚖️ Normalize
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {category === 'clutch' && showDetails.clutch && (
+              <div className="mt-3 bg-white/5 rounded-lg p-3 border border-red-500/30" onClick={(e) => e.stopPropagation()}>
+                <h5 className="text-red-200 font-medium mb-2 text-sm">💎 Clutch Components</h5>
+                <div className="space-y-2">
+                  {Object.entries(clutchWeights).map(([component, value]) => (
+                    <CompactWeightComponent
+                      key={component}
+                      component={component}
+                      value={value}
+                      onChange={onUpdateClutchWeight}
+                      className={`${(!includePlayoffs && component === 'playoffBonus') ? 'bg-gray-500/30 text-gray-400' : 'bg-red-500/30 text-red-100'}`}
+                      disabled={!includePlayoffs && component === 'playoffBonus'}
+                      includePlayoffs={includePlayoffs}
+                    />
+                  ))}
+                  <div className="text-center pt-1">
+                    <span className={`text-xs ${Object.values(clutchWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
+                      Total: {Object.values(clutchWeights).reduce((sum, val) => sum + val, 0)}%
+                    </span>
+                    {Object.values(clutchWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                      <button
+                        onClick={onNormalizeClutchWeights}
+                        className="ml-2 bg-red-500/20 hover:bg-red-500/30 px-3 py-2 rounded text-red-200 text-sm font-medium"
+                        title="Normalize"
+                      >
+                        ⚖️ Normalize
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {category === 'durability' && showDetails.durability && (
+              <div className="mt-3 bg-white/5 rounded-lg p-3 border border-orange-500/30" onClick={(e) => e.stopPropagation()}>
+                <h5 className="text-orange-200 font-medium mb-2 text-sm">⚡ Durability Components</h5>
+                <div className="space-y-2">
+                  {Object.entries(durabilityWeights).map(([component, value]) => (
+                    <CompactWeightComponent
+                      key={component}
+                      component={component}
+                      value={value}
+                      onChange={onUpdateDurabilityWeight}
+                      className="bg-orange-500/30 text-orange-100"
+                      includePlayoffs={includePlayoffs}
+                    />
+                  ))}
+                  <div className="text-center pt-1">
+                    <span className={`text-xs ${Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
+                      Total: {Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0)}%
+                    </span>
+                    {Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                      <button
+                        onClick={onNormalizeDurabilityWeights}
+                        className="ml-2 bg-orange-500/20 hover:bg-orange-500/30 px-3 py-2 rounded text-orange-200 text-sm font-medium"
+                        title="Normalize"
+                      >
+                        ⚖️ Normalize
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+        
+        <div className="text-center space-y-2">
+          <span className={`text-lg font-bold ${totalWeight === 100 ? 'text-green-400' : 'text-red-400'}`}>
+            Total Weight: {totalWeight}%
+          </span>
+          {totalWeight !== 100 && (
+            <button
+              onClick={onNormalizeWeights}
+              className="bg-blue-500/20 hover:bg-blue-500/30 px-6 py-3 rounded-lg text-blue-200 hover:text-white transition-colors text-base font-medium"
+              title="Adjust all weights proportionally to total exactly 100%"
+            >
+              ⚖️ Normalize to 100%
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Desktop Layout: Grid */}
+      <div className="hidden md:grid grid-cols-1 md:grid-cols-5 gap-4 items-stretch">
         {Object.entries(weights).map(([category, value]) => (
           <WeightSlider
             key={category}

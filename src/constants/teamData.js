@@ -47,32 +47,126 @@ export const TEAM_MAP = {
 export const PHILOSOPHY_PRESETS = {
   default: {
     team: 35, stats: 35, clutch: 5, durability: 10, support: 15,
-    description: "Balanced default configuration with equal team/stats emphasis"
+    description: "Balanced default configuration with equal team/stats emphasis",
+    // Sub-component weights for default preset
+    supportWeights: {
+      offensiveLine: 34,
+      weapons: 33,
+      defense: 33
+    },
+    statsWeights: {
+      efficiency: 34,
+      protection: 33,
+      volume: 33
+    },
+    teamWeights: {
+      regularSeason: 50,
+      offenseDVOA: 50,
+      playoff: 0
+    },
+    clutchWeights: {
+      gameWinningDrives: 25,
+      fourthQuarterComebacks: 25,
+      clutchRate: 25,
+      playoffBonus: 25
+    },
+    durabilityWeights: {
+      availability: 50,
+      consistency: 50
+    }
   },
   
   winner: {
     team: 65, stats: 25, clutch: 5, durability: 5, support: 0,
-    description: "Winning is everything - team success dominates (NEW: Enhanced playoff round weighting)"
+    description: "Winning is everything - team success dominates",
+    // Sub-component weights for winner preset
+    supportWeights: {
+      offensiveLine: 0,
+      weapons: 0,
+      defense: 0
+    },
+    statsWeights: {
+      efficiency: 40,
+      protection: 30,
+      volume: 30
+    },
+    teamWeights: {
+      regularSeason: 40,
+      offenseDVOA: 30,
+      playoff: 30
+    },
+    clutchWeights: {
+      gameWinningDrives: 30,
+      fourthQuarterComebacks: 20,
+      clutchRate: 20,
+      playoffBonus: 30
+    },
+    durabilityWeights: {
+      availability: 60,
+      consistency: 40
+    }
   },
   
   analyst: {
     team: 10, stats: 75, clutch: 5, durability: 5, support: 5,
-    description: "Numbers don't lie - statistical excellence"
-  },
-  
-  clutch: {
-    team: 25, stats: 40, clutch: 15, durability: 5, support: 15,
-    description: "Pressure makes diamonds - big moments matter most"
-  },
-  
-  balanced: {
-    team: 35, stats: 40, clutch: 5, durability: 5, support: 15,
-    description: "Well-rounded evaluation of all factors"
+    description: "Numbers don't lie - statistical excellence",
+    // Sub-component weights for analyst preset
+    supportWeights: {
+      offensiveLine: 34,
+      weapons: 33,
+      defense: 33
+    },
+    statsWeights: {
+      efficiency: 45,
+      protection: 35,
+      volume: 20
+    },
+    teamWeights: {
+      regularSeason: 30,
+      offenseDVOA: 70,
+      playoff: 0
+    },
+    clutchWeights: {
+      gameWinningDrives: 25,
+      fourthQuarterComebacks: 25,
+      clutchRate: 25,
+      playoffBonus: 25
+    },
+    durabilityWeights: {
+      availability: 40,
+      consistency: 60
+    }
   },
   
   context: {
     team: 25, stats: 35, clutch: 5, durability: 5, support: 30,
-    description: "Context matters - extra credit for difficult situations"
+    description: "Context matters - extra credit for difficult situations",
+    // Sub-component weights for context preset
+    supportWeights: {
+      offensiveLine: 40,
+      weapons: 35,
+      defense: 25
+    },
+    statsWeights: {
+      efficiency: 40,
+      protection: 35,
+      volume: 25
+    },
+    teamWeights: {
+      regularSeason: 40,
+      offenseDVOA: 40,
+      playoff: 20
+    },
+    clutchWeights: {
+      gameWinningDrives: 25,
+      fourthQuarterComebacks: 25,
+      clutchRate: 25,
+      playoffBonus: 25
+    },
+    durabilityWeights: {
+      availability: 50,
+      consistency: 50
+    }
   }
 };
 

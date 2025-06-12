@@ -499,11 +499,11 @@ export const calculateSupportScore = (qbSeasonData, supportWeights = { offensive
         teamsThisYear = [seasonData.Team];
       }
       
-      // Check if QB played meaningful games this season (minimum 4 games started)
+      // Check if QB played meaningful games this season (minimum 1 game started for 2024-only mode, 4 otherwise)
       const gamesStarted = seasonData.GS || seasonData.gamesStarted || 0;
       
       // Calculate support for each team played for in this year
-      if (teamsThisYear.length > 0 && gamesStarted >= 4) {
+      if (teamsThisYear.length > 0 && ((include2024Only && yearNum === 2024 && gamesStarted >= 1) || (!include2024Only && gamesStarted >= 4))) {
         // For multi-team seasons, we could weight by games played, but for simplicity
         // we'll average the support scores of all teams played for in that year
         const yearSupportScores = teamsThisYear.map(team => calculateWeightedSupportScore(team, yearNum, supportWeights));
@@ -567,15 +567,20 @@ export const calculateSupportScore = (qbSeasonData, supportWeights = { offensive
   }
   
   const weightedSupportQuality = redistributedTotalWeight > 0 ? redistributedWeightedSupport / redistributedTotalWeight : 50;
-   
-  // INVERTED LOGIC: Better supporting cast = Higher quality score
-  // Scale from 0-100 where higher score = better supporting cast
-  // Teams with GOOD support (high weightedSupportQuality) should get HIGH scores
-  // Teams with POOR support (low weightedSupportQuality) should get LOW scores
-   
-  // Direct scaling: excellent support = high score, poor support = low score
-  const supportQualityScore = Math.max(0, weightedSupportQuality);
-   
+  
+  // SYMMETRIC NORMALIZATION: Center around league average (50)
+  // This ensures that good and poor support have equal impact on the final score
+  const leagueAverage = 50;
+  const supportDifference = weightedSupportQuality - leagueAverage;
+  
+  // Scale the difference to create a symmetric effect
+  // Maximum adjustment is ±25 points (half of the 0-100 scale)
+  const maxAdjustment = 25;
+  const normalizedDifference = Math.max(-maxAdjustment, Math.min(maxAdjustment, supportDifference));
+  
+  // Calculate final support score (centered around 50)
+  const supportQualityScore = leagueAverage + normalizedDifference;
+  
   // Enhanced debug for multi-team QBs or significant cases
   const playerName = qbSeasonData.name || qbSeasonData.Player || 'Unknown';
   const hasMultipleTeams = seasonTeams.some(s => s.teams.length > 1);
@@ -596,7 +601,7 @@ export const calculateSupportScore = (qbSeasonData, supportWeights = { offensive
     const hasLimitedData = seasonTeams.length <= 1;
     const dataQuality = hasLimitedData ? ' [LIMITED DATA]' : '';
     
-    console.log(`🏟️ SUPPORT ${playerName}: [${debugBreakdown.join(', ')}] -> Weighted(${weightedSupportQuality.toFixed(1)}) - ${supportLevel} -> Quality Score(${supportQualityScore.toFixed(1)})${weightRedistribution}${dataQuality}`);
+    console.log(`🏟️ SUPPORT ${playerName}: [${debugBreakdown.join(', ')}] -> Raw(${weightedSupportQuality.toFixed(1)}) - ${supportLevel} -> Normalized(${supportQualityScore.toFixed(1)})${weightRedistribution}${dataQuality}`);
     
     // Show detailed breakdown for all debugged QBs
     if (seasonTeams.length > 0) {
@@ -616,6 +621,6 @@ export const calculateSupportScore = (qbSeasonData, supportWeights = { offensive
       console.log(`  No valid season data found for ${playerName}`);
     }
   }
-   
+  
   return supportQualityScore;
 }; 

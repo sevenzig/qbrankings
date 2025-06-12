@@ -130,12 +130,15 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
     const regSeasonFumbles = parseInt(data.Fumbles) || 0;
     
     // Skip seasons with insufficient data - use different thresholds for 2024 vs previous years
-    if (year === '2024') {
-      // For 2024: Use minimum attempts requirement (very lenient for rookies/backup roles)
-      if (regSeasonAtts < 50) return; // Minimum 50 attempts for 2024 (roughly 3-4 games as starter)
+    if (year === '2024' && include2024Only) {
+      // For 2024-only mode: allow any QB with at least 1 attempt
+      if (regSeasonAtts < 1) return;
+    } else if (year === '2024') {
+      // For 2024 in multi-year mode: keep the 50 attempt threshold
+      if (regSeasonAtts < 50) return;
     } else {
       // For 2022/2023: Use more lenient threshold to account for historical data
-      if (regSeasonAtts < 100) return; // Minimum 100 attempts for previous years
+      if (regSeasonAtts < 100) return;
     }
     
     // Calculate regular season statistical rates

@@ -1,9 +1,17 @@
 // Export all scoring categories
-export { calculateTeamScore } from './teamScore.js';
-export { calculateStatsScore } from './statsScore.js';
-export { calculateClutchScore } from './clutchScore.js';
-export { calculateDurabilityScore } from './durabilityScore.js';
-export { calculateSupportScore } from './supportScore.js';
+import { calculateTeamScore } from './teamScore.js';
+import { calculateStatsScore } from './statsScore.js';
+import { calculateSupportScore } from './supportScore.js';
+import { calculateClutchScore } from './clutchScore.js';
+import { calculateDurabilityScore } from './durabilityScore.js';
 
 // Export shared constants
-export { SCALING_RANGES, PERFORMANCE_YEAR_WEIGHTS, STABILITY_YEAR_WEIGHTS } from './constants.js'; 
+export { SCALING_RANGES, PERFORMANCE_YEAR_WEIGHTS, STABILITY_YEAR_WEIGHTS } from './constants.js';
+
+export {
+  calculateTeamScore,
+  calculateStatsScore,
+  calculateSupportScore,
+  calculateClutchScore,
+  calculateDurabilityScore
+}; 

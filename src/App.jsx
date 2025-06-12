@@ -12,7 +12,11 @@ function App() {
     return <Documentation onBack={showRankings} />;
   }
 
-  return <DynamicQBRankings onShowDocumentation={showDocumentation} />;
+  return (
+    <div>
+      <DynamicQBRankings onShowDocumentation={showDocumentation} />
+    </div>
+  );
 }
 
 export default App

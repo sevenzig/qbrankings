@@ -27,6 +27,8 @@ import {
 import GlobalSettings from './GlobalSettings.jsx';
 import WeightControls from './WeightControls.jsx';
 import QBRankingsTable from './QBRankingsTable.jsx';
+import ShareModal from './ShareModal.jsx';
+import { captureTop10QBsScreenshot } from '../utils/screenshotUtils.js';
 
 const DynamicQBRankings = ({ onShowDocumentation }) => {
   const { qbData, loading, error, lastFetch, shouldRefreshData, fetchAllQBData } = useQBData();
@@ -76,7 +78,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
   const [teamWeights, setTeamWeights] = useState({
     regularSeason: 50,   // Regular season win percentage
     offenseDVOA: 50,     // Offensive output performance
-    playoff: 0         // Career playoff achievement score (disabled by default)
+    playoff: 0           // Career playoff achievement score (disabled by default)
   });
   const [showTeamDetails, setShowTeamDetails] = useState(false);
   const [clutchWeights, setClutchWeights] = useState({
@@ -241,66 +243,33 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     const preset = PHILOSOPHY_PRESETS[presetName];
     if (!preset) return;
     
-    // Extract only the weight categories, exclude the description
-    const { description, ...weightCategories } = preset;
+    // Extract only the weight categories, exclude the description and sub-component weights
+    const { description, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, ...weightCategories } = preset;
     
     // Use startTransition to batch all state updates for better performance
     startTransition(() => {
       setWeights(weightCategories);
       setCurrentPreset(presetName);
       
-      // Special handling for "default" preset - set all sub-components to balanced values
-      if (presetName === 'default') {
-        // Batch all sub-component weight updates
-        setSupportWeights({
-          offensiveLine: 34,
-          weapons: 33,
-          defense: 33
-        });
-        
-        setStatsWeights({
-          efficiency: 34,
-          protection: 33,
-          volume: 33
-        });
-        
-        // Set sub-component weights for stats categories
-        setEfficiencyWeights({
-          anyA: 45,
-          tdPct: 30,
-          completionPct: 25
-        });
-        
-        setProtectionWeights({
-          sackPct: 60,
-          turnoverRate: 40
-        });
-        
-        setVolumeWeights({
-          passYards: 25,
-          passTDs: 25,
-          rushYards: 20,
-          rushTDs: 15,
-          totalAttempts: 15
-        });
-        
-        setTeamWeights({
-          regularSeason: 50,
-          offenseDVOA: 50,
-          playoff: 0
-        });
-        
-        setClutchWeights({
-          gameWinningDrives: 25,
-          fourthQuarterComebacks: 25,
-          clutchRate: 25,
-          playoffBonus: 25
-        });
-        
-        setDurabilityWeights({
-          availability: 50,
-          consistency: 50
-        });
+      // Apply sub-component weights if they exist in the preset
+      if (supportWeights) {
+        setSupportWeights(supportWeights);
+      }
+      
+      if (statsWeights) {
+        setStatsWeights(statsWeights);
+      }
+      
+      if (teamWeights) {
+        setTeamWeights(teamWeights);
+      }
+      
+      if (clutchWeights) {
+        setClutchWeights(clutchWeights);
+      }
+      
+      if (durabilityWeights) {
+        setDurabilityWeights(durabilityWeights);
       }
     });
   }, []);
@@ -857,25 +826,124 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     return `${baseUrl}?s=${encodedSettings}${presetParam}`;
   }, [weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only, currentPreset]);
 
-  const copyShareLink = useCallback(async (event, fullDetail = false) => {
-    const shareLink = generateShareLink(fullDetail);
+  // Helper: Normalize QEI scores so median = 65, with mode-specific scaling
+  const normalizeQeiScores = useCallback((qeiScores) => {
+    if (!qeiScores || qeiScores.length === 0) return [];
+    const sorted = [...qeiScores].sort((a, b) => a - b);
+    const min = sorted[0];
+    const median = sorted[Math.floor(sorted.length / 2)];
+    
+    // Avoid divide by zero
+    if (sorted.every(score => score === median)) return qeiScores.map(() => 65);
+    
+    // Calculate scaling factors
+    const medianToMinRange = median - min;
+    
+    return qeiScores.map(score => {
+      if (score <= median) {
+        // Scale [min, median] to [0, 65]
+        return medianToMinRange > 0 ? ((score - min) / medianToMinRange) * 65 : 65;
+      } else {
+        // Mode-specific scaling for above-median scores
+        if (include2024Only) {
+          // 2024-only mode: More generous scaling to account for limited data
+          // Each point above median = 1.5 points above 65 (vs 1.0 in 3-year mode)
+          return 65 + ((score - median) * 1.5);
+        } else {
+          // 3-year mode: Standard scaling
+          // Each point above median = 1 point above 65
+          return 65 + (score - median);
+        }
+      }
+    });
+  }, [include2024Only]);
+
+  // Calculate QEI with current weights and dynamic component calculations
+  const rankedQBs = useMemo(() => {
+    // First pass: Calculate all base scores
+    const qbsWithBaseScores = qbData.map(qb => {
+              const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights);
+      return {
+        ...qb,
+        baseScores
+      };
+    });
+    
+    // Extract all base scores for support rebalancing
+    const allQBBaseScores = qbsWithBaseScores.map(qb => qb.baseScores);
+    
+    // Second pass: Calculate raw QEI scores
+    const qbsWithRawQei = qbsWithBaseScores.map(qb => ({
+      ...qb,
+      rawQei: calculateQEI(qb.baseScores, qb, weights, includePlayoffs, allQBBaseScores, include2024Only)
+    }));
+    
+    // Third pass: Normalize QEI scores so top = 100, median = 65, min = 0
+    const rawScores = qbsWithRawQei.map(qb => qb.rawQei);
+    const normalizedScores = normalizeQeiScores(rawScores);
+    
+    // Final pass: Apply normalized scores and sort
+    return qbsWithRawQei
+      .map((qb, index) => ({
+        ...qb,
+        qei: normalizedScores[index]
+      }))
+      .sort((a, b) => b.qei - a.qei);
+  }, [qbData, weights, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights, normalizeQeiScores]);
+
+  const totalWeight = useMemo(() => 
+    Object.values(weights).reduce((a, b) => a + b, 0), 
+    [weights]
+  );
+
+  // Memoized handlers for showing/hiding details
+  const showDetailsHandlers = useMemo(() => ({
+    team: () => setShowTeamDetails(!showTeamDetails),
+    stats: () => setShowStatsDetails(!showStatsDetails),
+    clutch: () => setShowClutchDetails(!showClutchDetails),
+    durability: () => setShowDurabilityDetails(!showDurabilityDetails),
+    support: () => setShowSupportDetails(!showSupportDetails),
+    efficiency: () => setShowEfficiencyDetails(!showEfficiencyDetails),
+    protection: () => setShowProtectionDetails(!showProtectionDetails),
+    volume: () => setShowVolumeDetails(!showVolumeDetails)
+  }), [showTeamDetails, showStatsDetails, showClutchDetails, showDurabilityDetails, showSupportDetails, showEfficiencyDetails, showProtectionDetails, showVolumeDetails]);
+
+  const showDetailsState = useMemo(() => ({
+    team: showTeamDetails,
+    stats: showStatsDetails,
+    clutch: showClutchDetails,
+    durability: showDurabilityDetails,
+    support: showSupportDetails,
+    efficiency: showEfficiencyDetails,
+    protection: showProtectionDetails,
+    volume: showVolumeDetails
+  }), [showTeamDetails, showStatsDetails, showClutchDetails, showDurabilityDetails, showSupportDetails, showEfficiencyDetails, showProtectionDetails, showVolumeDetails]);
+
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareModalScreenshotUrl, setShareModalScreenshotUrl] = useState(null);
+  const [shareModalLink, setShareModalLink] = useState('');
+  const [shareModalType, setShareModalType] = useState('quick');
+  const [isScreenshotLoading, setIsScreenshotLoading] = useState(false);
+
+  // Share functionality
+  const handleShare = useCallback(async (shareType = 'quick') => {
     try {
-      await navigator.clipboard.writeText(shareLink);
-      // Show temporary success message on the clicked button
-      const button = event ? event.target : document.getElementById('share-button');
-      const originalText = button.textContent;
-      button.textContent = '✅ Copied!';
-      button.className = button.className.replace('bg-blue-500/20 hover:bg-blue-500/30', 'bg-green-500/20 hover:bg-green-500/30').replace('bg-purple-500/20 hover:bg-purple-500/30', 'bg-green-500/20 hover:bg-green-500/30');
-      setTimeout(() => {
-        button.textContent = originalText;
-        button.className = button.className.replace('bg-green-500/20 hover:bg-green-500/30', 'bg-blue-500/20 hover:bg-blue-500/30').replace('bg-green-500/20 hover:bg-green-500/30', 'bg-purple-500/20 hover:bg-purple-500/30');
-      }, 2000);
+      setIsScreenshotLoading(true);
+      const shareLink = generateShareLink(shareType === 'quick' ? 'quick' : 'full');
+      
+      // Take screenshot
+      const { blobUrl } = await captureTop10QBsScreenshot(rankedQBs, { includePlayoffs, include2024Only });
+      setShareModalScreenshotUrl(blobUrl);
+      setShareModalLink(shareLink);
+      setShareModalType(shareType === 'quick' ? 'quick' : 'full');
+      setIsShareModalOpen(true);
     } catch (err) {
-      console.error('Failed to copy link:', err);
-      // Fallback: show the link in a prompt
-      prompt('Copy this link to share your QB philosophy:', shareLink);
+      console.error('Failed to share:', err);
+      alert('Failed to generate screenshot or copy link.');
+    } finally {
+      setIsScreenshotLoading(false);
     }
-  }, [generateShareLink]);
+  }, [generateShareLink, rankedQBs, includePlayoffs, include2024Only]);
 
   const scrollToTop = useCallback(() => {
     window.scrollTo({
@@ -985,21 +1053,12 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     }
   }, []); // Only run once on mount - removed problematic dependency
 
-  // Auto-adjust team weights when playoff toggle changes
+  // Effect to automatically adjust team weights when playoff toggle changes
   useEffect(() => {
-    if (!includePlayoffs) {
-      setTeamWeights({
-        regularSeason: 85,
-        offenseDVOA: 15,
-        playoff: 0
-      });
+    if (includePlayoffs) {
+      setTeamWeights({ regularSeason: 33, offenseDVOA: 33, playoff: 34 });
     } else {
-      // When playoffs are re-enabled, restore to balanced split
-      setTeamWeights({
-        regularSeason: 50,
-        offenseDVOA: 15,
-        playoff: 35
-      });
+      setTeamWeights({ regularSeason: 50, offenseDVOA: 50, playoff: 0 });
     }
   }, [includePlayoffs]);
 
@@ -1009,57 +1068,6 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
       fetchAllQBData(include2024Only);
     }
   }, [include2024Only]); // Removed fetchAllQBData dependency to prevent infinite loop
-
-  // Calculate QEI with current weights and dynamic component calculations
-  const rankedQBs = useMemo(() => {
-    // First pass: Calculate all base scores
-    const qbsWithBaseScores = qbData.map(qb => {
-              const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights);
-      return {
-        ...qb,
-        baseScores
-      };
-    });
-    
-    // Extract all base scores for support rebalancing
-    const allQBBaseScores = qbsWithBaseScores.map(qb => qb.baseScores);
-    
-    // Second pass: Calculate QEI with support rebalancing
-    return qbsWithBaseScores
-      .map(qb => ({
-        ...qb,
-        qei: calculateQEI(qb.baseScores, qb, weights, includePlayoffs, allQBBaseScores, include2024Only)
-      }))
-      .sort((a, b) => b.qei - a.qei);
-  }, [qbData, weights, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights]); // Added missing durabilityWeights dependency
-
-  const totalWeight = useMemo(() => 
-    Object.values(weights).reduce((a, b) => a + b, 0), 
-    [weights]
-  );
-
-  // Memoized handlers for showing/hiding details
-  const showDetailsHandlers = useMemo(() => ({
-    team: () => setShowTeamDetails(!showTeamDetails),
-    stats: () => setShowStatsDetails(!showStatsDetails),
-    clutch: () => setShowClutchDetails(!showClutchDetails),
-    durability: () => setShowDurabilityDetails(!showDurabilityDetails),
-    support: () => setShowSupportDetails(!showSupportDetails),
-    efficiency: () => setShowEfficiencyDetails(!showEfficiencyDetails),
-    protection: () => setShowProtectionDetails(!showProtectionDetails),
-    volume: () => setShowVolumeDetails(!showVolumeDetails)
-  }), [showTeamDetails, showStatsDetails, showClutchDetails, showDurabilityDetails, showSupportDetails, showEfficiencyDetails, showProtectionDetails, showVolumeDetails]);
-
-  const showDetailsState = useMemo(() => ({
-    team: showTeamDetails,
-    stats: showStatsDetails,
-    clutch: showClutchDetails,
-    durability: showDurabilityDetails,
-    support: showSupportDetails,
-    efficiency: showEfficiencyDetails,
-    protection: showProtectionDetails,
-    volume: showVolumeDetails
-  }), [showTeamDetails, showStatsDetails, showClutchDetails, showDurabilityDetails, showSupportDetails, showEfficiencyDetails, showProtectionDetails, showVolumeDetails]);
 
   if (loading) {
     return (
@@ -1131,18 +1139,6 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
               className="px-4 py-2 rounded-lg font-medium transition-colors bg-green-600/20 hover:bg-green-600/30 text-green-200"
             >
               📊 Analyst
-            </button>
-            <button
-              onClick={() => applyPreset('clutch')}
-              className="px-4 py-2 rounded-lg font-medium transition-colors bg-red-600/20 hover:bg-red-600/30 text-red-200"
-            >
-              💎 Clutch
-            </button>
-            <button
-              onClick={() => applyPreset('balanced')}
-              className="px-4 py-2 rounded-lg font-medium transition-colors bg-blue-600/20 hover:bg-blue-600/30 text-blue-200"
-            >
-              ⚖️ Balanced
             </button>
             <button
               onClick={() => applyPreset('context')}
@@ -1250,16 +1246,18 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
           <div className="flex flex-wrap justify-center gap-3 mb-2">
             <button 
               id="share-button-top"
-              onClick={(e) => copyShareLink(e, false)}
+              onClick={() => handleShare('quick')}
               className="bg-blue-500/20 hover:bg-blue-500/30 px-6 py-3 rounded-lg font-bold transition-colors text-white"
+              disabled={isScreenshotLoading}
             >
-              🔗 Quick Share
+              {isScreenshotLoading ? '⏳ Generating...' : '🔗 Quick Share'}
             </button>
             <button 
-              onClick={(e) => copyShareLink(e, true)}
+              onClick={() => handleShare('full')}
               className="bg-purple-500/20 hover:bg-purple-500/30 px-6 py-3 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
+              disabled={isScreenshotLoading}
             >
-              📋 Full Detail Share
+              {isScreenshotLoading ? '⏳ Generating...' : '📋 Full Detail Share'}
             </button>
           </div>
           <p className="text-xs text-blue-400">
@@ -1288,16 +1286,18 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
             <div className="flex flex-wrap justify-center gap-3 mb-2">
               <button 
                 id="share-button"
-                onClick={(e) => copyShareLink(e, false)}
+                onClick={() => handleShare('quick')}
                 className="bg-blue-500/20 hover:bg-blue-500/30 px-5 py-2 rounded-lg font-bold transition-colors"
+                disabled={isScreenshotLoading}
               >
-                🔗 Quick Share
+                {isScreenshotLoading ? '⏳ Generating...' : '🔗 Quick Share'}
               </button>
               <button 
-                onClick={(e) => copyShareLink(e, true)}
+                onClick={() => handleShare('full')}
                 className="bg-purple-500/20 hover:bg-purple-500/30 px-5 py-2 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
+                disabled={isScreenshotLoading}
               >
-                📋 Full Detail Share
+                {isScreenshotLoading ? '⏳ Generating...' : '📋 Full Detail Share'}
               </button>
             </div>
             <p className="text-xs text-blue-400">
@@ -1331,6 +1331,20 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
           </svg>
         </button>
       )}
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => {
+          setIsShareModalOpen(false);
+          setShareModalScreenshotUrl(null);
+          setShareModalLink('');
+          setShareModalType('quick');
+        }}
+        screenshotUrl={shareModalScreenshotUrl}
+        shareLink={shareModalLink}
+        shareType={shareModalType}
+      />
     </div>
   );
 };

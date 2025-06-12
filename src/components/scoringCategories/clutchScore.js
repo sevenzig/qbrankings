@@ -62,7 +62,9 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
   
   Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
     const weight = yearWeights[year] || 0;
-    if (weight === 0 || !data.GWD || !data['4QC']) return;
+    const gamesPlayed = parseInt(data.G) || 0;
+    if (weight === 0 || (!data.GWD && !data['4QC'])) return;
+    if (include2024Only && year === '2024' && gamesPlayed < 1) return;
     
     // Regular season clutch stats only for base calculation
     const seasonGWD = parseInt(data.GWD) || 0;
