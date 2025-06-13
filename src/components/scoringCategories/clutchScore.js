@@ -40,8 +40,21 @@ const calculatePlayoffClutchMultiplier = (playoffData, team, year) => {
   return gameCount > 0 ? totalMultiplier / gameCount : 1.06;
 };
 
+// Helper function for percentile-based scoring
+const calculatePercentileScore = (value, allValues, inverted = false) => {
+  if (!allValues || allValues.length === 0) return 50; // Default to league average
+  
+  const validValues = allValues.filter(v => v !== null && !isNaN(v) && isFinite(v));
+  if (validValues.length < 2) return 50;
+  
+  const sorted = [...validValues].sort((a, b) => inverted ? b - a : a - b);
+  const rank = sorted.findIndex(v => inverted ? v <= value : v >= value) + 1;
+  const percentile = (rank / sorted.length) * 100;
+  return Math.max(0, Math.min(100, percentile));
+};
+
 // Enhanced Clutch Performance Score with playoff integration (0-100)
-export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, include2024Only = false) => {
+export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, include2024Only = false, allQBData = []) => {
   let totalGWD = 0;
   let totalFourthQC = 0;
   let totalGames = 0;
@@ -131,9 +144,9 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
           };
           
           if (knownSuperBowlWins[data.Team] && knownSuperBowlWins[data.Team].includes(parseInt(year))) {
-            roundImportanceBonus = include2024Only ? 1.40 : 1.10; // ENHANCED 40% bonus for SB wins in 2024-only mode
+            roundImportanceBonus = 1.10; // Consistent across both modes
           } else if (playoffWins >= 2) {
-            roundImportanceBonus = include2024Only ? 1.25 : 1.05; // Enhanced 25% bonus for deep playoff runs in 2024-only mode
+            roundImportanceBonus = 1.05; // Consistent across both modes
           }
         }
         
@@ -165,12 +178,84 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
   const comebacksPerGame = totalFourthQC / totalGames;
   const totalClutchPerGame = gwdPerGame + comebacksPerGame;
 
-  // CONTEXT-AWARE CLUTCH COMPONENT SCALING - Normalized to 0-100 base scoring
-  // Calculate individual normalized scores (0-100 scale) for each clutch metric
-  const gwdNormalized = Math.max(0, Math.min(100, gwdPerGame * 300)); // 0-100 scale for GWD (0.33/game gives 100 points)
-  const comebackNormalized = Math.max(0, Math.min(100, comebacksPerGame * 400)); // 0-100 scale for 4QC (0.25/game gives 100 points)
-  const clutchRateNormalized = Math.max(0, Math.min(100, totalClutchPerGame * 200)); // 0-100 scale for combined rate
-  const playoffBonusNormalized = Math.max(0, Math.min(100, (totalGWD + totalFourthQC) * 10 * playoffAdjustmentFactor)); // 0-100 scale for playoff bonus
+  // RELATIVE PERCENTILE-BASED CLUTCH SCORING - Following normalization rules
+  // Step 1: Calculate metrics for all QBs to establish distributions
+  const allGWDRates = allQBData.map(qb => {
+    if (!qb.years) return 0;
+    const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+    let gwdSum = 0, gamesSum = 0, weightSum = 0;
+    
+    Object.entries(qb.years).forEach(([year, data]) => {
+      const weight = yearWeights[year] || 0;
+      if (weight === 0 || !data.GWD) return;
+      const gwd = parseInt(data.GWD) || 0;
+      const games = parseInt(data.G) || 17;
+      gwdSum += gwd * weight;
+      gamesSum += games * weight;
+      weightSum += weight;
+    });
+    
+    return weightSum > 0 ? (gwdSum / weightSum) / (gamesSum / weightSum) : 0;
+  }).filter(v => !isNaN(v) && isFinite(v));
+
+  const allFourthQCRates = allQBData.map(qb => {
+    if (!qb.years) return 0;
+    const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+    let qcSum = 0, gamesSum = 0, weightSum = 0;
+    
+    Object.entries(qb.years).forEach(([year, data]) => {
+      const weight = yearWeights[year] || 0;
+      if (weight === 0 || !data['4QC']) return;
+      const qc = parseInt(data['4QC']) || 0;
+      const games = parseInt(data.G) || 17;
+      qcSum += qc * weight;
+      gamesSum += games * weight;
+      weightSum += weight;
+    });
+    
+    return weightSum > 0 ? (qcSum / weightSum) / (gamesSum / weightSum) : 0;
+  }).filter(v => !isNaN(v) && isFinite(v));
+
+  const allClutchRates = allQBData.map(qb => {
+    if (!qb.years) return 0;
+    const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+    let totalClutch = 0, gamesSum = 0, weightSum = 0;
+    
+    Object.entries(qb.years).forEach(([year, data]) => {
+      const weight = yearWeights[year] || 0;
+      if (weight === 0 || (!data.GWD && !data['4QC'])) return;
+      const gwd = parseInt(data.GWD) || 0;
+      const qc = parseInt(data['4QC']) || 0;
+      const games = parseInt(data.G) || 17;
+      totalClutch += (gwd + qc) * weight;
+      gamesSum += games * weight;
+      weightSum += weight;
+    });
+    
+    return weightSum > 0 ? (totalClutch / weightSum) / (gamesSum / weightSum) : 0;
+  }).filter(v => !isNaN(v) && isFinite(v));
+
+  const allPlayoffAdjustments = allQBData.map(qb => {
+    if (!qb.years || !includePlayoffs) return 1.0;
+    // Calculate playoff adjustment factor for each QB (simplified)
+    let adjustmentSum = 0, weightSum = 0;
+    const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+    
+    Object.entries(qb.years).forEach(([year, data]) => {
+      const weight = yearWeights[year] || 0;
+      if (weight === 0 || !data.playoffData) return;
+      adjustmentSum += weight; // Basic playoff participation bonus
+      weightSum += weight;
+    });
+    
+    return weightSum > 0 ? 1.0 + (adjustmentSum * 0.1) : 1.0; // Small playoff bonus
+  }).filter(v => !isNaN(v) && isFinite(v));
+
+  // Step 2: Score current QB relative to all others using percentiles
+  const gwdNormalized = calculatePercentileScore(gwdPerGame, allGWDRates);
+  const comebackNormalized = calculatePercentileScore(comebacksPerGame, allFourthQCRates);
+  const clutchRateNormalized = calculatePercentileScore(totalClutchPerGame, allClutchRates);
+  const playoffBonusNormalized = calculatePercentileScore(playoffAdjustmentFactor, allPlayoffAdjustments);
   
   // Calculate weighted average of normalized scores using sub-component weights
   // This ensures that regardless of weight distribution, elite performance can reach ~100 points
@@ -188,10 +273,10 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
   const finalScore = clutchCompositeScore;
 
   if (debugMode && playerName) {
-    console.log(`💎 CONTEXT-AWARE CLUTCH FINAL: ${finalScore.toFixed(1)}/100`);
-    console.log(`💎 Components: GWD(${gwdNormalized.toFixed(1)}) + 4QC(${comebackNormalized.toFixed(1)}) + Rate(${clutchRateNormalized.toFixed(1)}) + PlayoffBonus(${playoffBonusNormalized.toFixed(1)})`);
+    console.log(`💎 RELATIVE CLUTCH FINAL: ${finalScore.toFixed(1)}/100`);
+    console.log(`💎 Percentile Scores: GWD(${gwdNormalized.toFixed(1)}) + 4QC(${comebackNormalized.toFixed(1)}) + Rate(${clutchRateNormalized.toFixed(1)}) + PlayoffBonus(${playoffBonusNormalized.toFixed(1)})`);
     console.log(`💎 Weights: GWD(${clutchWeights.gameWinningDrives}%) + 4QC(${clutchWeights.fourthQuarterComebacks}%) + Rate(${clutchWeights.clutchRate}%) + Playoff(${clutchWeights.playoffBonus}%)`);
-    console.log(`💎 Rates: ${gwdPerGame.toFixed(3)} GWD/game, ${comebacksPerGame.toFixed(3)} 4QC/game over ${totalGames.toFixed(1)} weighted games`);
+    console.log(`💎 Raw Rates: ${gwdPerGame.toFixed(3)} GWD/game, ${comebacksPerGame.toFixed(3)} 4QC/game (relative to ${allGWDRates.length} QBs)`);
   }
 
   return finalScore;

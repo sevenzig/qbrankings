@@ -117,7 +117,7 @@ const WeightControls = memo(({
   const weightDescriptions = {
     team: 'Win-loss record, playoff success (NEW: Round-specific weighting)',
     stats: 'ANY/A, success rate, production (NEW: Playoff stat bonuses)',
-    clutch: 'Game-winning drives, 4QC (NEW: Round-specific multipliers)',
+    clutch: 'Coming soon: 3rd & 4th down splits, GWD, & 4QC',
     durability: 'Games started, consistency',
     support: 'Extra credit for poor supporting cast'
   };
@@ -134,6 +134,7 @@ const WeightControls = memo(({
               category={category}
               value={value}
               onUpdateWeight={onUpdateWeight}
+              disabled={category === 'clutch'}
               onShowDetails={category === 'team' ? () => onShowDetails.team() :
                             category === 'stats' ? () => onShowDetails.stats() :
                             category === 'clutch' ? () => onShowDetails.clutch() :
@@ -211,28 +212,94 @@ const WeightControls = memo(({
             )}
 
             {category === 'clutch' && showDetails.clutch && (
-              <div className="mt-3 bg-white/5 rounded-lg p-3 border border-red-500/30" onClick={(e) => e.stopPropagation()}>
-                <h5 className="text-red-200 font-medium mb-2 text-sm">💎 Clutch Components</h5>
+              <div className="mt-3 bg-gray-500/10 rounded-lg p-3 border border-gray-500/30 opacity-60" onClick={(e) => e.stopPropagation()}>
+                <h5 className="text-gray-400 font-medium mb-2 text-sm">💎 Clutch Components</h5>
+                <div className="text-center text-gray-400 text-sm py-4">
+                  Coming soon: 3rd & 4th down splits, GWD, & 4QC
+                </div>
+              </div>
+            )}
+
+            {category === 'stats' && showDetails.stats && (
+              <div className="mt-3 bg-white/5 rounded-lg p-3 border border-green-500/30" onClick={(e) => e.stopPropagation()}>
+                <h5 className="text-green-200 font-medium mb-2 text-sm">📊 Stats Components</h5>
                 <div className="space-y-2">
-                  {Object.entries(clutchWeights).map(([component, value]) => (
-                    <CompactWeightComponent
-                      key={component}
-                      component={component}
-                      value={value}
-                      onChange={onUpdateClutchWeight}
-                      className={`${(!includePlayoffs && component === 'playoffBonus') ? 'bg-gray-500/30 text-gray-400' : 'bg-red-500/30 text-red-100'}`}
-                      disabled={!includePlayoffs && component === 'playoffBonus'}
-                      includePlayoffs={includePlayoffs}
-                    />
+                  {Object.entries(statsWeights).map(([component, value]) => (
+                    <div key={component} className="space-y-2">
+                      <CompactWeightComponent
+                        component={component}
+                        value={value}
+                        onChange={onUpdateStatsWeight}
+                        className="bg-green-500/30 text-green-100"
+                        includePlayoffs={includePlayoffs}
+                      />
+                      
+                      {/* Efficiency sub-components */}
+                      {component === 'efficiency' && showDetails.efficiency && (
+                        <div className="ml-4 mt-2 bg-white/3 rounded-lg p-2 border border-green-400/20">
+                          <h6 className="text-green-300 font-medium mb-1 text-xs">📈 Efficiency Details</h6>
+                          <div className="space-y-1">
+                            {Object.entries(efficiencyWeights).map(([subComponent, subValue]) => (
+                              <CompactWeightComponent
+                                key={subComponent}
+                                component={subComponent}
+                                value={subValue}
+                                onChange={onUpdateEfficiencyWeight}
+                                className="bg-green-600/20 text-green-200"
+                                includePlayoffs={includePlayoffs}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Protection sub-components */}
+                      {component === 'protection' && showDetails.protection && (
+                        <div className="ml-4 mt-2 bg-white/3 rounded-lg p-2 border border-green-400/20">
+                          <h6 className="text-green-300 font-medium mb-1 text-xs">🛡️ Protection Details</h6>
+                          <div className="space-y-1">
+                            {Object.entries(protectionWeights).map(([subComponent, subValue]) => (
+                              <CompactWeightComponent
+                                key={subComponent}
+                                component={subComponent}
+                                value={subValue}
+                                onChange={onUpdateProtectionWeight}
+                                className="bg-green-600/20 text-green-200"
+                                includePlayoffs={includePlayoffs}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Volume sub-components */}
+                      {component === 'volume' && showDetails.volume && (
+                        <div className="ml-4 mt-2 bg-white/3 rounded-lg p-2 border border-green-400/20">
+                          <h6 className="text-green-300 font-medium mb-1 text-xs">📊 Volume Details</h6>
+                          <div className="space-y-1">
+                            {Object.entries(volumeWeights).map(([subComponent, subValue]) => (
+                              <CompactWeightComponent
+                                key={subComponent}
+                                component={subComponent}
+                                value={subValue}
+                                onChange={onUpdateVolumeWeight}
+                                className="bg-green-600/20 text-green-200"
+                                includePlayoffs={includePlayoffs}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   ))}
                   <div className="text-center pt-1">
-                    <span className={`text-xs ${Object.values(clutchWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
-                      Total: {Object.values(clutchWeights).reduce((sum, val) => sum + val, 0)}%
+                    <span className={`text-xs ${Object.values(statsWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
+                      Total: {Object.values(statsWeights).reduce((sum, val) => sum + val, 0)}%
                     </span>
-                    {Object.values(clutchWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
+                    {Object.values(statsWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
                       <button
-                        onClick={onNormalizeClutchWeights}
-                        className="ml-2 bg-red-500/20 hover:bg-red-500/30 px-3 py-2 rounded text-red-200 text-sm font-medium"
+                        onClick={onNormalizeStatsWeights}
+                        className="ml-2 bg-green-500/20 hover:bg-green-500/30 px-3 py-2 rounded text-green-200 text-sm font-medium"
                         title="Normalize"
                       >
                         ⚖️ Normalize
@@ -301,6 +368,8 @@ const WeightControls = memo(({
             category={category}
             value={value}
             onUpdateWeight={onUpdateWeight}
+            disabled={category === 'clutch'}
+            description={category === 'clutch' ? 'Coming soon: 3rd & 4th down splits, GWD, & 4QC' : undefined}
             onShowDetails={category === 'team' ? () => onShowDetails.team() :
                           category === 'stats' ? () => onShowDetails.stats() :
                           category === 'clutch' ? () => onShowDetails.clutch() :
@@ -330,9 +399,9 @@ const WeightControls = memo(({
         </div>
       </div>
 
-      {/* Support Component Details Dropdown */}
+      {/* Support Component Details Dropdown - Desktop Only */}
       {showDetails.support && (
-        <div className="mt-6 bg-white/5 rounded-lg p-4 border-2 border-purple-500/30">
+        <div className="hidden md:block mt-6 bg-white/5 rounded-lg p-4 border-2 border-purple-500/30">
           <h4 className="text-white font-medium mb-3 flex items-center">
             🏟️ Supporting Cast Components
             <span className="ml-2 text-xs text-purple-200 bg-purple-500/20 px-2 py-1 rounded">
@@ -401,9 +470,9 @@ const WeightControls = memo(({
         </div>
       )}
 
-      {/* Stats Component Details Dropdown */}
+      {/* Stats Component Details Dropdown - Desktop Only */}
       {showDetails.stats && (
-        <div className="mt-6 bg-white/5 rounded-lg p-4 border-2 border-green-500/30">
+        <div className="hidden md:block mt-6 bg-white/5 rounded-lg p-4 border-2 border-green-500/30">
           <h4 className="text-white font-medium mb-3 flex items-center">
             📊 Statistical Components
             <span className="ml-2 text-xs text-green-200 bg-green-500/20 px-2 py-1 rounded">
@@ -489,9 +558,9 @@ const WeightControls = memo(({
             )}
           </div>
           
-          {/* Efficiency Sub-Components - Only show when efficiency is expanded */}
+          {/* Efficiency Sub-Components - Desktop Only */}
           {showDetails.efficiency && (
-            <div className="mt-6 bg-white/3 rounded-lg p-4 border border-green-400/20">
+            <div className="hidden md:block mt-6 bg-white/3 rounded-lg p-4 border border-green-400/20">
               <h5 className="text-green-200 font-medium mb-3 flex items-center">
                 📈 Efficiency Sub-Components
                 <span className="ml-2 text-xs text-green-300 bg-green-500/20 px-2 py-1 rounded">
@@ -561,9 +630,9 @@ const WeightControls = memo(({
             </div>
           )}
 
-          {/* Protection Sub-Components - Only show when protection is expanded */}
+          {/* Protection Sub-Components - Desktop Only */}
           {showDetails.protection && (
-            <div className="mt-6 bg-white/3 rounded-lg p-4 border border-green-400/20">
+            <div className="hidden md:block mt-6 bg-white/3 rounded-lg p-4 border border-green-400/20">
               <h5 className="text-green-200 font-medium mb-3 flex items-center">
                 🛡️ Protection Sub-Components
                 <span className="ml-2 text-xs text-green-300 bg-green-500/20 px-2 py-1 rounded">
@@ -631,9 +700,9 @@ const WeightControls = memo(({
             </div>
           )}
 
-          {/* Volume Sub-Components - Only show when volume is expanded */}
+          {/* Volume Sub-Components - Desktop Only */}
           {showDetails.volume && (
-            <div className="mt-6 bg-white/3 rounded-lg p-4 border border-green-400/20">
+            <div className="hidden md:block mt-6 bg-white/3 rounded-lg p-4 border border-green-400/20">
               <h5 className="text-green-200 font-medium mb-3 flex items-center">
                 📊 Volume Sub-Components
                 <span className="ml-2 text-xs text-green-300 bg-green-500/20 px-2 py-1 rounded">
@@ -711,9 +780,9 @@ const WeightControls = memo(({
         </div>
       )}
 
-      {/* Team Component Details Dropdown */}
+      {/* Team Component Details Dropdown - Desktop Only */}
       {showDetails.team && (
-        <div className="mt-6 bg-white/5 rounded-lg p-4 border-2 border-yellow-500/30">
+        <div className="hidden md:block mt-6 bg-white/5 rounded-lg p-4 border-2 border-yellow-500/30">
           <h4 className="text-white font-medium mb-3 flex items-center">
             🏆 Team Success Components
             <span className="ml-2 text-xs text-yellow-200 bg-yellow-500/20 px-2 py-1 rounded">
@@ -799,99 +868,24 @@ const WeightControls = memo(({
         </div>
       )}
 
-      {/* Clutch Component Details Dropdown */}
+      {/* Clutch Component Details Dropdown - Desktop Only */}
       {showDetails.clutch && (
-        <div className="mt-6 bg-white/5 rounded-lg p-4 border-2 border-red-500/30">
-          <h4 className="text-white font-medium mb-3 flex items-center">
+        <div className="hidden md:block mt-6 bg-gray-500/10 rounded-lg p-4 border-2 border-gray-500/30 opacity-60">
+          <h4 className="text-gray-400 font-medium mb-3 flex items-center">
             💎 Clutch Performance Components
-            <span className="ml-2 text-xs text-red-200 bg-red-500/20 px-2 py-1 rounded">
-              Advanced Settings
+            <span className="ml-2 text-xs text-gray-400 bg-gray-500/20 px-2 py-1 rounded">
+              Coming Soon
             </span>
           </h4>
-          <div className="text-xs text-blue-200 mb-4">
-            Adjust how much each component affects the clutch performance score. All components must sum to 100%.
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {Object.entries(clutchWeights).map(([component, value]) => (
-              <div key={component} className="bg-white/5 rounded-lg p-3">
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-white font-medium text-sm">
-                    {component === 'gameWinningDrives' ? 'Game Winning Drives' :
-                     component === 'fourthQuarterComebacks' ? '4th Quarter Comebacks' :
-                     component === 'clutchRate' ? 'Clutch Rate' :
-                     component === 'playoffBonus' ? 'Playoff Bonus' : component}
-                  </label>
-                  <span className="bg-red-500/30 text-red-100 px-2 py-1 rounded text-xs">
-                    {value}%
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={value}
-                    onChange={(e) => onUpdateClutchWeight(component, e.target.value)}
-                    disabled={!includePlayoffs && component === 'playoffBonus'}
-                    className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
-                      (!includePlayoffs && component === 'playoffBonus')
-                        ? 'bg-gray-400 cursor-not-allowed opacity-50' 
-                        : 'bg-red-200'
-                    }`}
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={value}
-                    onChange={(e) => onUpdateClutchWeight(component, e.target.value)}
-                    disabled={!includePlayoffs && component === 'playoffBonus'}
-                    className={`w-full px-2 py-1 border border-white/20 rounded text-sm text-center ${
-                      (!includePlayoffs && component === 'playoffBonus')
-                        ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
-                        : 'bg-white/10 text-white'
-                    }`}
-                    placeholder="0-100"
-                  />
-                </div>
-                <div className="text-xs text-red-200 mt-1">
-                  {component === 'gameWinningDrives' && 'Drives that directly lead to game-winning scores'}
-                  {component === 'fourthQuarterComebacks' && 'Successful comebacks initiated in 4th quarter'}
-                  {component === 'clutchRate' && 'Combined GWD and 4QC opportunities per game'}
-                  {component === 'playoffBonus' && 'Additional points for playoff clutch performance'}
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          <div className="mt-3 text-center space-y-2">
-            <span className={`text-sm font-bold ${Object.values(clutchWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
-              Component Total: {Object.values(clutchWeights).reduce((sum, val) => sum + val, 0)}%
-            </span>
-            {!includePlayoffs && (
-              <div className="text-xs text-orange-300 mt-1">
-                ⚠️ Playoff Bonus component disabled - only regular season clutch will be scored
-              </div>
-            )}
-            {Object.values(clutchWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
-              <div>
-                <button
-                  onClick={onNormalizeClutchWeights}
-                  className="bg-red-500/20 hover:bg-red-500/30 px-3 py-1 rounded text-red-200 hover:text-white transition-colors text-xs font-medium"
-                  title="Adjust all components proportionally to total exactly 100%"
-                >
-                  ⚖️ Normalize to 100%
-                </button>
-              </div>
-            )}
+          <div className="text-center text-gray-400 text-lg py-8">
+            Coming soon: 3rd & 4th down splits, GWD, & 4QC
           </div>
         </div>
       )}
 
-      {/* Durability Component Details Dropdown */}
+      {/* Durability Component Details Dropdown - Desktop Only */}
       {showDetails.durability && (
-        <div className="mt-6 bg-white/5 rounded-lg p-4 border-2 border-orange-500/30">
+        <div className="hidden md:block mt-6 bg-white/5 rounded-lg p-4 border-2 border-orange-500/30">
           <h4 className="text-white font-medium mb-3 flex items-center">
             ⚡ Durability Components
             <span className="ml-2 text-xs text-orange-200 bg-orange-500/20 px-2 py-1 rounded">

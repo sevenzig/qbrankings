@@ -1,0 +1,345 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# QB Scoring Component Normalization Rules
+
+## Core Principle: Relative Rankings Over Absolute Thresholds
+
+All scoring components (main categories, sub-components, and sub-sub-components) MUST use **relative rankings** or **percentile-based scoring** to ensure proper index rebalancing rather than raw value increases.
+
+---
+
+## ❌ NEVER DO: Absolute Threshold Scoring
+
+### Problematic Patterns to Avoid:
+
+```javascript
+// ❌ BAD: Arbitrary multipliers and fixed thresholds
+const gwdNormalized = Math.max(0, Math.min(100, gwdPerGame * 300));
+const comebackNormalized = Math.max(0, Math.min(100, comebacksPerGame * 400));
+
+// ❌ BAD: Fixed point awards regardless of competition
+const fullSeasonBonus = Math.min(50, fullSeasonCount * 25);
+const superBowlBonus = isSuperBowlWin ? 25 : 0;
+
+// ❌ BAD: Absolute benchmarks without context
+if (efficiency >= 8.0) return 100;
+else if (efficiency >= 7.0) return 80;
+else if (efficiency >= 6.0) return 60;
+```
+
+### Why These Are Problematic:
+- Creates raw value inflation rather than relative comparison
+- Breaks index rebalancing when weights change
+- No adjustment for era, league trends, or peer comparison
+- Arbitrary scaling factors have no statistical basis
+
+---
+
+## ✅ ALWAYS DO: Relative Rankings & Percentile Scoring
+
+### Approved Patterns:
+
+#### 1. Percentile-Based Scoring (Preferred)
+```javascript
+// ✅ GOOD: Calculate percentiles from actual data distribution
+const calculatePercentileScore = (value, allValues, inverted = false) => {
+  const sorted = [...allValues].sort((a, b) => inverted ? b - a : a - b);
+  const rank = sorted.findIndex(v => v <= value) + 1;
+  const percentile = (rank / sorted.length) * 100;
+  return Math.max(0, Math.min(100, percentile));
+};
+
+// Usage example:
+const allGWDRates = allQBs.map(qb => qb.gwdPerGame);
+const gwdScore = calculatePercentileScore(currentQB.gwdPerGame, allGWDRates);
+```
+
+#### 2. Z-Score Normalization
+```javascript
+// ✅ GOOD: Statistical normalization to league mean/std
+const calculateZScore = (value, allValues, targetMean = 65, targetStd = 15) => {
+  const mean = allValues.reduce((sum, v) => sum + v, 0) / allValues.length;
+  const variance = allValues.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / allValues.length;
+  const std = Math.sqrt(variance);
+  
+  if (std === 0) return targetMean;
+  
+  const zScore = (value - mean) / std;
+  const normalizedScore = targetMean + (zScore * targetStd);
+  return Math.max(0, Math.min(100, normalizedScore));
+};
+```
+
+#### 3. League Average Baseline (Minimum Standard)
+```javascript
+// ✅ ACCEPTABLE: When percentile data unavailable, use league baseline
+const calculateRelativeScore = (value, allValues, maxScore = 100) => {
+  const leagueAvg = allValues.reduce((sum, v) => sum + v, 0) / allValues.length;
+  const leagueMax = Math.max(...allValues);
+  const leagueMin = Math.min(...allValues);
+  
+  // Scale relative to actual distribution
+  if (leagueMax === leagueMin) return 65; // Default if no variance
+  
+  const normalizedValue = (value - leagueMin) / (leagueMax - leagueMin);
+  return Math.max(0, Math.min(maxScore, normalizedValue * maxScore));
+};
+```
+
+---
+
+## Implementation Requirements
+
+### For All Component Functions:
+
+#### 1. **Accept `allQBData` Parameter**
+```javascript
+export const calculateComponentScore = (
+  qbData, 
+  weights, 
+  includePlayoffs, 
+  include2024Only,
+  allQBData // ✅ REQUIRED: For relative calculations
+) => {
+  // Function implementation
+};
+```
+
+#### 2. **Extract Comparison Values**
+```javascript
+// ✅ Calculate metric for all QBs first
+const allMetricValues = allQBData.map(qb => {
+  // Calculate the same metric for each QB
+  return calculateMetricForQB(qb, includePlayoffs, include2024Only);
+}).filter(value => value !== null && !isNaN(value));
+```
+
+#### 3. **Use Relative Scoring**
+```javascript
+// ✅ Score current QB relative to all others
+const relativeScore = calculatePercentileScore(
+  currentQBMetric, 
+  allMetricValues, 
+  inverted // true for metrics where lower is better
+);
+```
+
+#### 4. **Component Composition**
+```javascript
+// ✅ Weighted average of normalized sub-components
+const totalSubWeights = Object.values(subWeights).reduce((sum, w) => sum + w, 0);
+
+const compositeScore = totalSubWeights > 0 ? 
+  Object.entries(subComponents).reduce((sum, [key, score]) => 
+    sum + (score * (subWeights[key] || 0)), 0
+  ) / totalSubWeights : 0;
+
+return Math.max(0, Math.min(100, compositeScore));
+```
+
+---
+
+## Specific Requirements by Component Type
+
+### Main Components (Team, Stats, Clutch, Durability, Support)
+- **MUST** return values between 0-100
+- **MUST** use `allQBData` for relative comparison
+- **MUST** normalize all sub-components before weighted averaging
+- **SHOULD** use percentile scoring when possible
+
+### Sub-Components (Efficiency, Protection, Volume, etc.)
+- **MUST** return values between 0-100
+- **MUST** be calculated relative to peer performance
+- **MUST** use same data scope as parent component (2024-only vs 3-year)
+- **SHOULD** handle edge cases (insufficient data, outliers)
+
+### Sub-Sub-Components (ANY/A, TD%, Sack%, etc.)
+- **MUST** return values between 0-100
+- **MUST** be the atomic units of relative comparison
+- **MUST** use actual statistical distributions
+- **SHOULD** handle inverted metrics (lower is better) properly
+
+---
+
+## Data Validation Requirements
+
+### Input Validation:
+```javascript
+// ✅ Always validate inputs
+if (!allQBData || allQBData.length === 0) {
+  console.warn('No QB data available for relative scoring');
+  return 50; // Default to league average
+}
+
+if (!qbData || !qbData.seasonData) {
+  console.warn('Invalid QB data structure');
+  return 0;
+}
+```
+
+### Distribution Validation:
+```javascript
+// ✅ Handle edge cases in distribution
+const validValues = allMetricValues.filter(v => 
+  v !== null && 
+  !isNaN(v) && 
+  isFinite(v)
+);
+
+if (validValues.length < 2) {
+  console.warn('Insufficient data for relative scoring');
+  return 50; // Default to league average
+}
+```
+
+---
+
+## Performance Guidelines
+
+### Calculation Efficiency:
+- **DO** cache expensive calculations when possible
+- **DO** calculate all QB metrics in batch when feasible
+- **DON'T** recalculate percentiles for every individual QB
+- **DON'T** perform redundant statistical operations
+
+### Memory Management:
+- **DO** use efficient array operations (map, filter, reduce)
+- **DON'T** create unnecessary intermediate arrays
+- **DO** clean up large temporary datasets
+
+---
+
+## Testing Requirements
+
+### Unit Test Coverage:
+1. **Edge Cases**: Empty data, single QB, identical values
+2. **Distribution Handling**: Normal, skewed, bimodal distributions  
+3. **Inverted Metrics**: Ensure lower-is-better metrics work correctly
+4. **Weight Sensitivity**: Verify score changes appropriately with weights
+5. **Scale Consistency**: All outputs must be 0-100
+
+### Integration Testing:
+1. **Index Rebalancing**: Verify weight changes rebalance rather than inflate
+2. **Cross-Component Consistency**: Similar performers should rank similarly
+3. **Historical Stability**: Score calculation should be stable across data updates
+
+---
+
+## Common Anti-Patterns to Avoid
+
+### ❌ Magic Numbers:
+```javascript
+// Bad: Arbitrary scaling factors
+const score = Math.min(100, value * 47.3);
+const bonus = value > 12.7 ? 25 : 0;
+```
+
+### ❌ Era Blindness:
+```javascript
+// Bad: Fixed thresholds that don't account for league evolution
+if (passingYards > 4000) return 100;
+```
+
+### ❌ Binary Scoring:
+```javascript
+// Bad: All-or-nothing scoring
+const score = hasPlayoffSuccess ? 100 : 0;
+```
+
+### ❌ Additive Inflation:
+```javascript
+// Bad: Unlimited score accumulation
+let score = baseScore;
+score += bonusA + bonusB + bonusC; // Can exceed 100
+```
+
+---
+
+## Migration Strategy for Existing Functions
+
+### Step 1: Audit Current Functions
+- Identify functions using absolute thresholds
+- Document current scoring ranges and distributions
+- Test current vs proposed scoring for sample QBs
+
+### Step 2: Implement Relative Scoring
+- Add `allQBData` parameter to function signatures
+- Replace absolute thresholds with percentile calculations
+- Maintain backward compatibility during transition
+
+### Step 3: Validate Results
+- Compare old vs new scoring for consistency
+- Ensure no dramatic ranking changes without justification
+- Test edge cases and boundary conditions
+
+### Step 4: Update Documentation
+- Document new scoring methodology
+- Update component descriptions in UI
+- Provide migration notes for any breaking changes
+
+---
+
+## Example Implementation Template
+
+```javascript
+export const calculateExampleScore = (
+  qbData, 
+  weights = { subA: 40, subB: 35, subC: 25 }, 
+  includePlayoffs = true,
+  include2024Only = false,
+  allQBData = [] // ✅ Required for relative scoring
+) => {
+  // Step 1: Extract metrics for all QBs
+  const allSubAValues = allQBData.map(qb => 
+    calculateSubAMetric(qb, includePlayoffs, include2024Only)
+  ).filter(v => v !== null && !isNaN(v));
+  
+  const allSubBValues = allQBData.map(qb => 
+    calculateSubBMetric(qb, includePlayoffs, include2024Only)
+  ).filter(v => v !== null && !isNaN(v));
+  
+  const allSubCValues = allQBData.map(qb => 
+    calculateSubCMetric(qb, includePlayoffs, include2024Only)
+  ).filter(v => v !== null && !isNaN(v));
+  
+  // Step 2: Calculate current QB's metrics
+  const subAValue = calculateSubAMetric(qbData, includePlayoffs, include2024Only);
+  const subBValue = calculateSubBMetric(qbData, includePlayoffs, include2024Only);
+  const subCValue = calculateSubCMetric(qbData, includePlayoffs, include2024Only);
+  
+  // Step 3: Score relative to peers
+  const subAScore = calculatePercentileScore(subAValue, allSubAValues);
+  const subBScore = calculatePercentileScore(subBValue, allSubBValues, true); // inverted
+  const subCScore = calculatePercentileScore(subCValue, allSubCValues);
+  
+  // Step 4: Weighted composition
+  const totalWeights = Object.values(weights).reduce((sum, w) => sum + w, 0);
+  
+  if (totalWeights === 0) return 0;
+  
+  const compositeScore = (
+    (subAScore * weights.subA) +
+    (subBScore * weights.subB) + 
+    (subCScore * weights.subC)
+  ) / totalWeights;
+  
+  return Math.max(0, Math.min(100, compositeScore));
+};
+```
+
+---
+
+## Enforcement
+
+This rule is **MANDATORY** for all scoring functions. Code reviews must verify:
+- No absolute threshold scoring
+- Proper use of relative rankings
+- Correct 0-100 scale normalization
+- Appropriate handling of edge cases
+- Performance considerations for batch calculations
+
+Violations of this rule should be flagged and corrected before merging.
+

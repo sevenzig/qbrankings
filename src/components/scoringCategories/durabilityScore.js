@@ -1,23 +1,15 @@
 import { STABILITY_YEAR_WEIGHTS } from './constants.js';
 
-// Enhanced Durability Score with comprehensive availability tracking (0-100)
+// Linear Durability Score that complements existing logarithmic penalty system (0-100)
 export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, include2024Only = false, durabilityWeights = { availability: 75, consistency: 25 }) => {
-  let weightedAvailability = 0;
-  let fullSeasonCount = 0;
-  let nearFullSeasonCount = 0;
-  let totalSeasonsPlayed = 0;
-  let totalWeight = 0;
   
-  // Debug logging for playoff inclusion
-  const debugMode = !includePlayoffs;
-  const playerName = qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player;
-  
-  if (debugMode && playerName) {
-    console.log(`⚡ DURABILITY DEBUG - ${playerName} (Playoffs ${includePlayoffs ? 'INCLUDED' : 'EXCLUDED'})`);
-  }
-
   // In 2024-only mode, only process 2024 data with 100% weight
   const yearWeights = include2024Only ? { '2024': 1.0 } : STABILITY_YEAR_WEIGHTS;
+  
+  // Calculate total weighted games played
+  let totalWeightedGames = 0;
+  let totalWeightSum = 0;
+  let validSeasons = 0;
   
   Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
     const weight = yearWeights[year] || 0;
@@ -25,95 +17,84 @@ export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, i
     
     const gamesStarted = parseInt(data.GS) || 0;
     let totalGames = gamesStarted;
-    let possibleGames = 17; // Regular season games
     
     // Add playoff games if available and playoffs are included
     if (data.playoffData && includePlayoffs) {
-      const playoff = data.playoffData;
-      const playoffGamesStarted = parseInt(playoff.gamesStarted) || 0;
-      const playoffWins = parseInt(playoff.wins) || 0;
+      const playoffGamesStarted = parseInt(data.playoffData.gamesStarted) || 0;
       totalGames += playoffGamesStarted;
       
       // In 2024-only mode, give extra credit for deep playoff runs
       if (include2024Only && year === '2024') {
-        // Check known Super Bowl data for additional bonuses
-        const knownSuperBowlWins = {
-          'Philadelphia Eagles': [2023], // Hurts won SB in 2023
-          'Kansas City Chiefs': [2024] // Mahomes won SB in 2024
-        };
-        const knownSuperBowlAppearances = {
-          'Kansas City Chiefs': [2022, 2024], // Mahomes appeared in 2022 (loss), 2024 (win)
-          'Philadelphia Eagles': [2023] // Hurts appeared in 2023 (win)
-        };
-        
-        // Super Bowl WINNERS get MASSIVE durability boost
-        if (knownSuperBowlWins[data.Team] && knownSuperBowlWins[data.Team].includes(parseInt(year))) {
-          totalGames += 4; // BONUS equivalent to 4 extra games for SB WINNERS
-        }
-        // Super Bowl participants get big durability boost
-        else if ((playoffWins >= 3 || (playoffWins >= 2 && playoffGamesStarted >= 3)) ||
-                 (knownSuperBowlAppearances[data.Team] && knownSuperBowlAppearances[data.Team].includes(parseInt(year)))) {
-          totalGames += 2; // Bonus equivalent to 2 extra games for SB teams
-        }
+        const playoffWins = parseInt(data.playoffData.wins) || 0;
         // Conference Championship teams get moderate boost  
-        else if (playoffWins >= 2) {
-          totalGames += 1; // Bonus equivalent to 1 extra game for CCG teams
+        if (playoffWins >= 2) {
+          totalGames += 1; // Bonus equivalent to 1 extra game for CCG+ teams
         }
       }
-      
-      // Teams that make playoffs can potentially play up to 4 additional games
-      const maxPlayoffGames = 4;
-      possibleGames += maxPlayoffGames;
-      
-      if (debugMode && playerName) {
-        console.log(`⚡ ${year}: Added ${playoffGamesStarted} playoff games (total: ${totalGames}/${possibleGames})`);
-      }
-    } else if (data.playoffData && debugMode && playerName) {
-      console.log(`⚡ ${year}: Playoff games IGNORED - would have added ${data.playoffData.gamesStarted || 0} games`);
     }
     
-    const availability = Math.min(1, totalGames / possibleGames);
-    
-    if (debugMode && playerName) {
-      console.log(`⚡ ${year}: ${totalGames}/${possibleGames} games = ${(availability * 100).toFixed(1)}% availability`);
+    // Count valid seasons for consistency scoring
+    if (gamesStarted >= 4) { // Must have meaningful participation
+      validSeasons++;
     }
     
-    // Count season types for consistency bonuses
-    if (totalGames >= 16) {
-      fullSeasonCount += weight;
-    } else if (totalGames >= 14) {
-      nearFullSeasonCount += weight;
-    }
-    
-    totalSeasonsPlayed += weight;
-    weightedAvailability += availability * weight;
-    totalWeight += weight;
+    totalWeightedGames += totalGames * weight;
+    totalWeightSum += weight;
   });
-
-  if (totalWeight === 0) return 0;
-
-  // Normalize weighted values
-  weightedAvailability = weightedAvailability / totalWeight;
-  fullSeasonCount = fullSeasonCount / totalWeight;
-  nearFullSeasonCount = nearFullSeasonCount / totalWeight;
-  totalSeasonsPlayed = totalSeasonsPlayed / totalWeight;
-
-  if (debugMode && playerName) {
-    console.log(`⚡ FINAL DURABILITY METRICS:`);
-    console.log(`⚡   Weighted availability: ${(weightedAvailability * 100).toFixed(1)}%`);
-    console.log(`⚡   Full seasons: ${fullSeasonCount.toFixed(1)}`);
-    console.log(`⚡   Near-full seasons: ${nearFullSeasonCount.toFixed(1)}`);
-    console.log(`⚡ ----------------------------------------`);
-  }
-
-  // Calculate normalized component scores (0-100 scale each)
-  const availabilityNormalized = Math.max(0, Math.min(100, weightedAvailability * 100)); // 0-100 scale for availability
   
-  // Consistency component (0-100 scale)
-  const fullSeasonBonus = Math.min(50, fullSeasonCount * 25); // Up to 50 points for full seasons
-  const nearFullSeasonBonus = Math.min(25, nearFullSeasonCount * 12.5); // Up to 25 points for near-full seasons
-  const multiYearBonus = totalSeasonsPlayed >= 3 ? 25 : 0; // Up to 25 points for multi-year consistency
-  const consistencyNormalized = Math.max(0, Math.min(100, fullSeasonBonus + nearFullSeasonBonus + multiYearBonus));
+  if (totalWeightSum === 0) return 0;
+  
+  // LINEAR AVAILABILITY SCORING
+  // Mode-specific thresholds that align with logarithmic penalty thresholds
+  let maxGames, minThreshold, availabilityScore;
+  
+  if (include2024Only) {
+    // 2024-only mode: Per-season linear scale from 9-17 games
+    const avgGamesPerSeason = totalWeightedGames / totalWeightSum;
+    maxGames = 17; // Perfect attendance (17 regular season games)
+    minThreshold = 9; // Matches logarithmic penalty threshold
+    
+    if (avgGamesPerSeason >= maxGames) {
+      availabilityScore = 100;
+    } else if (avgGamesPerSeason <= minThreshold) {
+      availabilityScore = 0; // Logarithmic penalty will handle further reduction
+    } else {
+      // Linear scale from 9 games (0 points) to 17 games (100 points)
+      availabilityScore = ((avgGamesPerSeason - minThreshold) / (maxGames - minThreshold)) * 100;
+    }
+  } else {
+    // 3-year mode: Total games across all years
+    maxGames = 51; // 17 games × 3 years (perfect attendance)
+    minThreshold = 15; // Matches logarithmic penalty threshold for 3-year mode
+    
+    if (totalWeightedGames >= maxGames) {
+      availabilityScore = 100;
+    } else if (totalWeightedGames <= minThreshold) {
+      availabilityScore = 0; // Logarithmic penalty will handle further reduction
+    } else {
+      // Linear scale from 15 total games (0 points) to 51 total games (100 points)
+      availabilityScore = ((totalWeightedGames - minThreshold) / (maxGames - minThreshold)) * 100;
+    }
+  }
+  
+  // CONSISTENCY SCORING - Simplified to complement availability
+  // Rewards consistent performance across multiple seasons (3-year mode only)
+  let consistencyScore = 50; // Default for 2024-only mode
+  
+  if (!include2024Only) {
+    // Multi-year consistency bonus based on number of seasons with meaningful participation
+    if (validSeasons >= 3) {
+      consistencyScore = 85; // High consistency across all 3 years
+    } else if (validSeasons >= 2) {
+      consistencyScore = 70; // Good consistency across 2 years
+    } else {
+      consistencyScore = 35; // Limited consistency data
+    }
+  }
+  
+  // Apply durability sub-component weights
+  const availabilityNormalized = Math.max(0, Math.min(100, availabilityScore));
+  const consistencyNormalized = Math.max(0, Math.min(100, consistencyScore));
 
   // Calculate weighted average of normalized scores using sub-component weights
   const totalDurabilitySubWeights = durabilityWeights.availability + durabilityWeights.consistency;
@@ -122,13 +103,6 @@ export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, i
   if (totalDurabilitySubWeights > 0) {
     finalScore = ((availabilityNormalized * durabilityWeights.availability) +
                   (consistencyNormalized * durabilityWeights.consistency)) / totalDurabilitySubWeights;
-  }
-
-  // Debug for durability leaders or concerning cases
-  if (availabilityNormalized >= 80 || availabilityNormalized < 40) {
-    console.log(`⚡ DURABILITY: ${playerName}: ${(weightedAvailability * 100).toFixed(1)}% availability → ${finalScore.toFixed(1)}/100 points`);
-    console.log(`⚡   Components: Availability(${availabilityNormalized.toFixed(1)}) + Consistency(${consistencyNormalized.toFixed(1)})`);
-    console.log(`⚡   Weights: Availability(${durabilityWeights.availability}%) + Consistency(${durabilityWeights.consistency}%)`);
   }
 
   return finalScore;

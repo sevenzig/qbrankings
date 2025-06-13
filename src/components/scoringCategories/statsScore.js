@@ -1,5 +1,31 @@
 import { PERFORMANCE_YEAR_WEIGHTS, PERFORMANCE_PERCENTILES, SCORING_TIERS } from './constants.js';
 
+// Helper function to normalize weights within a group
+const normalizeWeights = (weights) => {
+  const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
+  if (total === 0) return weights;
+  
+  const normalized = {};
+  Object.keys(weights).forEach(key => {
+    normalized[key] = weights[key] / total;
+  });
+  return normalized;
+};
+
+// Hierarchical weight calculation
+const calculateHierarchicalScore = (componentScores, weights) => {
+  const normalizedWeights = normalizeWeights(weights);
+  let weightedSum = 0;
+  
+  Object.keys(componentScores).forEach(key => {
+    if (normalizedWeights[key] !== undefined) {
+      weightedSum += componentScores[key] * normalizedWeights[key];
+    }
+  });
+  
+  return weightedSum;
+};
+
 // Linear percentile scoring function
 const calculatePercentileScore = (value, metric, maxPoints, inverted = false) => {
   const percentiles = PERFORMANCE_PERCENTILES[metric];
@@ -28,6 +54,43 @@ const calculatePercentileScore = (value, metric, maxPoints, inverted = false) =>
   }
   
   return scoreMultiplier * maxPoints;
+};
+
+// Calculate efficiency subcomponent scores
+const calculateEfficiencyScores = (weightedAnyA, weightedTDPct, weightedCmpPct, efficiencyWeights) => {
+  const efficiencySubScores = {
+    anyA: calculatePercentileScore(weightedAnyA, 'anyA', 100),
+    tdPct: calculatePercentileScore(weightedTDPct, 'tdPct', 100),
+    completionPct: calculatePercentileScore(weightedCmpPct, 'completionPct', 100)
+  };
+  
+  // Apply hierarchical weighting to efficiency subcomponents
+  return calculateHierarchicalScore(efficiencySubScores, efficiencyWeights);
+};
+
+// Calculate protection subcomponent scores
+const calculateProtectionScores = (weightedSackPct, weightedTurnoverRate, protectionWeights) => {
+  const protectionSubScores = {
+    sackPct: calculatePercentileScore(weightedSackPct, 'sackPct', 100, true), // Inverted: lower is better
+    turnoverRate: calculatePercentileScore(weightedTurnoverRate, 'turnoverRate', 100) // Higher is better (attempts per turnover)
+  };
+  
+  // Apply hierarchical weighting to protection subcomponents
+  return calculateHierarchicalScore(protectionSubScores, protectionWeights);
+};
+
+// Calculate volume subcomponent scores
+const calculateVolumeScores = (totalPassYards, totalPassTDs, totalRushYards, totalRushTDs, totalAttempts, volumeWeights) => {
+  const volumeSubScores = {
+    passYards: Math.max(0, Math.min(100, (totalPassYards - 3500) / 12.5 + 50)), // Scale around 4000 yards
+    passTDs: Math.max(0, Math.min(100, (totalPassTDs - 25) / 0.5 + 50)), // Scale around 30 TDs
+    rushYards: Math.max(0, Math.min(100, (totalRushYards - 200) / 8 + 50)), // Scale around 400 yards
+    rushTDs: Math.max(0, Math.min(100, totalRushTDs * 12.5 + 25)), // Scale rushing TDs
+    totalAttempts: Math.max(0, Math.min(100, (totalAttempts - 450) / 8 + 50)) // Scale around 550 attempts
+  };
+  
+  // Apply hierarchical weighting to volume subcomponents
+  return calculateHierarchicalScore(volumeSubScores, volumeWeights);
 };
 
 // Volume scoring functions
@@ -59,8 +122,7 @@ const calculateTurnoverBurden = (totalTurnovers) => {
   return -3;                                // Terrible
 };
 
-// Enhanced Statistical Performance Score with detailed component breakdown (0-100)
-// Updated: Combined turnover rate calculation using (pass attempts + rush attempts) / total turnovers
+// Enhanced Statistical Performance Score with hierarchical weighting (0-100)
 export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, includePlayoffs = true, include2024Only = false, efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 }, protectionWeights = { sackPct: 60, turnoverRate: 40 }, volumeWeights = { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }) => {
   let weightedAnyA = 0;
   let weightedTDPct = 0;
@@ -184,7 +246,21 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
   totalVolume = totalVolume / totalWeight;
   totalAttempts = totalAttempts / totalWeight;
   
-  // Second Pass: Calculate playoff performance adjustment if enabled
+  // Calculate hierarchical component scores
+  const efficiencyScore = calculateEfficiencyScores(weightedAnyA, weightedTDPct, weightedCmpPct, efficiencyWeights);
+  const protectionScore = calculateProtectionScores(weightedSackPct, weightedTurnoverRate, protectionWeights);
+  const volumeScore = calculateVolumeScores(totalPassYards, totalPassTDs, totalRushYards, totalRushTDs, totalAttempts, volumeWeights);
+  
+  // Combine component scores using stats-level weights
+  const statsComponentScores = {
+    efficiency: efficiencyScore,
+    protection: protectionScore,
+    volume: volumeScore
+  };
+  
+  let baseStatsScore = calculateHierarchicalScore(statsComponentScores, statsWeights);
+  
+  // Apply playoff adjustment if enabled (existing playoff logic)
   if (includePlayoffs) {
     let totalPlayoffWeight = 0;
     let playoffPerformanceMultiplier = 1.0;
@@ -199,170 +275,82 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
       const playoffYds = parseInt(playoff.passingYards) || 0;
       const playoffTDs = parseInt(playoff.passingTDs) || 0;
       const playoffInts = parseInt(playoff.interceptions) || 0;
-      const playoffGames = parseInt(playoff.gamesStarted) || parseInt(playoff.gamesPlayed) || 0;
+      const playoffSacks = parseInt(playoff.sacks) || 0;
+      const playoffRushYds = parseInt(playoff.rushingYards) || 0;
+      const playoffRushTDs = parseInt(playoff.rushingTDs) || 0;
+      const playoffRushAtts = parseInt(playoff.rushingAttempts) || 0;
+      const playoffFumbles = parseInt(playoff.fumbles) || 0;
       
-      // Regular season stats for comparison
+      if (playoffAtts < 10) return; // Skip minimal playoff appearances
+      
+      // Calculate playoff rates
+      const playoffAnyA = playoff.anyPerAttempt || 0;
+      const playoffTDPct = playoffAtts > 0 ? (playoffTDs / playoffAtts) * 100 : 0;
+      const playoffCmpPct = playoffAtts > 0 ? (playoffCmps / playoffAtts) * 100 : 0;
+      const playoffSackPct = (playoffAtts + playoffSacks) > 0 ? (playoffSacks / (playoffAtts + playoffSacks)) * 100 : 0;
+      
+      const playoffSeasonAttempts = playoffAtts + playoffRushAtts;
+      const playoffTotalTurnovers = playoffInts + playoffFumbles;
+      const playoffTurnoverRate = (playoffTotalTurnovers > 0 && playoffSeasonAttempts > 0) ? playoffSeasonAttempts / playoffTotalTurnovers : 999;
+      
+      // Calculate regular season rates for comparison
       const regSeasonAtts = parseInt(data.Att) || 0;
       const regSeasonCmps = parseInt(data.Cmp) || 0;
-      const regSeasonYds = parseInt(data.Yds) || 0;
       const regSeasonTDs = parseInt(data.TD) || 0;
       const regSeasonInts = parseInt(data.Int) || 0;
-      const regSeasonGames = parseInt(data.G) || 17;
+      const regSeasonSacks = parseInt(data.Sk) || 0;
+      const regSeasonRushAtts = parseInt(data.RushingAtt) || 0;
+      const regSeasonFumbles = parseInt(data.Fumbles) || 0;
       
-      // Apply same threshold logic to playoff calculations
-      const regSeasonThreshold = year === '2024' ? 50 : 100;
-      if (playoffAtts >= 15 && playoffGames > 0 && regSeasonAtts >= regSeasonThreshold) {
-        // Calculate playoff vs regular season performance ratios
-        const playoffCmpPct = (playoffCmps / playoffAtts) * 100;
-        const playoffTDPct = (playoffTDs / playoffAtts) * 100;
-        const playoffIntPct = (playoffInts / playoffAtts) * 100;
-        const playoffYPG = playoffYds / playoffGames;
-        
-        const regCmpPct = (regSeasonCmps / regSeasonAtts) * 100;
-        const regTDPct = (regSeasonTDs / regSeasonAtts) * 100;
-        const regIntPct = (regSeasonInts / regSeasonAtts) * 100;
-        const regYPG = regSeasonYds / regSeasonGames;
-        
-        // Calculate performance improvement/decline ratios (capped for sanity)
-        const cmpRatio = Math.max(0.85, Math.min(1.20, playoffCmpPct / Math.max(regCmpPct, 50)));
-        const tdRatio = Math.max(0.80, Math.min(1.25, playoffTDPct / Math.max(regTDPct, 2)));
-        const intRatio = Math.max(0.75, Math.min(1.30, regIntPct / Math.max(playoffIntPct, 1))); // Inverted - lower playoff INT% is better
-        const yardRatio = Math.max(0.85, Math.min(1.20, playoffYPG / Math.max(regYPG, 150)));
-        
-        // Average the performance ratios
-        const basePerformanceRatio = (cmpRatio + tdRatio + intRatio + yardRatio) / 4;
-        
-        // Apply round progression modifier (modest impact)
-        const playoffWins = parseInt(playoff.wins) || 0;
-        const playoffLosses = parseInt(playoff.losses) || 0;
-        const totalPlayoffGames = playoffWins + playoffLosses;
-        
-        let roundImportanceBonus = 1.0;
-        if (totalPlayoffGames >= 3 && playoffWins >= 2) {
-          // Known Super Bowl results
-          const knownSuperBowlWins = {
-            'PHI': [2023], // Eagles won 2023 Super Bowl (Hurts)
-            'KAN': [2024], // Chiefs won 2024 Super Bowl (Mahomes)
-            'TAM': [2022], // Bucs won 2022 Super Bowl
-            'LAR': [2022] // Rams won 2022 Super Bowl
-          };
-          
-          if (knownSuperBowlWins[data.Team] && knownSuperBowlWins[data.Team].includes(parseInt(year))) {
-            roundImportanceBonus = include2024Only ? 1.35 : 1.08; // ENHANCED 35% bonus for SB wins in 2024-only mode
-          } else if (playoffWins >= 2) {
-            roundImportanceBonus = include2024Only ? 1.20 : 1.04; // Enhanced 20% bonus for deep playoff runs in 2024-only mode
-          }
-        }
-        
-        // Combine performance ratio with round importance
-        const seasonPlayoffMultiplier = basePerformanceRatio * roundImportanceBonus;
-        playoffPerformanceMultiplier += (seasonPlayoffMultiplier - 1.0) * weight;
-        totalPlayoffWeight += weight;
-        
-        if (debugMode && playerName) {
-          console.log(`📊 ${year}: Playoff adjustment - Performance ratio: ${basePerformanceRatio.toFixed(3)}, Round bonus: ${roundImportanceBonus.toFixed(3)}, Combined: ${seasonPlayoffMultiplier.toFixed(3)}`);
-        }
+      const regAnyA = data['ANY/A'] || 0;
+      const regTDPct = regSeasonAtts > 0 ? (regSeasonTDs / regSeasonAtts) * 100 : 0;
+      const regCmpPct = regSeasonAtts > 0 ? (regSeasonCmps / regSeasonAtts) * 100 : 0;
+      const regSackPct = (regSeasonAtts + regSeasonSacks) > 0 ? (regSeasonSacks / (regSeasonAtts + regSeasonSacks)) * 100 : 0;
+      
+      const regSeasonAttempts = regSeasonAtts + regSeasonRushAtts;
+      const regTotalTurnovers = regSeasonInts + regSeasonFumbles;
+      const regTurnoverRate = (regTotalTurnovers > 0 && regSeasonAttempts > 0) ? regSeasonAttempts / regTotalTurnovers : 999;
+      
+      // Calculate performance ratios (playoff vs regular season)
+      const anyARatio = regAnyA > 0 ? playoffAnyA / regAnyA : 1.0;
+      const tdPctRatio = regTDPct > 0 ? playoffTDPct / regTDPct : 1.0;
+      const cmpPctRatio = regCmpPct > 0 ? playoffCmpPct / regCmpPct : 1.0;
+      const sackPctRatio = regSackPct > 0 ? regSackPct / playoffSackPct : 1.0; // Inverted: lower playoff sack% is better
+      const turnoverRatio = regTurnoverRate > 0 ? playoffTurnoverRate / regTurnoverRate : 1.0;
+      
+      // Calculate weighted performance multiplier
+      const performanceMultiplier = (
+        (anyARatio * 0.3) +
+        (tdPctRatio * 0.25) +
+        (cmpPctRatio * 0.2) +
+        (sackPctRatio * 0.15) +
+        (turnoverRatio * 0.1)
+      );
+      
+      // Weight by playoff sample size and year importance
+      const sampleWeight = Math.min(1.0, playoffAtts / 75); // Full weight at 75+ attempts
+      playoffPerformanceMultiplier += (performanceMultiplier - 1.0) * sampleWeight * weight;
+      totalPlayoffWeight += weight;
+      
+      if (debugMode && playerName && (playerName.includes('Mahomes') || playerName.includes('Hurts') || playerName.includes('Allen'))) {
+        console.log(`   ${year} Playoff Performance: ANY/A(${anyARatio.toFixed(2)}x) TD%(${tdPctRatio.toFixed(2)}x) Comp%(${cmpPctRatio.toFixed(2)}x) → Multiplier(${performanceMultiplier.toFixed(3)})`);
       }
     });
     
-    // Normalize the playoff adjustment
+    // Apply playoff adjustment
     if (totalPlayoffWeight > 0) {
-      playoffAdjustmentFactor = 1.0 + (playoffPerformanceMultiplier / totalPlayoffWeight);
-      // Cap the adjustment to prevent extreme swings - RELAXED CAPS to avoid systematic deflation
-      playoffAdjustmentFactor = Math.max(0.98, Math.min(1.20, playoffAdjustmentFactor));
+      const adjustmentStrength = Math.min(0.25, totalPlayoffWeight * 0.15); // Cap at 25% adjustment, scale by playoff experience
+      playoffAdjustmentFactor = 1.0 + ((playoffPerformanceMultiplier - 1.0) * adjustmentStrength);
+      
+      if (debugMode && playerName && (playerName.includes('Mahomes') || playerName.includes('Hurts') || playerName.includes('Allen'))) {
+        console.log(`   Final Playoff Adjustment: ${playoffAdjustmentFactor.toFixed(3)}x (Strength: ${adjustmentStrength.toFixed(3)})`);
+      }
     }
-    
-    if (debugMode && playerName) {
-      console.log(`📊 Final playoff adjustment factor: ${playoffAdjustmentFactor.toFixed(3)}`);
-    }
   }
   
-  // Calculate component scores using regular season base - BALANCED SCALING FOR ALL COMPONENTS
-  // All components now use similar scaling approaches to be equally competitive when weighted at 100%
+  // Apply playoff adjustment to base stats score
+  const finalStatsScore = baseStatsScore * playoffAdjustmentFactor;
   
-  // Efficiency Component - CONTEXT-AWARE SUB-COMPONENT SCALING
-  // Calculate individual normalized scores (0-100 scale) for each efficiency metric
-  const anyANormalized = Math.max(0, Math.min(100, (weightedAnyA - 4.5) * 28.6)); // 0-100 scale for ANY/A (elite 8.0 gives 100 points)
-  const tdPctNormalized = Math.max(0, Math.min(100, (weightedTDPct - 2.5) * 28.6)); // 0-100 scale for TD% (elite 6.0 gives 100 points)
-  const efficiencyCmpPctNormalized = Math.max(0, Math.min(100, (weightedCmpPct - 58) * 8.33)); // 0-100 scale for completion% (elite 70 gives 100 points)
-  
-  // Calculate weighted average of normalized scores using sub-component weights
-  // This ensures that regardless of weight distribution, elite performance can reach ~100 points
-  const totalEfficiencySubWeights = efficiencyWeights.anyA + efficiencyWeights.tdPct + efficiencyWeights.completionPct;
-  
-  const efficiencyCompositeScore = totalEfficiencySubWeights > 0 ? 
-    ((anyANormalized * efficiencyWeights.anyA) +
-     (tdPctNormalized * efficiencyWeights.tdPct) +
-     (efficiencyCmpPctNormalized * efficiencyWeights.completionPct)) / totalEfficiencySubWeights : 0;
-  
-  // Apply the main efficiency weight to the composite score
-  const baseEfficiencyScore = efficiencyCompositeScore * (statsWeights.efficiency / 100);
-  
-  // Protection Component - CONTEXT-AWARE SUB-COMPONENT SCALING
-  // Calculate individual normalized scores (0-100 scale) for each protection metric
-  const sackPctNormalized = Math.max(0, Math.min(100, (8.5 - weightedSackPct) * 22.2)); // 0-100 scale for sack% (elite 4.0% gives 100 points)
-  const turnoverRateNormalized = Math.max(0, Math.min(100, (weightedTurnoverRate - 22) * 2.78)); // 0-100 scale for turnover rate (elite 58 gives 100 points)
-  
-  // Calculate weighted average of normalized scores using sub-component weights
-  // This ensures that regardless of weight distribution, elite performance can reach ~100 points
-  const totalProtectionSubWeights = protectionWeights.sackPct + protectionWeights.turnoverRate;
-  
-  const protectionCompositeScore = totalProtectionSubWeights > 0 ? 
-    ((sackPctNormalized * protectionWeights.sackPct) +
-     (turnoverRateNormalized * protectionWeights.turnoverRate)) / totalProtectionSubWeights : 0;
-  
-  // Apply the main protection weight to the composite score
-  const baseProtectionScore = protectionCompositeScore * (statsWeights.protection / 100);
-  
-  // Volume Component (0 to full volume weight) - PROPERLY using detailed sub-component weights with MUCH TIGHTER SCALING
-  
-  // Debug logging for volume weights
-  if (debugMode && playerName) {
-    console.log(`📊 Volume weights: passYards(${volumeWeights.passYards}%) passTDs(${volumeWeights.passTDs}%) rushYards(${volumeWeights.rushYards}%) rushTDs(${volumeWeights.rushTDs}%) attempts(${volumeWeights.totalAttempts}%)`);
-  }
-  
-  // Volume Component - CONTEXT-AWARE SUB-COMPONENT SCALING (NO DOUBLE-COUNTING)
-  // Calculate individual normalized scores (0-100 scale) for each volume metric
-  const passYardsNormalized = Math.max(0, Math.min(100, (totalPassYards - 2000) * 0.025)); // 0-100 scale for pass yards
-  const passTDsNormalized = Math.max(0, Math.min(100, (totalPassTDs - 10) * 3.33)); // 0-100 scale for pass TDs  
-  const rushYardsNormalized = Math.max(0, Math.min(100, (totalRushYards - 100) * 0.1)); // 0-100 scale for rush yards
-  const rushTDsNormalized = Math.max(0, Math.min(100, (totalRushTDs - 1) * 20.0)); // 0-100 scale for rush TDs
-  const totalAttemptsNormalized = Math.max(0, Math.min(100, (totalAttempts - 300) * 0.1)); // 0-100 scale for total attempts
-  
-  // REMOVED totalVolume to prevent double-counting with passYards + rushYards
-  // Total volume was redundant and causing overfitting for players like Joshua Dobbs
-  
-  // Calculate weighted average of normalized scores using sub-component weights (excluding totalVolume)
-  const totalSubWeights = volumeWeights.passYards + volumeWeights.passTDs + volumeWeights.rushYards + 
-                          volumeWeights.rushTDs + volumeWeights.totalAttempts;
-  
-  const volumeCompositeScore = totalSubWeights > 0 ? 
-    ((passYardsNormalized * volumeWeights.passYards) +
-     (passTDsNormalized * volumeWeights.passTDs) +
-     (rushYardsNormalized * volumeWeights.rushYards) +
-     (rushTDsNormalized * volumeWeights.rushTDs) +
-     (totalAttemptsNormalized * volumeWeights.totalAttempts)) / totalSubWeights : 0;
-  
-  // Apply the main volume weight to the composite score
-  const baseVolumeScore = volumeCompositeScore * (statsWeights.volume / 100);
-  
-  // Apply playoff adjustment to the base scores
-  const finalEfficiencyScore = baseEfficiencyScore * playoffAdjustmentFactor;
-  const finalProtectionScore = baseProtectionScore * playoffAdjustmentFactor;
-  const finalVolumeScore = baseVolumeScore * playoffAdjustmentFactor;
-  
-  const finalScore = finalEfficiencyScore + finalProtectionScore + finalVolumeScore;
-  
-  if (debugMode && playerName) {
-    console.log(`📊 FINAL ADJUSTED STATS: Base(${(baseEfficiencyScore + baseProtectionScore + baseVolumeScore).toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) = ${finalScore.toFixed(1)}`);
-    console.log(`📊 Components: Efficiency(${finalEfficiencyScore.toFixed(1)}) + Protection(${finalProtectionScore.toFixed(1)}) + Volume(${finalVolumeScore.toFixed(1)})`);
-    console.log(`📊 DETAILED BREAKDOWN:`);
-    console.log(`📊   Efficiency: ANY/A(${anyANormalized.toFixed(1)}) + TD%(${tdPctNormalized.toFixed(1)}) + Comp%(${efficiencyCmpPctNormalized.toFixed(1)}) = ${baseEfficiencyScore.toFixed(1)}`);
-    console.log(`📊   Protection: Sack%(${sackPctNormalized.toFixed(1)}) + TurnoverRate(${turnoverRateNormalized.toFixed(1)}) = ${baseProtectionScore.toFixed(1)}`);
-    console.log(`📊   Volume: PassYds(${passYardsNormalized.toFixed(1)}) + PassTDs(${passTDsNormalized.toFixed(1)}) + RushYds(${rushYardsNormalized.toFixed(1)}) + RushTDs(${rushTDsNormalized.toFixed(1)}) + Attempts(${totalAttemptsNormalized.toFixed(1)}) = ${baseVolumeScore.toFixed(1)}`);
-    console.log(`📊 Raw Stats: ANY/A(${weightedAnyA.toFixed(1)}) TD%(${weightedTDPct.toFixed(1)}) TurnoverRate(${weightedTurnoverRate.toFixed(1)}) Comp%(${weightedCmpPct.toFixed(1)})`);
-    console.log(`📊 Volume Stats: PassYds(${totalPassYards.toFixed(0)}) PassTDs(${totalPassTDs.toFixed(1)}) RushYds(${totalRushYards.toFixed(0)}) RushTDs(${totalRushTDs.toFixed(1)}) TotalAtts(${totalAttempts.toFixed(0)})`);
-  }
-  
-  return finalScore;
+  // Ensure score stays within 0-100 range
+  return Math.max(0, Math.min(100, finalStatsScore));
 }; 

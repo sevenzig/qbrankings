@@ -44,6 +44,9 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
   // Get top 10 QBs
   const top10QBs = rankedQBs.slice(0, 10);
   
+  // Extract all QBs with base scores for dynamic tier calculation
+  const allQBsWithBaseScores = rankedQBs;
+  
   // Preload team logos
   await preloadTeamLogos(top10QBs);
   
@@ -62,8 +65,8 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
   // Generate team logos HTML for all QBs first
   const qbRowsPromises = top10QBs.map(async (qb, index) => {
     const rowBg = getRowBackgroundStyle(index);
-    const qeiColor = getQEIColorStyle(qb.qei);
-    const qeiLabel = getQEILabel(qb.qei);
+    const qeiColor = getQEIColorStyle(qb, allQBsWithBaseScores);
+    const qeiLabel = getQEILabel(qb, allQBsWithBaseScores);
     const teamLogosHtml = await getTeamLogosHtml(qb);
     
           return `
@@ -162,22 +165,52 @@ function getRowBackgroundStyle(index) {
   return 'background: rgba(59, 130, 246, 0.05);';
 }
 
-function getQEIColorStyle(qei) {
-  if (qei >= 85) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.3), rgba(251, 146, 60, 0.3)); color: #fef3c7;';
-  if (qei >= 75) return 'background: linear-gradient(to right, rgba(209, 213, 219, 0.3), rgba(156, 163, 175, 0.3)); color: #e5e7eb;';
-  if (qei >= 65) return 'background: linear-gradient(to right, rgba(217, 119, 6, 0.3), rgba(180, 83, 9, 0.3)); color: #fed7aa;';
-  if (qei >= 55) return 'background: linear-gradient(to right, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3)); color: #bbf7d0;';
-  if (qei >= 45) return 'background: linear-gradient(to right, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.3)); color: #dbeafe;';
-  return 'background: rgba(255, 255, 255, 0.1); color: white;';
+function getQEIColorStyle(qb, allQBsWithBaseScores = null) {
+  // Import the dynamic tier function from uiHelpers
+  const { calculateDynamicTiers } = require('./uiHelpers');
+  const tiers = allQBsWithBaseScores ? calculateDynamicTiers(allQBsWithBaseScores) : null;
+  
+  if (tiers && qb.baseScores) {
+    // Calculate this QB's composite score using the same fixed weights as tier calculation
+    const FIXED_WEIGHTS = {
+      team: 30,
+      stats: 40,
+      clutch: 0,
+      durability: 15,
+      support: 15
+    };
+    const totalFixedWeight = FIXED_WEIGHTS.team + FIXED_WEIGHTS.stats + FIXED_WEIGHTS.durability + FIXED_WEIGHTS.support;
+    
+    const compositeScore = (
+      (qb.baseScores.team * FIXED_WEIGHTS.team) +
+      (qb.baseScores.stats * FIXED_WEIGHTS.stats) +
+      (qb.baseScores.durability * FIXED_WEIGHTS.durability) +
+      ((100 - qb.baseScores.support) * FIXED_WEIGHTS.support)
+    ) / totalFixedWeight;
+    
+    // Use composite score for tier comparison
+    if (compositeScore >= tiers.elite) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.3), rgba(251, 146, 60, 0.3)); color: #fef3c7;';
+    if (compositeScore >= tiers.excellent) return 'background: linear-gradient(to right, rgba(209, 213, 219, 0.3), rgba(156, 163, 175, 0.3)); color: #e5e7eb;';
+    if (compositeScore >= tiers.veryGood) return 'background: linear-gradient(to right, rgba(217, 119, 6, 0.3), rgba(180, 83, 9, 0.3)); color: #fed7aa;';
+    if (compositeScore >= tiers.good) return 'background: linear-gradient(to right, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3)); color: #bbf7d0;';
+    if (compositeScore >= tiers.average) return 'background: linear-gradient(to right, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.3)); color: #dbeafe;';
+    return 'background: rgba(255, 255, 255, 0.1); color: white;';
+  } else {
+    // Fallback to static thresholds using QEI score
+    const qei = qb.qei || 0;
+    if (qei >= 85) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.3), rgba(251, 146, 60, 0.3)); color: #fef3c7;';
+    if (qei >= 75) return 'background: linear-gradient(to right, rgba(209, 213, 219, 0.3), rgba(156, 163, 175, 0.3)); color: #e5e7eb;';
+    if (qei >= 65) return 'background: linear-gradient(to right, rgba(217, 119, 6, 0.3), rgba(180, 83, 9, 0.3)); color: #fed7aa;';
+    if (qei >= 55) return 'background: linear-gradient(to right, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3)); color: #bbf7d0;';
+    if (qei >= 45) return 'background: linear-gradient(to right, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.3)); color: #dbeafe;';
+    return 'background: rgba(255, 255, 255, 0.1); color: white;';
+  }
 }
 
-function getQEILabel(qei) {
-  if (qei >= 95) return 'Elite';
-  if (qei >= 88) return 'Excellent';
-  if (qei >= 78) return 'Very Good';
-  if (qei >= 65) return 'Good';
-  if (qei >= 50) return 'Average';
-  return 'Below Avg';
+function getQEILabel(qb, allQBsWithBaseScores = null) {
+  // Import the dynamic tier function from uiHelpers
+  const { getQEITier } = require('./uiHelpers');
+  return getQEITier(qb, allQBsWithBaseScores);
 }
 
 async function getTeamLogosHtml(qb) {

@@ -1,8 +1,10 @@
-import React, { memo, useCallback } from 'react';
-import { getQEIColor } from '../utils/uiHelpers.js';
+import React, { memo, useCallback, useMemo } from 'react';
+import { getQEIColor, getQEITier } from '../utils/uiHelpers.js';
 import { getTeamInfo } from '../constants/teamData.js';
 
 const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = false }) => {
+  // Extract all QBs with QEI scores for dynamic tier calculation
+  const allQBsWithQEI = useMemo(() => rankedQBs, [rankedQBs]);
   // Helper function to get all unique teams a QB played for
   const getQBTeams = useCallback((qb) => {
     if (!qb.seasonData || qb.seasonData.length === 0) {
@@ -80,14 +82,9 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
     return totalPlayoffStarts;
   }, []);
 
-  const getQEILabel = useCallback((qei) => {
-    if (qei >= 95) return 'Elite';
-    if (qei >= 88) return 'Excellent';
-    if (qei >= 78) return 'Very Good';
-    if (qei >= 65) return 'Good';
-    if (qei >= 50) return 'Average';
-    return 'Below Avg';
-  }, []);
+  const getQEILabel = useCallback((qb) => {
+    return getQEITier(qb, allQBsWithQEI);
+  }, [allQBsWithQEI]);
 
   const getRowClassName = useCallback((index) => {
     const baseClasses = 'border-b border-white/10 hover:bg-white/5 transition-colors';
@@ -155,10 +152,10 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
                     </div>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <div className={`inline-block px-3 py-1 rounded-lg ${getQEIColor(qb.qei)}`}>
+                    <div className={`inline-block px-3 py-1 rounded-lg ${getQEIColor(qb, allQBsWithQEI)}`}>
                       <span className="text-xl font-bold">{qb.qei.toFixed(2)}</span>
                       <div className="text-xs opacity-75">
-                        {getQEILabel(qb.qei)}
+                        {getQEILabel(qb)}
                       </div>
                     </div>
                   </td>

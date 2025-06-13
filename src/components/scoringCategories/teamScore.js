@@ -253,19 +253,13 @@ const calculatePlayoffWeightedWins = (playoffData, team, year, include2024Only =
   
   if (totalGames === 0) return 0;
   
-  // Define playoff weights object - enhanced for 2024-only mode
-  const WEIGHTS = include2024Only ? {
-    // 2024-only mode: Significantly increased playoff bonuses
-    SUPER_BOWL_WIN: 3.0, SUPER_BOWL_LOSS: 1.8, // 5x increase from 0.6/0.3
-    CONF_CHAMPIONSHIP_WIN: 2.1, CONF_CHAMPIONSHIP_LOSS: 1.2, // 5x increase from 0.42/0.21
-    DIVISIONAL_WIN: 1.5, DIVISIONAL_LOSS: 0.8, // 5x increase from 0.3/0.15
-    WILD_CARD_WIN: 1.0, WILD_CARD_LOSS: 0.6 // ~5x increase from 0.21/0.12
-  } : {
-    // Normal mode: Current reduced values
-    SUPER_BOWL_WIN: 0.6, SUPER_BOWL_LOSS: 0.3, // Further reduced from 2.0/1.0
-    CONF_CHAMPIONSHIP_WIN: 0.42, CONF_CHAMPIONSHIP_LOSS: 0.21, // Further reduced from 1.4/0.7
-    DIVISIONAL_WIN: 0.3, DIVISIONAL_LOSS: 0.15, // Further reduced from 1.0/0.5
-    WILD_CARD_WIN: 0.21, WILD_CARD_LOSS: 0.12 // Further reduced from 0.7/0.4
+  // Define playoff weights object - NORMALIZED across both modes
+  const WEIGHTS = {
+    // Consistent playoff weights for both 2024-only and 3-year modes
+    SUPER_BOWL_WIN: 0.6, SUPER_BOWL_LOSS: 0.3,
+    CONF_CHAMPIONSHIP_WIN: 0.42, CONF_CHAMPIONSHIP_LOSS: 0.21,
+    DIVISIONAL_WIN: 0.3, DIVISIONAL_LOSS: 0.15,
+    WILD_CARD_WIN: 0.21, WILD_CARD_LOSS: 0.12
   };
   
   let weightedWins = 0;
@@ -330,7 +324,7 @@ const calculateByeWeekBonus = (playoffData, team, year, include2024Only = false)
     };
     
     if (byeWeekTeams[year] && byeWeekTeams[year].includes(team)) {
-      return include2024Only ? 1.0 : 0.21; // Enhanced bye bonus for 2024-only mode
+      return 0.21; // Consistent bye bonus for both modes
     }
   }
   
@@ -447,18 +441,18 @@ export const calculateTeamScore = (
         // Performance comparison ratio (capped for sanity)
         const performanceRatio = Math.max(0.85, Math.min(1.20, playoffWinPct / Math.max(regWinPct, 0.3)));
         
-        // Apply round progression modifier - enhanced for 2024-only mode
+        // Apply round progression modifier - NORMALIZED across both modes
         let roundImportanceBonus = 1.0;
         const progress = getPlayoffProgress(data.Team, year);
         if (progress) {
           if (progress.reached === "Super Bowl" && progress.result === "Won") {
-            roundImportanceBonus = include2024Only ? 1.50 : 1.08;
+            roundImportanceBonus = 1.08; // Consistent across both modes
           } else if (progress.reached === "Super Bowl") {
-            roundImportanceBonus = include2024Only ? 1.30 : 1.04;
+            roundImportanceBonus = 1.04; // Consistent across both modes
           } else if (progress.reached === "Conference") {
-            roundImportanceBonus = include2024Only ? 1.20 : 1.02;
+            roundImportanceBonus = 1.02; // Consistent across both modes
           } else if (progress.reached === "Divisional") {
-            roundImportanceBonus = include2024Only ? 1.10 : 1.01;
+            roundImportanceBonus = 1.01; // Consistent across both modes
           }
         }
         
@@ -495,11 +489,13 @@ export const calculateTeamScore = (
     console.log(`🔍 BASE OFFENSE OUTPUT: ${weightedOffenseDVOA.toFixed(1)} (total weight: ${totalWeight.toFixed(2)})`);
   }
   
-    // CAREER PLAYOFF ACHIEVEMENT BONUS: Calculate for use in normalized scoring
+    // CAREER PLAYOFF ACHIEVEMENT BONUS: Only calculate if playoffs are enabled
   let careerPlayoffScore = 0;
-  const achievementYearWeights = include2024Only ? { '2024': 1.0 } : REGULAR_SEASON_YEAR_WEIGHTS;
+  
+  if (includePlayoffs) {
+    const achievementYearWeights = include2024Only ? { '2024': 1.0 } : REGULAR_SEASON_YEAR_WEIGHTS;
 
-  Object.entries(qbData.years || {}).forEach(([year, data]) => {
+    Object.entries(qbData.years || {}).forEach(([year, data]) => {
     const weight = achievementYearWeights[year] || 0;
     if (weight === 0 || !data.playoffData) return;
 
@@ -534,27 +530,29 @@ export const calculateTeamScore = (
       }
     }
 
+    // DRASTICALLY REDUCED bonuses to prevent score inflation
     if (isSuperBowlWin) {
-      careerPlayoffScore += 25 * weight;
+      careerPlayoffScore += 5 * weight; // Reduced from 25 to 5
     } else if (isSuperBowlAppearance) {
-      careerPlayoffScore += 15 * weight;
+      careerPlayoffScore += 3 * weight; // Reduced from 15 to 3
     }
     if (isConferenceChampWin) {
-      careerPlayoffScore += 8 * weight;
+      careerPlayoffScore += 2 * weight; // Reduced from 8 to 2
     } else if (isConferenceChampAppearance) {
-      careerPlayoffScore += 4 * weight;
+      careerPlayoffScore += 1 * weight; // Reduced from 4 to 1
     }
-    careerPlayoffScore += playoffGames * 1.5 * weight;
-  });
+    careerPlayoffScore += playoffGames * 0.5 * weight; // Reduced from 1.5 to 0.5
+    });
+  }
 
-  // Cap career playoff score at reasonable level
-  const normalizedCareerPlayoffScore = Math.min(35, careerPlayoffScore);
+  // Cap career playoff score at much lower level to prevent inflation
+  const normalizedCareerPlayoffScore = Math.min(15, careerPlayoffScore); // Reduced from 35 to 15
 
   // CONTEXT-AWARE TEAM COMPONENT SCALING - Normalized to 0-100 base scoring
   // Calculate individual normalized scores (0-100 scale) for each team metric
   const regularSeasonNormalized = Math.max(0, Math.min(100, weightedWinPct * 100));
   const offenseDVOANormalized = Math.max(0, Math.min(100, (weightedOffenseDVOA / 15) * 100));
-  const careerPlayoffNormalized = Math.max(0, Math.min(100, (normalizedCareerPlayoffScore / 35) * 100));
+  const careerPlayoffNormalized = Math.max(0, Math.min(100, (normalizedCareerPlayoffScore / 15) * 100)); // Updated denominator from 35 to 15
 
   // Use the provided teamWeights for the weighted average
   const totalTeamSubWeights = (teamWeights.regularSeason || 0) + (teamWeights.offenseDVOA || 0) + (teamWeights.playoff || 0);
@@ -569,9 +567,9 @@ export const calculateTeamScore = (
   }
   
   // Apply playoff adjustment to the composite score (affects all components proportionally)
+  // Cap the adjustment to prevent extreme inflation, then normalize to 0-100
   const adjustedTeamCompositeScore = teamCompositeScore * playoffAdjustmentFactor;
-  
-  const finalScore = adjustedTeamCompositeScore;
+  const finalScore = Math.max(0, Math.min(100, adjustedTeamCompositeScore));
   
     // Debug final calculation
   if (debugMode && playerName) {
@@ -597,9 +595,8 @@ export const calculateTeamScore = (
     console.log(`🏆 SUPER BOWL WINNER: Raw Career(${normalizedCareerPlayoffScore.toFixed(1)}) normalized to ${careerPlayoffNormalized.toFixed(1)} points!`);
   }
   
-  // Normalize the score to be between 0 and 100
-  const finalScoreClamped = Math.max(0, Math.min(100, finalScore));
-  return finalScoreClamped;
+  // Score is already normalized above, return directly
+  return finalScore;
 };
 
 // VALIDATION FUNCTION: Verify all 32 NFL teams are covered in DVOA data

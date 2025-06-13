@@ -46,7 +46,7 @@ export const TEAM_MAP = {
 
 export const PHILOSOPHY_PRESETS = {
   default: {
-    team: 35, stats: 35, clutch: 5, durability: 10, support: 15,
+    team: 37, stats: 37, clutch: 0, durability: 11, support: 15,
     description: "Balanced default configuration with equal team/stats emphasis",
     // Sub-component weights for default preset
     supportWeights: {
@@ -77,7 +77,7 @@ export const PHILOSOPHY_PRESETS = {
   },
   
   winner: {
-    team: 65, stats: 25, clutch: 5, durability: 5, support: 0,
+    team: 68, stats: 27, clutch: 0, durability: 5, support: 0,
     description: "Winning is everything - team success dominates",
     // Sub-component weights for winner preset
     supportWeights: {
@@ -108,7 +108,7 @@ export const PHILOSOPHY_PRESETS = {
   },
   
   analyst: {
-    team: 10, stats: 75, clutch: 5, durability: 5, support: 5,
+    team: 10, stats: 80, clutch: 0, durability: 5, support: 5,
     description: "Numbers don't lie - statistical excellence",
     // Sub-component weights for analyst preset
     supportWeights: {
@@ -139,7 +139,7 @@ export const PHILOSOPHY_PRESETS = {
   },
   
   context: {
-    team: 25, stats: 35, clutch: 5, durability: 5, support: 30,
+    team: 25, stats: 37, clutch: 0, durability: 8, support: 30,
     description: "Context matters - extra credit for difficult situations",
     // Sub-component weights for context preset
     supportWeights: {
