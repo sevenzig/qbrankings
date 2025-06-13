@@ -99,11 +99,16 @@ export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, i
   // Calculate weighted average of normalized scores using sub-component weights
   const totalDurabilitySubWeights = durabilityWeights.availability + durabilityWeights.consistency;
   
-  let finalScore = 0;
+  let compositeScore = 0;
   if (totalDurabilitySubWeights > 0) {
-    finalScore = ((availabilityNormalized * durabilityWeights.availability) +
-                  (consistencyNormalized * durabilityWeights.consistency)) / totalDurabilitySubWeights;
+    compositeScore = ((availabilityNormalized * durabilityWeights.availability) +
+                     (consistencyNormalized * durabilityWeights.consistency)) / totalDurabilitySubWeights;
   }
+
+  // ELITE PERFORMANCE SCALING: Apply 1.15x multiplier to push elite performers to 100+ range
+  // This addresses the psychological impact of reaching the 100 threshold
+  const scaledScore = compositeScore * 1.15;
+  const finalScore = Math.max(0, Math.min(150, scaledScore)); // Increased cap to 150 to allow elite scores
 
   return finalScore;
 }; 

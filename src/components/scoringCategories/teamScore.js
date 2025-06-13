@@ -552,7 +552,7 @@ export const calculateTeamScore = (
   // Calculate individual normalized scores (0-100 scale) for each team metric
   const regularSeasonNormalized = Math.max(0, Math.min(100, weightedWinPct * 100));
   const offenseDVOANormalized = Math.max(0, Math.min(100, (weightedOffenseDVOA / 15) * 100));
-  const careerPlayoffNormalized = Math.max(0, Math.min(100, (normalizedCareerPlayoffScore / 15) * 100)); // Updated denominator from 35 to 15
+  const careerPlayoffNormalized = Math.max(0, Math.min(100, (normalizedCareerPlayoffScore / 15) * 100)); // Keep denominator at 15 to match reduced playoff bonuses
 
   // Use the provided teamWeights for the weighted average
   const totalTeamSubWeights = (teamWeights.regularSeason || 0) + (teamWeights.offenseDVOA || 0) + (teamWeights.playoff || 0);
@@ -569,16 +569,20 @@ export const calculateTeamScore = (
   // Apply playoff adjustment to the composite score (affects all components proportionally)
   // Cap the adjustment to prevent extreme inflation, then normalize to 0-100
   const adjustedTeamCompositeScore = teamCompositeScore * playoffAdjustmentFactor;
-  const finalScore = Math.max(0, Math.min(100, adjustedTeamCompositeScore));
+  
+  // TEAM SCORE ADJUSTMENT: Reduce by 40% to normalize scoring range
+  const scaledTeamScore = adjustedTeamCompositeScore * 0.6;
+  const finalScore = Math.max(0, Math.min(100, scaledTeamScore));
   
     // Debug final calculation
   if (debugMode && playerName) {
     console.log(`🔍 FINAL CALCULATION:`);
     console.log(`🔍   Regular Season: ${weightedWinPct.toFixed(3)} × 100 = ${regularSeasonNormalized.toFixed(1)} (weight: ${teamWeights.regularSeason || 0}%)`);
     console.log(`🔍   Offense Output: ${weightedOffenseDVOA.toFixed(1)}/15 × 100 = ${offenseDVOANormalized.toFixed(1)} (weight: ${teamWeights.offenseDVOA || 0}%)`);
-    console.log(`🔍   Career Playoff: ${normalizedCareerPlayoffScore.toFixed(1)}/35 × 100 = ${careerPlayoffNormalized.toFixed(1)} (weight: ${teamWeights.playoff || 0}%)`);
+    console.log(`🔍   Career Playoff: ${normalizedCareerPlayoffScore.toFixed(1)}/15 × 100 = ${careerPlayoffNormalized.toFixed(1)} (weight: ${teamWeights.playoff || 0}%)`);
     console.log(`🔍   Composite Score: (${regularSeasonNormalized.toFixed(1)} × ${teamWeights.regularSeason || 0} + ${offenseDVOANormalized.toFixed(1)} × ${teamWeights.offenseDVOA || 0} + ${careerPlayoffNormalized.toFixed(1)} × ${teamWeights.playoff || 0}) / ${totalTeamSubWeights} = ${teamCompositeScore.toFixed(1)}`);
     console.log(`🔍   Playoff Adjustment: ${teamCompositeScore.toFixed(1)} × ${playoffAdjustmentFactor.toFixed(3)} = ${adjustedTeamCompositeScore.toFixed(1)}`);
+    console.log(`🔍   Team Score Reduction: ${adjustedTeamCompositeScore.toFixed(1)} × 0.6 = ${scaledTeamScore.toFixed(1)}`);
     console.log(`🔍   Final Score: ${finalScore.toFixed(1)}`);
     console.log(`🔍 ----------------------------------------`);
   }

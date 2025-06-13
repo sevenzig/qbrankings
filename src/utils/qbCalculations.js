@@ -9,14 +9,103 @@ import {
 
 // Helper function to normalize weights within a group
 const normalizeWeights = (weights) => {
-  const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
+  if (!weights || typeof weights !== 'object') {
+    return {};
+  }
+  
+  const total = Object.values(weights).reduce((sum, weight) => {
+    const w = parseFloat(weight) || 0;
+    return sum + (isNaN(w) || !isFinite(w) ? 0 : w);
+  }, 0);
+  
   if (total === 0) return weights;
   
   const normalized = {};
   Object.keys(weights).forEach(key => {
-    normalized[key] = weights[key] / total;
+    const weight = parseFloat(weights[key]) || 0;
+    normalized[key] = (isNaN(weight) || !isFinite(weight)) ? 0 : weight / total;
   });
   return normalized;
+};
+
+// Legacy function - kept for compatibility but no longer used
+const calculateSupportAdjustedScore = (rawScore, supportQuality, allQBBaseScores, category, supportWeight) => {
+  // This function is no longer used - replaced with direct support adjustment factor
+  return rawScore;
+};
+
+// Helper: Calculate percentile rank of a score within an array
+const calculatePercentileRank = (score, sortedArray) => {
+  if (sortedArray.length === 0) return 50;
+  
+  let rank = 0;
+  for (let i = 0; i < sortedArray.length; i++) {
+    if (sortedArray[i] < score) rank++;
+    else if (sortedArray[i] === score) rank += 0.5;
+  }
+  
+  return (rank / sortedArray.length) * 100;
+};
+
+// Helper: Calculate what score corresponds to a given percentile
+const calculateScoreAtPercentile = (percentile, sortedArray) => {
+  if (sortedArray.length === 0) return 0;
+  
+  const index = (percentile / 100) * (sortedArray.length - 1);
+  const lowerIndex = Math.floor(index);
+  const upperIndex = Math.ceil(index);
+  
+  if (lowerIndex === upperIndex) {
+    return sortedArray[lowerIndex];
+  }
+  
+  const weight = index - lowerIndex;
+  return sortedArray[lowerIndex] * (1 - weight) + sortedArray[upperIndex] * weight;
+};
+
+// Helper: Calculate support adjustment factor - INVERTS support quality as penalty/reward
+const calculateSupportAdjustmentFactor = (supportQuality, supportWeight) => {
+  // INVERSION LOGIC: Higher support = penalty, Lower support = reward
+  // The adjustment strength scales with support weight (0-100%)
+  const adjustmentStrength = supportWeight / 100; // 0.0 to 1.0
+  
+  // Calculate adjustment based on INVERTED support quality
+  // Good support (high numbers) = penalty when support weight increases
+  // Poor support (low numbers) = reward when support weight increases
+  
+  let adjustmentFactor;
+  
+  if (supportQuality >= 80) {
+    // Elite support: PENALTY scales from 0% to 15% as support weight increases
+    const penaltyAmount = 0.15 * adjustmentStrength;
+    adjustmentFactor = 1.0 - penaltyAmount;
+  } else if (supportQuality >= 60) {
+    // Good support: PENALTY scales from 0% to 8% as support weight increases  
+    const penaltyAmount = 0.08 * adjustmentStrength;
+    adjustmentFactor = 1.0 - penaltyAmount;
+  } else if (supportQuality >= 40) {
+    // Average support: REWARD scales from 0% to 5% as support weight increases
+    const rewardAmount = 0.05 * adjustmentStrength;
+    adjustmentFactor = 1.0 + rewardAmount;
+  } else if (supportQuality >= 20) {
+    // Poor support: REWARD scales from 0% to 15% as support weight increases
+    const rewardAmount = 0.15 * adjustmentStrength;
+    adjustmentFactor = 1.0 + rewardAmount;
+  } else {
+    // Terrible support: REWARD scales from 0% to 20% as support weight increases
+    const rewardAmount = 0.20 * adjustmentStrength;
+    adjustmentFactor = 1.0 + rewardAmount;
+  }
+  
+  // TEST VERIFICATION: Log the calculation for debugging
+  if (supportWeight > 0) {
+    const qbName = 'TEST_QB';
+    const adjustmentType = adjustmentFactor > 1.0 ? 'REWARD' : 'PENALTY';
+    const adjustmentPercent = ((adjustmentFactor - 1.0) * 100).toFixed(1);
+    console.log(`🧪 TEST INVERSION: Support(${supportQuality}) @ Weight(${supportWeight}%) -> ${adjustmentType} ${adjustmentPercent}% (Factor: ${adjustmentFactor.toFixed(3)})`);
+  }
+  
+  return Math.max(0.75, Math.min(1.25, adjustmentFactor)); // Safety bounds
 };
 
 // Hierarchical weight calculation system
@@ -26,14 +115,25 @@ const calculateHierarchicalScore = (componentScores, weights) => {
   
   Object.keys(componentScores).forEach(key => {
     if (normalizedWeights[key] !== undefined) {
-      weightedSum += componentScores[key] * normalizedWeights[key];
+      const score = componentScores[key] || 0;
+      const weight = normalizedWeights[key] || 0;
+      
+      // Ensure both score and weight are valid numbers
+      if (!isNaN(score) && isFinite(score) && !isNaN(weight) && isFinite(weight)) {
+        weightedSum += score * weight;
+      }
     }
   });
+  
+  // Ensure the result is a valid number
+  if (isNaN(weightedSum) || !isFinite(weightedSum)) {
+    return 0;
+  }
   
   return weightedSum;
 };
 
-export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 65, playoff: 35 }, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, includePlayoffs = true, include2024Only = false, efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 }, protectionWeights = { sackPct: 60, turnoverRate: 40 }, volumeWeights = { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, durabilityWeights = { availability: 75, consistency: 25 }, allQBData = []) => {
+export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 65, playoff: 35 }, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, includePlayoffs = true, include2024Only = false, efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 }, protectionWeights = { sackPct: 60, turnoverRate: 40 }, volumeWeights = { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, durabilityWeights = { availability: 75, consistency: 25 }, allQBData = [], mainSupportWeight = 0) => {
   // Create season data structure for enhanced calculations
   const qbSeasonData = {
     years: {}
@@ -89,7 +189,7 @@ export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, wea
   qbSeasonData.name = qb.name;
 
   // Calculate scores using hierarchical weight system
-  const supportScore = calculateSupportScore(qbSeasonData, supportWeights, include2024Only);
+  const supportScore = calculateSupportScore(qbSeasonData, supportWeights, include2024Only, mainSupportWeight);
   const teamScore = calculateTeamScore(qbSeasonData, teamWeights, includePlayoffs, include2024Only, supportScore);
   const statsScore = calculateStatsScore(qbSeasonData, statsWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights);
   const clutchScore = calculateClutchScore(qbSeasonData, includePlayoffs, clutchWeights, include2024Only, allQBData);
@@ -181,16 +281,55 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
   // Apply season-specific game start penalties
   const penalties = applyGameStartPenalties(qb, include2024Only);
   
-  // Apply penalties to component scores before hierarchical weighting
-  // Support is inverted: higher support quality = lower component contribution (achievements less impressive)
-  // Reduced adjustment: 50% inversion instead of 100% for more moderate penalty
-  const penalizedScores = {
-    team: baseScores.team,
-    stats: baseScores.stats,
-    clutch: baseScores.clutch,
-    durability: baseScores.durability,
-    support: 100 - (baseScores.support * 0.5) // 50% inversion for moderate penalty
+  // Enhanced support-based contextual reweighting using comprehensive support data
+  // This normalizes QB performance relative to others in similar support situations
+  const supportQuality = baseScores.support || 50;
+  const supportWeight = weights.support || 0;
+  
+  // Debug support weight extraction - FORCE DEBUG FOR KEY QBs
+  const qbName = qb?.name || 'Unknown QB';
+  const isKeyQB = qbName.includes('Hurts') || qbName.includes('Burrow') || qbName.includes('Jackson') || qbName.includes('Allen');
+  
+  if (isKeyQB || supportWeight > 0) {
+    console.log(`🔍 QEI CALCULATION ${qbName}: supportWeight=${supportWeight}, supportQuality=${supportQuality.toFixed(1)}, baseScores:`, baseScores);
+  }
+  
+  let contextualScores = {
+    team: baseScores.team || 0,
+    stats: baseScores.stats || 0,
+    clutch: baseScores.clutch || 0,
+    durability: baseScores.durability || 0,
+    support: supportQuality
   };
+  
+  // CORE FIX: Support should work as a PENALTY/REWARD system, not additive
+  // When support weight increases, good support should HURT QEI, poor support should HELP QEI
+  if (supportWeight > 0) {
+    // Calculate the support adjustment as a modifier to other scores, not an additive component
+    const supportAdjustmentFactor = calculateSupportAdjustmentFactor(supportQuality, supportWeight);
+    
+    // Apply the support adjustment to team and stats scores (most affected by support context)
+    contextualScores.team = (baseScores.team || 0) * supportAdjustmentFactor;
+    contextualScores.stats = (baseScores.stats || 0) * supportAdjustmentFactor;
+    
+    // Apply lighter adjustment to clutch and durability  
+    const lighterAdjustment = 1 + (supportAdjustmentFactor - 1) * 0.3;
+    contextualScores.clutch = (baseScores.clutch || 0) * lighterAdjustment;
+    contextualScores.durability = (baseScores.durability || 0) * lighterAdjustment;
+    
+    // Set support score to 0 so it doesn't add to the final score - it's now a modifier, not additive
+    contextualScores.support = 0;
+    
+    if (isKeyQB) {
+      console.log(`🔧 SUPPORT AS MODIFIER ${qbName}: Factor(${supportAdjustmentFactor.toFixed(3)}) applied to other scores`);
+      console.log(`   Team: ${(baseScores.team || 0).toFixed(1)} → ${contextualScores.team.toFixed(1)}`);
+      console.log(`   Stats: ${(baseScores.stats || 0).toFixed(1)} → ${contextualScores.stats.toFixed(1)}`);
+    }
+  }
+  
+  // REMOVED: Support adjustment logic now handled in calculateSupportScore function
+  // The support score now comes pre-adjusted based on the main support weight
+  // No additional adjustment needed here since inversion is applied at score calculation
 
   // In multi-year mode, apply per-season penalties to scores
   // Note: This is a simplified approach - ideally we'd apply penalties to each season's 
@@ -204,18 +343,72 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
                            (penalties[2022] * yearWeights[2022]);
     
     // Apply the effective weight reduction to all component scores
-    Object.keys(penalizedScores).forEach(component => {
-      penalizedScores[component] *= effectiveWeight;
+    Object.keys(contextualScores).forEach(component => {
+      if (isNaN(contextualScores[component]) || !isFinite(contextualScores[component])) {
+        contextualScores[component] = 0;
+      }
+      contextualScores[component] *= effectiveWeight;
     });
   } else {
     // In 2024-only mode, apply 2024 penalty directly
-    Object.keys(penalizedScores).forEach(component => {
-      penalizedScores[component] *= penalties[2024];
+    Object.keys(contextualScores).forEach(component => {
+      if (isNaN(contextualScores[component]) || !isFinite(contextualScores[component])) {
+        contextualScores[component] = 0;
+      }
+      contextualScores[component] *= penalties[2024];
     });
   }
 
+  // Extract only top-level weights for hierarchical calculation
+  // Handle both simple weight objects and philosophy preset objects
+  const topLevelWeights = {
+    team: weights.team || 0,
+    stats: weights.stats || 0,
+    clutch: weights.clutch || 0,
+    durability: weights.durability || 0,
+    support: weights.support || 0
+  };
+  
+  // If support weight > 0, redistribute that weight to other categories since support is now a modifier
+  if (supportWeight > 0) {
+    const totalOtherWeights = topLevelWeights.team + topLevelWeights.stats + topLevelWeights.clutch + topLevelWeights.durability;
+    if (totalOtherWeights > 0) {
+      // Redistribute support weight proportionally to other categories
+      const redistributionFactor = (totalOtherWeights + supportWeight) / totalOtherWeights;
+      topLevelWeights.team *= redistributionFactor;
+      topLevelWeights.stats *= redistributionFactor;
+      topLevelWeights.clutch *= redistributionFactor;
+      topLevelWeights.durability *= redistributionFactor;
+    }
+    topLevelWeights.support = 0; // Support doesn't get direct weight since it's a modifier
+    
+    if (isKeyQB) {
+      console.log(`📊 WEIGHT REDISTRIBUTION ${qbName}: Support weight(${supportWeight}) redistributed to other categories`);
+      console.log(`   Adjusted weights: Team(${topLevelWeights.team.toFixed(1)}) Stats(${topLevelWeights.stats.toFixed(1)}) Clutch(${topLevelWeights.clutch.toFixed(1)}) Durability(${topLevelWeights.durability.toFixed(1)})`);
+    }
+  }
+
   // Calculate weighted composite score using user's current weights (true hierarchical)
-  const compositeScore = calculateHierarchicalScore(penalizedScores, weights);
+  const compositeScore = calculateHierarchicalScore(contextualScores, topLevelWeights);
+  
+  // DEBUG: Show the hierarchical score calculation for key QBs
+  if (isKeyQB || supportWeight > 0) {
+    console.log(`🧮 HIERARCHICAL CALC ${qbName}:`);
+    console.log(`   Scores: Team(${contextualScores.team.toFixed(1)}) Stats(${contextualScores.stats.toFixed(1)}) Clutch(${contextualScores.clutch.toFixed(1)}) Durability(${contextualScores.durability.toFixed(1)}) Support(${contextualScores.support.toFixed(1)})`);
+    console.log(`   Weights: Team(${topLevelWeights.team}) Stats(${topLevelWeights.stats}) Clutch(${topLevelWeights.clutch}) Durability(${topLevelWeights.durability}) Support(${topLevelWeights.support})`);
+    console.log(`   Composite Score: ${compositeScore.toFixed(3)}`);
+    
+    // Show individual contributions
+    const teamContrib = contextualScores.team * topLevelWeights.team;
+    const statsContrib = contextualScores.stats * topLevelWeights.stats;
+    const clutchContrib = contextualScores.clutch * topLevelWeights.clutch;
+    const durabilityContrib = contextualScores.durability * topLevelWeights.durability;
+    const supportContrib = contextualScores.support * topLevelWeights.support;
+    const totalWeight = Object.values(topLevelWeights).reduce((sum, w) => sum + w, 0);
+    
+    console.log(`   Contributions: Team(${teamContrib.toFixed(2)}) Stats(${statsContrib.toFixed(2)}) Clutch(${clutchContrib.toFixed(2)}) Durability(${durabilityContrib.toFixed(2)}) Support(${supportContrib.toFixed(2)})`);
+    console.log(`   Total Weight: ${totalWeight}, Weighted Sum: ${(teamContrib + statsContrib + clutchContrib + durabilityContrib + supportContrib).toFixed(3)}`);
+  }
   
   // Apply experience penalty for rookies and near-rookies in 2024-only mode only
   const experience = qb?.experience || qb?.seasonData?.length || 1;
@@ -231,7 +424,17 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
   // Calculate final QEI score
   let finalScore = compositeScore * experienceModifier;
   
-  // Ensure minimum score of 0
+  // Ensure minimum score of 0 and handle NaN/Infinity
+  if (isNaN(finalScore) || !isFinite(finalScore)) {
+    finalScore = 0;
+  }
+  
+  // DEBUG: Show final score calculation for key QBs
+  if (isKeyQB || supportWeight > 0) {
+    console.log(`🏆 FINAL QEI ${qbName}: Composite(${compositeScore.toFixed(3)}) × Experience(${experienceModifier.toFixed(3)}) = Final(${finalScore.toFixed(3)})`);
+    console.log(`───────────────────────────────────────────────────────────────────────`);
+  }
+  
   return Math.max(0, finalScore);
 };
 

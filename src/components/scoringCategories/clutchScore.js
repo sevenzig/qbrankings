@@ -270,7 +270,10 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
                            (playoffBonusNormalized * clutchWeights.playoffBonus)) / totalClutchSubWeights;
   }
   
-  const finalScore = clutchCompositeScore;
+  // ELITE PERFORMANCE SCALING: Apply 1.2x multiplier to push elite performers to 100+ range
+  // This addresses the psychological impact of reaching the 100 threshold
+  const scaledScore = clutchCompositeScore * 1.2;
+  const finalScore = Math.max(0, Math.min(150, scaledScore)); // Increased cap to 150 to allow elite scores
 
   if (debugMode && playerName) {
     console.log(`💎 RELATIVE CLUTCH FINAL: ${finalScore.toFixed(1)}/100`);

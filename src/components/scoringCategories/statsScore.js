@@ -349,8 +349,14 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
   }
   
   // Apply playoff adjustment to base stats score
-  const finalStatsScore = baseStatsScore * playoffAdjustmentFactor;
+  const adjustedStatsScore = baseStatsScore * playoffAdjustmentFactor;
   
-  // Ensure score stays within 0-100 range
-  return Math.max(0, Math.min(100, finalStatsScore));
+  // ELITE PERFORMANCE SCALING: Apply flat 1.5x multiplier to push elite performers to 100+ range
+  // This addresses the psychological impact of reaching the 100 threshold
+  const scaledStatsScore = adjustedStatsScore * 1.5;
+  
+  // Ensure score stays within reasonable range (increased cap to 150 to allow elite scores)
+  const finalStatsScore = Math.max(0, Math.min(150, scaledStatsScore));
+  
+  return finalStatsScore;
 }; 

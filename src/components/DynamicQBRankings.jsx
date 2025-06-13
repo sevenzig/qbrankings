@@ -239,7 +239,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     if (!preset) return;
     
     // Extract only the weight categories, exclude the description and sub-component weights
-    const { description, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, ...weightCategories } = preset;
+    const { description, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, efficiencyWeights, protectionWeights, volumeWeights, ...weightCategories } = preset;
     
     // Use startTransition to batch all state updates for better performance
     startTransition(() => {
@@ -265,6 +265,18 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
       
       if (durabilityWeights) {
         setDurabilityWeights(durabilityWeights);
+      }
+      
+      if (efficiencyWeights) {
+        setEfficiencyWeights(efficiencyWeights);
+      }
+      
+      if (protectionWeights) {
+        setProtectionWeights(protectionWeights);
+      }
+      
+      if (volumeWeights) {
+        setVolumeWeights(volumeWeights);
       }
     });
   }, []);
@@ -869,7 +881,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     
     // First pass: Calculate all base scores
     const qbsWithBaseScores = qbData.map(qb => {
-              const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights, qbData);
+              const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights, qbData, weights.support);
       return {
         ...qb,
         baseScores
