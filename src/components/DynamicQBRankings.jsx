@@ -43,6 +43,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
   });
   const [currentPreset, setCurrentPreset] = useState('default');
   const [isCustomizeAccordionOpen, setIsCustomizeAccordionOpen] = useState(false);
+  const [isPresetsAccordionOpen, setIsPresetsAccordionOpen] = useState(false);
   const [supportWeights, setSupportWeights] = useState({
     offensiveLine: 34,
     weapons: 33,
@@ -1163,38 +1164,79 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
           </p>
         </div>
 
-        {/* Quick Philosophy Presets - Outside Accordion */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 mb-6">
-          <h3 className="text-xl font-bold text-white mb-4">⚡ Quick Philosophy Presets</h3>
-          <div className="flex flex-wrap gap-2 mb-3">
-            <button
-              onClick={() => applyPreset('default')}
-              className="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-600/20 hover:bg-gray-600/30 text-gray-200"
-            >
-              ⚙️ Default
-            </button>
-            <button
-              onClick={() => applyPreset('winner')}
-              className="px-4 py-2 rounded-lg font-medium transition-colors bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-200"
-            >
-              🏆 Winner
-            </button>
-            <button
-              onClick={() => applyPreset('analyst')}
-              className="px-4 py-2 rounded-lg font-medium transition-colors bg-green-600/20 hover:bg-green-600/30 text-green-200"
-            >
-              📊 Analyst
-            </button>
-            <button
-              onClick={() => applyPreset('context')}
-              className="px-4 py-2 rounded-lg font-medium transition-colors bg-purple-600/20 hover:bg-purple-600/30 text-purple-200"
-            >
-              🏢 Context
-            </button>
+        {/* Quick Philosophy Presets - Collapsible */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-2xl mb-6">
+          {/* Presets Accordion Header */}
+          <div 
+            className="p-6 cursor-pointer hover:bg-white/5 transition-colors select-none"
+            onClick={() => setIsPresetsAccordionOpen(!isPresetsAccordionOpen)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-white">⚡ Quick Philosophy Presets</h3>
+                <p className="text-blue-200 text-sm mt-1">
+                  💡 Current: {getCurrentPresetDescription}
+                </p>
+              </div>
+              <div className="ml-6 flex items-center justify-center">
+                <div className={`
+                  w-8 h-8 rounded-full bg-white/10 border border-white/20 
+                  flex items-center justify-center
+                  transition-all duration-300 ease-in-out
+                  hover:bg-white/20 hover:border-white/30
+                  ${isPresetsAccordionOpen ? 'rotate-180 bg-blue-500/30 border-blue-400/50' : 'rotate-0'}
+                `}>
+                  <svg 
+                    className="w-4 h-4 text-white transition-colors duration-300" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M19 9l-7 7-7-7" 
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="text-sm text-blue-200 italic">
-            💡 Current Philosophy: {getCurrentPresetDescription}
-          </div>
+
+          {/* Presets Accordion Content */}
+          {isPresetsAccordionOpen && (
+            <div className="border-t border-white/10">
+              <div className="p-6">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => applyPreset('default')}
+                    className="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-600/20 hover:bg-gray-600/30 text-gray-200"
+                  >
+                    ⚙️ Default
+                  </button>
+                  <button
+                    onClick={() => applyPreset('winner')}
+                    className="px-4 py-2 rounded-lg font-medium transition-colors bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-200"
+                  >
+                    🏆 Winner
+                  </button>
+                  <button
+                    onClick={() => applyPreset('analyst')}
+                    className="px-4 py-2 rounded-lg font-medium transition-colors bg-green-600/20 hover:bg-green-600/30 text-green-200"
+                  >
+                    📊 Analyst
+                  </button>
+                  <button
+                    onClick={() => applyPreset('context')}
+                    className="px-4 py-2 rounded-lg font-medium transition-colors bg-purple-600/20 hover:bg-purple-600/30 text-purple-200"
+                  >
+                    🏢 Context
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Customize Your QB Philosophy - Accordion */}
