@@ -120,36 +120,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Effect to automatically adjust clutch weights when playoff toggle changes
-  useEffect(() => {
-    if (!includePlayoffs) {
-      // When playoffs are disabled, set playoff bonus to 0% and redistribute to other components
-      setClutchWeights(prev => {
-        if (prev.playoffBonus === 0) return prev; // Already adjusted
-        
-        // New balanced defaults when no playoffs: GWD 50%, 4QC 30%, Rate 20%
-        return {
-          gameWinningDrives: 50,    // Increased from 40%
-          fourthQuarterComebacks: 30, // Increased from 25%
-          clutchRate: 20,           // Increased from 15%
-          playoffBonus: 0           // Disabled
-        };
-      });
-    } else {
-      // When playoffs are re-enabled, restore balanced defaults
-      setClutchWeights(prev => {
-        if (prev.playoffBonus > 0) return prev; // Already has playoff bonus
-        
-        // Restore original balanced defaults: GWD 40%, 4QC 25%, Rate 15%, Playoff 20%
-        return {
-          gameWinningDrives: 40,
-          fourthQuarterComebacks: 25,
-          clutchRate: 15,
-          playoffBonus: 20
-        };
-      });
-    }
-  }, [includePlayoffs]); // Run when includePlayoffs changes
+
 
   const updateWeight = useCallback((category, value) => {
     const validatedValue = validateNumberInput(value, 0, 100);
@@ -985,6 +956,9 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     });
   }, []);
 
+  // Track if we've loaded from URL to prevent overrides
+  const [hasLoadedFromUrl, setHasLoadedFromUrl] = useState(false);
+
   // Load settings from URL on component mount
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -996,8 +970,11 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     const settingsToLoad = encodedSettings || encodedWeights;
     
     if (settingsToLoad) {
+      console.log('Loading settings from URL:', settingsToLoad);
       const decodedSettings = decodeSettings(settingsToLoad);
       if (decodedSettings) {
+        console.log('Decoded settings:', decodedSettings);
+        
         // Apply main weights
         if (decodedSettings.weights) {
           setWeights(decodedSettings.weights);
@@ -1039,6 +1016,7 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
         }
         
         setCurrentPreset(preset && PHILOSOPHY_PRESETS[preset] ? preset : 'custom');
+        setHasLoadedFromUrl(true); // Mark that we loaded from URL
       }
     } else if (preset && PHILOSOPHY_PRESETS[preset]) {
       // Call applyPreset directly here instead of using it as a dependency
@@ -1086,14 +1064,57 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     }
   }, []); // Only run once on mount - removed problematic dependency
 
-  // Effect to automatically adjust team weights when playoff toggle changes
+  // Effect to automatically adjust clutch weights when playoff toggle changes
+  // BUT don't override if we loaded custom settings from URL
   useEffect(() => {
+    if (hasLoadedFromUrl) {
+      console.log('Skipping clutch weight auto-adjustment - loaded from URL');
+      return; // Don't auto-adjust if we loaded from URL
+    }
+    
+    if (!includePlayoffs) {
+      // When playoffs are disabled, set playoff bonus to 0% and redistribute to other components
+      setClutchWeights(prev => {
+        if (prev.playoffBonus === 0) return prev; // Already adjusted
+        
+        // New balanced defaults when no playoffs: GWD 50%, 4QC 30%, Rate 20%
+        return {
+          gameWinningDrives: 50,    // Increased from 40%
+          fourthQuarterComebacks: 30, // Increased from 25%
+          clutchRate: 20,           // Increased from 15%
+          playoffBonus: 0           // Disabled
+        };
+      });
+    } else {
+      // When playoffs are re-enabled, restore balanced defaults
+      setClutchWeights(prev => {
+        if (prev.playoffBonus > 0) return prev; // Already has playoff bonus
+        
+        // Restore original balanced defaults: GWD 40%, 4QC 25%, Rate 15%, Playoff 20%
+        return {
+          gameWinningDrives: 40,
+          fourthQuarterComebacks: 25,
+          clutchRate: 15,
+          playoffBonus: 20
+        };
+      });
+    }
+  }, [includePlayoffs, hasLoadedFromUrl]); // Run when includePlayoffs changes
+
+  // Effect to automatically adjust team weights when playoff toggle changes
+  // BUT don't override if we loaded custom settings from URL
+  useEffect(() => {
+    if (hasLoadedFromUrl) {
+      console.log('Skipping team weight auto-adjustment - loaded from URL');
+      return; // Don't auto-adjust if we loaded from URL
+    }
+    
     if (includePlayoffs) {
       setTeamWeights({ regularSeason: 33, offenseDVOA: 33, playoff: 34 });
     } else {
       setTeamWeights({ regularSeason: 50, offenseDVOA: 50, playoff: 0 });
     }
-  }, [includePlayoffs]);
+  }, [includePlayoffs, hasLoadedFromUrl]);
 
   // Refetch data when 2024-only toggle changes
   useEffect(() => {
