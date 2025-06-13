@@ -67,8 +67,8 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
     completionPct: 25   // Completion percentage
   });
   const [protectionWeights, setProtectionWeights] = useState({
-    sackPct: 60,        // Sack percentage
-    turnoverRate: 40    // Combined turnover rate (attempts/turnovers)
+    sackPct: 40,        // Sack percentage (more O-line dependent)
+    turnoverRate: 60    // Combined turnover rate (more QB dependent)
   });
   const [volumeWeights, setVolumeWeights] = useState({
     passYards: 25,      // Passing yards

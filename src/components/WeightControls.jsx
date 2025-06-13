@@ -126,24 +126,73 @@ const WeightControls = memo(({
     <div className="space-y-6">
       {/* Main Weight Sliders - Different layouts for mobile vs desktop */}
       
-      {/* Mobile Layout: Stacked with inline sub-components */}
-      <div className="md:hidden space-y-4">
+      {/* Mobile Layout: Compact stacked with inline sub-components */}
+      <div className="md:hidden space-y-2">
         {Object.entries(weights).map(([category, value]) => (
           <div key={category} className="w-full">
-            <WeightSlider
-              category={category}
-              value={value}
-              onUpdateWeight={onUpdateWeight}
-              disabled={category === 'clutch'}
-              onShowDetails={category === 'team' ? () => onShowDetails.team() :
-                            category === 'stats' ? () => onShowDetails.stats() :
-                            category === 'clutch' ? () => onShowDetails.clutch() :
-                            category === 'durability' ? () => onShowDetails.durability() :
-                            category === 'support' ? () => onShowDetails.support() :
-                            null}
-              showDetails={showDetails[category]}
-              description={weightDescriptions[category]}
-            />
+            {/* Compact top-level component */}
+            <div className="bg-white/10 rounded-lg p-2 border border-white/20">
+              <div className="flex justify-between items-center mb-1">
+                <div className="flex items-center gap-2">
+                  <label className="text-white font-medium text-sm">
+                    {category === 'team' ? '🏆 Team' :
+                     category === 'stats' ? '📊 Stats' :
+                     category === 'clutch' ? '💎 Clutch' :
+                     category === 'durability' ? '⚡ Durability' :
+                     category === 'support' ? '🏟️ Support' : category}
+                  </label>
+                  <button
+                    onClick={() => {
+                      if (category === 'team') onShowDetails.team();
+                      if (category === 'stats') onShowDetails.stats();
+                      if (category === 'clutch') onShowDetails.clutch();
+                      if (category === 'durability') onShowDetails.durability();
+                      if (category === 'support') onShowDetails.support();
+                    }}
+                    className="flex items-center justify-center w-6 h-6 text-sm text-blue-300 hover:text-blue-100 transition-colors bg-white/10 hover:bg-white/20 rounded"
+                    disabled={category === 'clutch'}
+                  >
+                    {showDetails[category] ? '▼' : '▶'}
+                  </button>
+                </div>
+                <span className="bg-blue-500/30 text-blue-100 px-2 py-1 rounded text-sm font-medium">
+                  {value}%
+                </span>
+              </div>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={value}
+                  onChange={(e) => onUpdateWeight(category, e.target.value)}
+                  disabled={category === 'clutch'}
+                  className={`flex-1 h-2 rounded-lg cursor-pointer ${
+                    category === 'clutch' 
+                      ? 'bg-gray-400 cursor-not-allowed opacity-50' 
+                      : 'bg-gray-200'
+                  }`}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={value}
+                  onChange={(e) => onUpdateWeight(category, e.target.value)}
+                  disabled={category === 'clutch'}
+                  className={`w-12 px-1 py-1 border border-white/20 rounded text-sm text-center ${
+                    category === 'clutch' 
+                      ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
+                      : 'bg-white/10 text-white'
+                  }`}
+                />
+              </div>
+              {category === 'clutch' && (
+                <div className="text-xs text-gray-400 mt-1 text-center">
+                  Coming soon: 3rd & 4th down splits, GWD, & 4QC
+                </div>
+              )}
+            </div>
 
             {/* Mobile sub-components - directly under each slider */}
             {category === 'support' && showDetails.support && (
@@ -221,22 +270,60 @@ const WeightControls = memo(({
             )}
 
             {category === 'stats' && showDetails.stats && (
-              <div className="mt-3 bg-white/5 rounded-lg p-3 border border-green-500/30" onClick={(e) => e.stopPropagation()}>
+              <div className="mt-3 bg-white/5 rounded-lg p-2 border border-green-500/30" onClick={(e) => e.stopPropagation()}>
                 <h5 className="text-green-200 font-medium mb-2 text-sm">📊 Stats Components</h5>
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {Object.entries(statsWeights).map(([component, value]) => (
-                    <div key={component} className="space-y-2">
-                      <CompactWeightComponent
-                        component={component}
-                        value={value}
-                        onChange={onUpdateStatsWeight}
-                        className="bg-green-500/30 text-green-100"
-                        includePlayoffs={includePlayoffs}
-                      />
+                    <div key={component} className="space-y-1">
+                      {/* Compact main component with expand button */}
+                      <div className="bg-white/5 rounded p-1.5">
+                        <div className="flex justify-between items-center mb-1">
+                          <div className="flex items-center gap-2">
+                            <label className="text-white font-medium text-xs">
+                              {component === 'efficiency' ? '📈 Efficiency' :
+                               component === 'protection' ? '🛡️ Protection' :
+                               component === 'volume' ? '📊 Volume' : component}
+                            </label>
+                            <button
+                              onClick={() => {
+                                if (component === 'efficiency') onShowDetails.efficiency();
+                                if (component === 'protection') onShowDetails.protection();
+                                if (component === 'volume') onShowDetails.volume();
+                              }}
+                              className="flex items-center justify-center w-6 h-6 text-sm text-green-300 hover:text-green-100 transition-colors bg-white/10 hover:bg-white/20 rounded"
+                            >
+                              {(component === 'efficiency' && showDetails.efficiency) ||
+                               (component === 'protection' && showDetails.protection) ||
+                               (component === 'volume' && showDetails.volume) ? '▼' : '▶'}
+                            </button>
+                          </div>
+                          <span className="bg-green-500/30 text-green-100 px-1.5 py-0.5 rounded text-xs font-medium">
+                            {value}%
+                          </span>
+                        </div>
+                        <div className="flex gap-1 items-center">
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={value}
+                            onChange={(e) => onUpdateStatsWeight(component, e.target.value)}
+                            className="flex-1 h-1.5 rounded-lg bg-gray-200 cursor-pointer"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={value}
+                            onChange={(e) => onUpdateStatsWeight(component, e.target.value)}
+                            className="w-10 px-1 py-0.5 border border-white/20 rounded text-xs text-center bg-white/10 text-white"
+                          />
+                        </div>
+                      </div>
                       
                       {/* Efficiency sub-components */}
                       {component === 'efficiency' && showDetails.efficiency && (
-                        <div className="ml-4 mt-2 bg-white/3 rounded-lg p-2 border border-green-400/20">
+                        <div className="ml-2 bg-white/3 rounded p-1.5 border border-green-400/20">
                           <h6 className="text-green-300 font-medium mb-1 text-xs">📈 Efficiency Details</h6>
                           <div className="space-y-1">
                             {Object.entries(efficiencyWeights).map(([subComponent, subValue]) => (
@@ -255,7 +342,7 @@ const WeightControls = memo(({
                       
                       {/* Protection sub-components */}
                       {component === 'protection' && showDetails.protection && (
-                        <div className="ml-4 mt-2 bg-white/3 rounded-lg p-2 border border-green-400/20">
+                        <div className="ml-2 bg-white/3 rounded p-1.5 border border-green-400/20">
                           <h6 className="text-green-300 font-medium mb-1 text-xs">🛡️ Protection Details</h6>
                           <div className="space-y-1">
                             {Object.entries(protectionWeights).map(([subComponent, subValue]) => (
@@ -274,7 +361,7 @@ const WeightControls = memo(({
                       
                       {/* Volume sub-components */}
                       {component === 'volume' && showDetails.volume && (
-                        <div className="ml-4 mt-2 bg-white/3 rounded-lg p-2 border border-green-400/20">
+                        <div className="ml-2 bg-white/3 rounded p-1.5 border border-green-400/20">
                           <h6 className="text-green-300 font-medium mb-1 text-xs">📊 Volume Details</h6>
                           <div className="space-y-1">
                             {Object.entries(volumeWeights).map(([subComponent, subValue]) => (
@@ -299,7 +386,7 @@ const WeightControls = memo(({
                     {Object.values(statsWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
                       <button
                         onClick={onNormalizeStatsWeights}
-                        className="ml-2 bg-green-500/20 hover:bg-green-500/30 px-3 py-2 rounded text-green-200 text-sm font-medium"
+                        className="ml-2 bg-green-500/20 hover:bg-green-500/30 px-2 py-1 rounded text-green-200 text-xs font-medium"
                         title="Normalize"
                       >
                         ⚖️ Normalize
