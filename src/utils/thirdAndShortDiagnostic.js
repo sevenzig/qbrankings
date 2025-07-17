@@ -5,13 +5,21 @@
  * by examining what data actually exists in the qb_splits table.
  */
 
-import { supabase } from './supabase.js';
+import { supabase, isSupabaseAvailable } from './supabase.js';
 
 /**
  * Diagnostic function to examine qb_splits table structure and content
  */
 export const diagnoseThirdAndShortData = async () => {
   console.log('🔍 Starting 3rd & 1-3 data diagnostic...\n');
+  
+  if (!isSupabaseAvailable()) {
+    console.warn('⚠️ Supabase is not available - cannot run diagnostic');
+    return {
+      error: 'SUPABASE_UNAVAILABLE',
+      message: 'Supabase is not configured or unavailable'
+    };
+  }
   
   try {
     // 1. Check if qb_splits_advanced table exists and has data
@@ -24,12 +32,12 @@ export const diagnoseThirdAndShortData = async () => {
     
     if (tableError) {
       console.error('❌ Error accessing qb_splits table:', tableError);
-      return;
+      return { error: tableError };
     }
     
     if (!tableInfo || tableInfo.length === 0) {
       console.log('⚠️ qb_splits_advanced table is empty or doesn\'t exist');
-      return;
+      return { error: 'NO_DATA', message: 'Table is empty or does not exist' };
     }
     
     console.log('✅ qb_splits_advanced table exists and has data');
@@ -46,7 +54,7 @@ export const diagnoseThirdAndShortData = async () => {
     
     if (splitError) {
       console.error('❌ Error fetching split types:', splitError);
-      return;
+      return { error: splitError };
     }
     
     const uniqueSplitTypes = [...new Set(splitTypes.map(s => s.split))];
@@ -66,7 +74,7 @@ export const diagnoseThirdAndShortData = async () => {
     
     if (downError) {
       console.error('❌ Error fetching down splits:', downError);
-      return;
+      return { error: downError };
     }
     
     console.log(`📋 Found ${downSplits.length} down-related splits in 2024:`);
@@ -95,7 +103,7 @@ export const diagnoseThirdAndShortData = async () => {
     
     if (distanceError) {
       console.error('❌ Error fetching distance splits:', distanceError);
-      return;
+      return { error: distanceError };
     }
     
     console.log(`📋 Found ${distanceSplits.length} distance-related splits in 2024:`);
@@ -116,7 +124,7 @@ export const diagnoseThirdAndShortData = async () => {
     
     if (qbsError) {
       console.error('❌ Error fetching QBs with splits:', qbsError);
-      return;
+      return { error: qbsError };
     }
     
     const uniqueQBs = [...new Set(qbsWithSplits.map(q => q.pfr_id))];
@@ -180,8 +188,11 @@ export const diagnoseThirdAndShortData = async () => {
     
     console.log('\n🔍 Diagnostic complete!');
     
+    return { success: true };
+    
   } catch (error) {
     console.error('❌ Diagnostic error:', error);
+    return { error };
   }
 };
 
@@ -189,6 +200,11 @@ export const diagnoseThirdAndShortData = async () => {
  * Get all available split types for a specific season
  */
 export const getAllSplitTypes = async (season = 2024) => {
+  if (!isSupabaseAvailable()) {
+    console.warn('⚠️ Supabase is not available');
+    return [];
+  }
+  
   try {
     const { data, error } = await supabase
       .from('qb_splits_advanced')
@@ -199,53 +215,53 @@ export const getAllSplitTypes = async (season = 2024) => {
       throw error;
     }
     
-    const splitMap = {};
-    data.forEach(record => {
-      if (!splitMap[record.split]) {
-        splitMap[record.split] = new Set();
-      }
-      splitMap[record.split].add(record.value);
-    });
-    
-    return splitMap;
-    
+    return data || [];
   } catch (error) {
-    console.error('❌ Error getting split types:', error);
-    return {};
-  }
-};
-
-/**
- * Find QBs with specific split patterns
- */
-export const findQBsWithSplitPattern = async (pattern, season = 2024) => {
-  try {
-    const { data, error } = await supabase
-      .from('qb_splits_advanced')
-      .select('*')
-      .eq('season', season)
-      .or(`split.ilike.%${pattern}%,value.ilike.%${pattern}%`);
-    
-    if (error) {
-      throw error;
-    }
-    
-    return data;
-    
-  } catch (error) {
-    console.error(`❌ Error finding QBs with pattern "${pattern}":`, error);
+    console.error('❌ Error fetching split types:', error);
     return [];
   }
 };
 
 /**
- * Find QB by name (case-insensitive search)
+ * Find QBs that have a specific split pattern
  */
-export const findQBByName = async (playerName, season = 2024) => {
+export const findQBsWithSplitPattern = async (pattern, season = 2024) => {
+  if (!isSupabaseAvailable()) {
+    console.warn('⚠️ Supabase is not available');
+    return [];
+  }
+  
   try {
     const { data, error } = await supabase
       .from('qb_splits_advanced')
-      .select('pfr_id, player_name')
+      .select('pfr_id, player_name, split, value')
+      .eq('season', season)
+      .ilike('split', `%${pattern}%`);
+    
+    if (error) {
+      throw error;
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('❌ Error finding QBs with split pattern:', error);
+    return [];
+  }
+};
+
+/**
+ * Find QB by name in splits data
+ */
+export const findQBByName = async (playerName, season = 2024) => {
+  if (!isSupabaseAvailable()) {
+    console.warn('⚠️ Supabase is not available');
+    return [];
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('qb_splits_advanced')
+      .select('*')
       .eq('season', season)
       .ilike('player_name', `%${playerName}%`);
     
@@ -253,18 +269,9 @@ export const findQBByName = async (playerName, season = 2024) => {
       throw error;
     }
     
-    // Remove duplicates and return unique QBs
-    const uniqueQBs = data.reduce((acc, qb) => {
-      if (!acc.find(q => q.pfr_id === qb.pfr_id)) {
-        acc.push(qb);
-      }
-      return acc;
-    }, []);
-    
-    return uniqueQBs;
-    
+    return data || [];
   } catch (error) {
-    console.error(`❌ Error finding QB "${playerName}":`, error);
+    console.error('❌ Error finding QB by name:', error);
     return [];
   }
 }; 

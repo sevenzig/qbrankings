@@ -5,7 +5,7 @@
  * qb_splits or qb_splits_advanced tables
  */
 
-import { supabase } from './supabase.js';
+import { supabase, isSupabaseAvailable } from './supabase.js';
 import { 
   getSplitTypeForValue, 
   organizeSplitsByCategory, 
@@ -20,6 +20,37 @@ import {
  */
 export const getAvailableSplitTypes = async (season = 2024) => {
   try {
+    if (!isSupabaseAvailable()) {
+      console.warn('⚠️ Supabase is not available - returning default splits');
+      return {
+        'Down & Yards to Go': {
+          values: ['3rd & 1-3', '3rd & 4-6', '3rd & 7-9', '3rd & 10+'],
+          table: 'qb_splits_advanced',
+          count: 4
+        },
+        'Field Position': {
+          values: ['Red Zone', 'Own 1-20', 'Own 21-50'],
+          table: 'qb_splits_advanced',
+          count: 3
+        },
+        'Quarter': {
+          values: ['4th Qtr', '3rd Qtr', '2nd Qtr', '1st Qtr'],
+          table: 'qb_splits_advanced',
+          count: 4
+        },
+        'Place': {
+          values: ['Home', 'Road'],
+          table: 'qb_splits_advanced',
+          count: 2
+        },
+        'Result': {
+          values: ['Win', 'Loss'],
+          table: 'qb_splits_advanced',
+          count: 2
+        }
+      };
+    }
+
     console.log(`🔄 Fetching available split types for ${season}...`);
     
     // Get all split values from both tables (all stored under 'other' split field)
@@ -145,6 +176,14 @@ export const getAvailableSplitTypes = async (season = 2024) => {
  */
 export const getAvailableStatistics = async (splitType, splitValue, season = 2024) => {
   try {
+    if (!isSupabaseAvailable()) {
+      console.warn('⚠️ Supabase is not available - returning default statistics');
+      return [
+        'completions', 'attempts', 'completion_pct', 'yards', 'yards_per_attempt',
+        'touchdowns', 'interceptions', 'rating', 'sacks', 'sack_yards'
+      ];
+    }
+
     console.log(`🔄 Fetching available statistics for ${splitType} = ${splitValue} in ${season}...`);
     
     // Query database by 'other' split field and specific value, then categorize locally
@@ -198,16 +237,8 @@ export const getAvailableStatistics = async (splitType, splitValue, season = 202
       console.log(`⚠️ No data found for ${splitType} = ${splitValue} in ${season}`);
       // Return default statistics for testing
       return [
-        { field: 'att', displayName: 'Attempts', type: 'numeric', sampleValue: 25 },
-        { field: 'cmp', displayName: 'Completions', type: 'numeric', sampleValue: 18 },
-        { field: 'yds', displayName: 'Yards', type: 'numeric', sampleValue: 245 },
-        { field: 'td', displayName: 'Touchdowns', type: 'numeric', sampleValue: 3 },
-        { field: 'int', displayName: 'Interceptions', type: 'numeric', sampleValue: 1 },
-        { field: 'rate', displayName: 'Passer Rating', type: 'numeric', sampleValue: 95.2 },
-        { field: 'completion_rate', displayName: 'Completion Rate', type: 'numeric', sampleValue: 72.0 },
-        { field: 'yards_per_attempt', displayName: 'Yards/Attempt', type: 'numeric', sampleValue: 9.8 },
-        { field: 'td_rate', displayName: 'TD Rate', type: 'numeric', sampleValue: 12.0 },
-        { field: 'int_rate', displayName: 'INT Rate', type: 'numeric', sampleValue: 4.0 }
+        'completions', 'attempts', 'completion_pct', 'yards', 'yards_per_attempt',
+        'touchdowns', 'interceptions', 'rating', 'sacks', 'sack_yards'
       ];
     }
     
@@ -236,7 +267,11 @@ export const getAvailableStatistics = async (splitType, splitValue, season = 202
       { field: 'yds', displayName: 'Yards', type: 'numeric', sampleValue: 245 },
       { field: 'td', displayName: 'Touchdowns', type: 'numeric', sampleValue: 3 },
       { field: 'int', displayName: 'Interceptions', type: 'numeric', sampleValue: 1 },
-      { field: 'rate', displayName: 'Passer Rating', type: 'numeric', sampleValue: 95.2 }
+      { field: 'rate', displayName: 'Passer Rating', type: 'numeric', sampleValue: 95.2 },
+      { field: 'completion_rate', displayName: 'Completion Rate', type: 'numeric', sampleValue: 72.0 },
+      { field: 'yards_per_attempt', displayName: 'Yards/Attempt', type: 'numeric', sampleValue: 9.8 },
+      { field: 'td_rate', displayName: 'TD Rate', type: 'numeric', sampleValue: 12.0 },
+      { field: 'int_rate', displayName: 'INT Rate', type: 'numeric', sampleValue: 4.0 }
     ];
   }
 };

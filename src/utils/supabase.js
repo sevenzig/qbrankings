@@ -5,15 +5,34 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Validate environment variables
+// Check if we're in development mode
+const isDevelopment = import.meta.env.DEV;
+
+// Validate environment variables with graceful fallback
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('❌ Missing Supabase environment variables');
-  console.error('Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env.local file');
-  throw new Error('Supabase configuration is missing');
+  if (isDevelopment) {
+    console.error('❌ Missing Supabase environment variables');
+    console.error('Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env.local file');
+    console.warn('⚠️ Supabase features will be disabled in development mode');
+  } else {
+    console.warn('⚠️ Supabase environment variables not found - Supabase features disabled');
+  }
 }
 
-// Create Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Create Supabase client with fallback for missing credentials
+let supabase = null;
+
+if (supabaseUrl && supabaseAnonKey) {
+  try {
+    supabase = createClient(supabaseUrl, supabaseAnonKey);
+    console.log('✅ Supabase client initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize Supabase client:', error);
+    supabase = null;
+  }
+} else {
+  console.warn('⚠️ Supabase client not initialized - missing credentials');
+}
 
 // QB data fetching utilities
 export const qbDataService = {
@@ -24,6 +43,11 @@ export const qbDataService = {
    */
   async fetchAllQBData(include2024Only = false) {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning empty array');
+        return [];
+      }
+
       console.log(`🔄 Fetching QB data from Supabase... (2024 Only: ${include2024Only})`);
       
       let query = supabase
@@ -48,7 +72,8 @@ export const qbDataService = {
       
     } catch (error) {
       console.error('❌ Error fetching QB data from Supabase:', error);
-      throw error;
+      // Return empty array instead of throwing to prevent app crashes
+      return [];
     }
   },
 
@@ -59,6 +84,11 @@ export const qbDataService = {
    */
   async fetchQBDataByYear(year) {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning empty array');
+        return [];
+      }
+
       console.log(`🔄 Fetching QB data for ${year} from Supabase...`);
       
       const { data, error } = await supabase
@@ -77,7 +107,7 @@ export const qbDataService = {
       
     } catch (error) {
       console.error(`❌ Error fetching ${year} QB data from Supabase:`, error);
-      throw error;
+      return [];
     }
   },
 
@@ -88,6 +118,11 @@ export const qbDataService = {
    */
   async fetchQBDataByName(playerName) {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning empty array');
+        return [];
+      }
+
       console.log(`🔄 Fetching QB data for ${playerName} from Supabase...`);
       
       const { data, error } = await supabase
@@ -106,7 +141,7 @@ export const qbDataService = {
       
     } catch (error) {
       console.error(`❌ Error fetching QB data for ${playerName} from Supabase:`, error);
-      throw error;
+      return [];
     }
   },
 
@@ -121,6 +156,11 @@ export const qbDataService = {
    */
   async fetchQBDataWithFilters(filters = {}) {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning empty array');
+        return [];
+      }
+
       console.log('🔄 Fetching QB data with filters from Supabase...', filters);
       
       let query = supabase
@@ -156,7 +196,7 @@ export const qbDataService = {
       
     } catch (error) {
       console.error('❌ Error fetching filtered QB data from Supabase:', error);
-      throw error;
+      return [];
     }
   },
 
@@ -168,6 +208,11 @@ export const qbDataService = {
    */
   async fetchPlayerDetailedData(pfrId, season) {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning null');
+        return null;
+      }
+
       console.log(`🔄 Fetching detailed data for ${pfrId} in ${season}...`);
       
       // Fetch passing stats
@@ -228,7 +273,7 @@ export const qbDataService = {
       
     } catch (error) {
       console.error(`❌ Error fetching detailed data for ${pfrId} in ${season}:`, error);
-      throw error;
+      return null;
     }
   },
 
@@ -241,6 +286,11 @@ export const qbDataService = {
    */
   async fetchSplitsByType(pfrId, season, splitType) {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning empty array');
+        return [];
+      }
+
       console.log(`🔄 Fetching ${splitType} splits for ${pfrId} in ${season}...`);
       
       const { data, error } = await supabase
@@ -251,15 +301,16 @@ export const qbDataService = {
         });
       
       if (error) {
-        throw error;
+        console.error('❌ Supabase RPC error:', error);
+        throw new Error(`Failed to fetch ${splitType} splits: ${error.message}`);
       }
       
       console.log(`✅ Successfully fetched ${data.length} ${splitType} splits`);
-      return data;
+      return data || [];
       
     } catch (error) {
-      console.error(`❌ Error fetching ${splitType} splits:`, error);
-      throw error;
+      console.error(`❌ Error fetching ${splitType} splits for ${pfrId} in ${season}:`, error);
+      return [];
     }
   },
 
@@ -269,6 +320,11 @@ export const qbDataService = {
    */
   async getDatabaseStats() {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning empty array');
+        return [];
+      }
+
       console.log('🔄 Fetching database statistics...');
       
       const { data, error } = await supabase
@@ -276,7 +332,8 @@ export const qbDataService = {
         .select('*');
       
       if (error) {
-        throw error;
+        console.error('❌ Supabase query error:', error);
+        throw new Error(`Failed to fetch database stats: ${error.message}`);
       }
       
       console.log('✅ Successfully fetched database statistics');
@@ -284,7 +341,7 @@ export const qbDataService = {
       
     } catch (error) {
       console.error('❌ Error fetching database statistics:', error);
-      throw error;
+      return [];
     }
   },
 
@@ -300,6 +357,11 @@ export const qbDataService = {
    */
   async searchPlayers(searchParams = {}) {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning empty array');
+        return [];
+      }
+
       console.log('🔄 Searching players with filters...', searchParams);
       
       let query = supabase
@@ -331,7 +393,8 @@ export const qbDataService = {
         .limit(50);
       
       if (error) {
-        throw error;
+        console.error('❌ Supabase query error:', error);
+        throw new Error(`Failed to search players: ${error.message}`);
       }
       
       console.log(`✅ Found ${data.length} players matching search criteria`);
@@ -339,7 +402,7 @@ export const qbDataService = {
       
     } catch (error) {
       console.error('❌ Error searching players:', error);
-      throw error;
+      return [];
     }
   },
 
@@ -349,6 +412,11 @@ export const qbDataService = {
    */
   async fetchThirdAndShortData2024() {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning empty array');
+        return [];
+      }
+
       console.log('🔄 Fetching 3rd & 1-3 splits data for all 2024 QBs...');
       
       // Try multiple possible table structures for 3rd & 1-3 data
@@ -462,7 +530,7 @@ export const qbDataService = {
       
     } catch (error) {
       console.error('❌ Error fetching 3rd & 1-3 data:', error);
-      throw error;
+      return [];
     }
   },
 
@@ -473,6 +541,11 @@ export const qbDataService = {
    */
   async fetchThirdAndShortDataForQB(pfrId) {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning empty array');
+        return [];
+      }
+
       console.log(`🔄 Fetching 3rd & 1-3 splits for QB ${pfrId} in 2024...`);
       
       // Try multiple possible table structures for 3rd & 1-3 data
@@ -563,7 +636,7 @@ export const qbDataService = {
       
     } catch (error) {
       console.error(`❌ Error fetching 3rd & 1-3 data for QB ${pfrId}:`, error);
-      throw error;
+      return [];
     }
   },
 
@@ -573,6 +646,23 @@ export const qbDataService = {
    */
   async getThirdAndShortSummary2024() {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning empty object');
+        return {
+          totalQBs: 0,
+          totalAttempts: 0,
+          totalCompletions: 0,
+          totalYards: 0,
+          totalTDs: 0,
+          totalInts: 0,
+          averageCompletionRate: 0,
+          averageYardsPerAttempt: 0,
+          averageTDsPerAttempt: 0,
+          averageIntsPerAttempt: 0,
+          qbBreakdown: []
+        };
+      }
+
       console.log('🔄 Generating 3rd & 1-3 summary statistics for 2024...');
       
       const allData = await this.fetchThirdAndShortData2024();
@@ -694,7 +784,19 @@ export const qbDataService = {
       
     } catch (error) {
       console.error('❌ Error generating 3rd & 1-3 summary:', error);
-      throw error;
+      return {
+        totalQBs: 0,
+        totalAttempts: 0,
+        totalCompletions: 0,
+        totalYards: 0,
+        totalTDs: 0,
+        totalInts: 0,
+        averageCompletionRate: 0,
+        averageYardsPerAttempt: 0,
+        averageTDsPerAttempt: 0,
+        averageIntsPerAttempt: 0,
+        qbBreakdown: []
+      };
     }
   },
 
@@ -704,6 +806,15 @@ export const qbDataService = {
    */
   async diagnoseThirdDownData() {
     try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning empty object');
+        return {
+          qb_splits_advanced: {},
+          qb_splits: {},
+          sampleRecords: {}
+        };
+      }
+
       console.log('🔍 Diagnosing 3rd down data availability...');
       
       const diagnostics = {
@@ -798,7 +909,11 @@ export const qbDataService = {
       
     } catch (error) {
       console.error('❌ Error in diagnostic:', error);
-      throw error;
+      return {
+        qb_splits_advanced: {},
+        qb_splits: {},
+        sampleRecords: {}
+      };
     }
   }
 };
@@ -811,6 +926,11 @@ export const realtimeService = {
    * @returns {function} Unsubscribe function
    */
   subscribeToQBChanges(callback) {
+    if (!supabase) {
+      console.warn('⚠️ Supabase not available - cannot subscribe to changes');
+      return () => {};
+    }
+
     const subscription = supabase
       .channel('qb_data_changes')
       .on('postgres_changes', 
@@ -842,24 +962,43 @@ export const realtimeService = {
   }
 };
 
-// Error handling utilities
-export const handleSupabaseError = (error) => {
-  console.error('Supabase error:', error);
-  
-  if (error.code === 'PGRST116') {
-    return 'No data found for the specified criteria';
-  }
-  
-  if (error.code === 'PGRST301') {
-    return 'Invalid filter parameters';
-  }
-  
-  if (error.message.includes('JWT')) {
-    return 'Authentication error - please check your credentials';
-  }
-  
-  return error.message || 'An unexpected error occurred';
+// Export the supabase client (may be null if credentials are missing)
+export { supabase };
+
+// Utility function to check if Supabase is available
+export const isSupabaseAvailable = () => {
+  return supabase !== null;
 };
 
-// Export default client for direct use
-export default supabase; 
+// Enhanced error handler for Supabase operations
+export const handleSupabaseError = (error) => {
+  if (!supabase) {
+    return {
+      type: 'SUPABASE_UNAVAILABLE',
+      message: 'Supabase is not configured or unavailable',
+      details: 'Missing environment variables or connection issues'
+    };
+  }
+
+  if (error.code === 'PGRST116') {
+    return {
+      type: 'NO_DATA_FOUND',
+      message: 'No data found for the specified criteria',
+      details: error.message
+    };
+  }
+
+  if (error.code === '42501') {
+    return {
+      type: 'PERMISSION_DENIED',
+      message: 'Permission denied for this operation',
+      details: error.message
+    };
+  }
+
+  return {
+    type: 'UNKNOWN_ERROR',
+    message: 'An unexpected error occurred',
+    details: error.message
+  };
+}; 

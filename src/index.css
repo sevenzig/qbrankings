@@ -12,162 +12,162 @@ html {
   /* Root-level scrollbar configuration - applies to html and body */
   html, body {
     /* Force traditional scrollbars that reserve space */
-    scrollbar-width: auto !important;
-    scrollbar-color: theme('colors.gray.600') theme('colors.gray.100') !important;
-    scrollbar-gutter: stable both-edges !important;
+    scrollbar-width: auto;
+    scrollbar-color: #4b5563 #f3f4f6;
+    scrollbar-gutter: stable both-edges;
     
     /* Disable overlay scrollbars completely */
-    -webkit-overflow-scrolling: auto !important;
-    overflow: auto !important;
+    -webkit-overflow-scrolling: auto;
+    overflow: auto;
     
     /* Force scrollbars to always be visible */
-    overflow-y: scroll !important;
-    overflow-x: auto !important;
+    overflow-y: scroll;
+    overflow-x: auto;
   }
 
   /* Global scrollbar styling for ALL elements */
   * {
-    scrollbar-width: auto !important;
-    scrollbar-color: theme('colors.gray.600') theme('colors.gray.100') !important;
-    scrollbar-gutter: stable both-edges !important;
+    scrollbar-width: auto;
+    scrollbar-color: #4b5563 #f3f4f6;
+    scrollbar-gutter: stable both-edges;
   }
 
   /* WEBKIT BROWSERS (Chrome, Safari, Edge) - COMPLETE OVERRIDE */
   ::-webkit-scrollbar {
-    width: 12px !important;
-    height: 12px !important;
-    -webkit-appearance: none !important;
-    appearance: none !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    background: transparent !important;
+    width: 12px;
+    height: 12px;
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    visibility: visible;
+    opacity: 1;
+    background: transparent;
   }
 
   ::-webkit-scrollbar-track {
-    background: theme('colors.gray.100') !important;
-    border-radius: 6px !important;
-    border: 1px solid theme('colors.gray.200') !important;
-    box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.1) !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    margin: 2px !important;
+    background: #f3f4f6;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.1);
+    display: block;
+    visibility: visible;
+    opacity: 1;
+    margin: 2px;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: theme('colors.gray.600') !important;
-    border-radius: 6px !important;
-    border: 1px solid theme('colors.gray.100') !important;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2) !important;
-    min-height: 30px !important;
-    min-width: 12px !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    width: 12px !important;
-    height: 12px !important;
+    background: #4b5563;
+    border-radius: 6px;
+    border: 1px solid #f3f4f6;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+    min-height: 30px;
+    min-width: 12px;
+    display: block;
+    visibility: visible;
+    opacity: 1;
+    width: 12px;
+    height: 12px;
   }
 
   ::-webkit-scrollbar-corner {
-    background: theme('colors.gray.100') !important;
-    border-radius: 6px !important;
-    border: 1px solid theme('colors.gray.200') !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+    background: #f3f4f6;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    display: block;
+    visibility: visible;
+    opacity: 1;
   }
 
   /* HORIZONTAL SCROLLBAR SPECIFIC STYLING */
   ::-webkit-scrollbar:horizontal {
-    height: 12px !important;
-    width: auto !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+    height: 12px;
+    width: auto;
+    display: block;
+    visibility: visible;
+    opacity: 1;
   }
 
   ::-webkit-scrollbar:vertical {
-    width: 12px !important;
-    height: auto !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+    width: 12px;
+    height: auto;
+    display: block;
+    visibility: visible;
+    opacity: 1;
   }
 
   /* HORIZONTAL SCROLLBAR TRACK AND THUMB */
   ::-webkit-scrollbar-track:horizontal {
-    background: theme('colors.gray.100') !important;
-    border-radius: 6px !important;
-    border: 1px solid theme('colors.gray.200') !important;
-    box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.1) !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    margin: 2px !important;
+    background: #f3f4f6;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.1);
+    display: block;
+    visibility: visible;
+    opacity: 1;
+    margin: 2px;
   }
 
   ::-webkit-scrollbar-thumb:horizontal {
-    background: theme('colors.gray.600') !important;
-    border-radius: 6px !important;
-    border: 1px solid theme('colors.gray.100') !important;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2) !important;
-    min-width: 30px !important;
-    min-height: 12px !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    width: auto !important;
-    height: 12px !important;
+    background: #4b5563;
+    border-radius: 6px;
+    border: 1px solid #f3f4f6;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+    min-width: 30px;
+    min-height: 12px;
+    display: block;
+    visibility: visible;
+    opacity: 1;
+    width: auto;
+    height: 12px;
   }
 
   /* VERTICAL SCROLLBAR TRACK AND THUMB */
   ::-webkit-scrollbar-track:vertical {
-    background: theme('colors.gray.100') !important;
-    border-radius: 6px !important;
-    border: 1px solid theme('colors.gray.200') !important;
-    box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.1) !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    margin: 2px !important;
+    background: #f3f4f6;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.1);
+    display: block;
+    visibility: visible;
+    opacity: 1;
+    margin: 2px;
   }
 
   ::-webkit-scrollbar-thumb:vertical {
-    background: theme('colors.gray.600') !important;
-    border-radius: 6px !important;
-    border: 1px solid theme('colors.gray.100') !important;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2) !important;
-    min-height: 30px !important;
-    min-width: 12px !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    width: 12px !important;
-    height: auto !important;
+    background: #4b5563;
+    border-radius: 6px;
+    border: 1px solid #f3f4f6;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+    min-height: 30px;
+    min-width: 12px;
+    display: block;
+    visibility: visible;
+    opacity: 1;
+    width: 12px;
+    height: auto;
   }
 
   /* HOVER STATES - MAINTAIN VISIBILITY */
   ::-webkit-scrollbar-thumb:hover {
-    background: theme('colors.gray.700') !important;
-    width: 12px !important;
-    height: 12px !important;
-    min-width: 12px !important;
-    min-height: 12px !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+    background: #374151;
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    min-height: 12px;
+    display: block;
+    visibility: visible;
+    opacity: 1;
   }
 
   ::-webkit-scrollbar-thumb:active {
-    background: theme('colors.gray.800') !important;
-    width: 12px !important;
-    height: 12px !important;
-    min-width: 12px !important;
-    min-height: 12px !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+    background: #1f2937;
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    min-height: 12px;
+    display: block;
+    visibility: visible;
+    opacity: 1;
   }
 
   /* FORCE OVERFLOW CLASSES TO USE TRADITIONAL SCROLLBARS */
@@ -177,83 +177,66 @@ html {
   .overflow-scroll,
   .overflow-x-scroll,
   .overflow-y-scroll {
-    scrollbar-width: auto !important;
-    scrollbar-color: theme('colors.gray.600') theme('colors.gray.100') !important;
-    scrollbar-gutter: stable both-edges !important;
-    -webkit-overflow-scrolling: auto !important;
+    scrollbar-width: auto;
+    scrollbar-color: #4b5563 #f3f4f6;
+    scrollbar-gutter: stable both-edges;
+    -webkit-overflow-scrolling: auto;
   }
 
   /* SPECIFIC OVERFLOW CLASS STYLING */
   .overflow-x-auto,
   .overflow-x-scroll {
-    overflow-x: scroll !important;
-    padding-bottom: 12px !important;
-    margin-bottom: -12px !important;
-    scrollbar-gutter: stable both-edges !important;
+    overflow-x: scroll;
+    padding-bottom: 12px;
+    margin-bottom: -12px;
+    scrollbar-gutter: stable both-edges;
   }
 
   .overflow-y-auto,
   .overflow-y-scroll {
-    overflow-y: scroll !important;
-    padding-right: 12px !important;
-    margin-right: -12px !important;
-    scrollbar-gutter: stable both-edges !important;
+    overflow-y: scroll;
+    padding-right: 12px;
+    margin-right: -12px;
+    scrollbar-gutter: stable both-edges;
   }
 
   /* CUSTOM SCROLLBAR CLASS FOR SPECIFIC ELEMENTS */
   .custom-scrollbar {
-    scrollbar-width: auto !important;
-    scrollbar-color: theme('colors.gray.600') theme('colors.gray.100') !important;
-    scrollbar-gutter: stable both-edges !important;
-    -webkit-overflow-scrolling: auto !important;
-    overflow: scroll !important;
+    scrollbar-width: auto;
+    scrollbar-color: #4b5563 #f3f4f6;
+    scrollbar-gutter: stable both-edges;
+    -webkit-overflow-scrolling: auto;
+    overflow: scroll;
   }
 
   /* FIREFOX SPECIFIC STYLING */
   @supports (scrollbar-color: red blue) {
     * {
-      scrollbar-width: auto !important;
-      scrollbar-color: theme('colors.gray.600') theme('colors.gray.100') !important;
+      scrollbar-width: auto;
+      scrollbar-color: #4b5563 #f3f4f6;
     }
   }
 
   /* SAFARI SPECIFIC OVERRIDES */
   @supports (-webkit-appearance: none) {
     html, body {
-      -webkit-overflow-scrolling: auto !important;
+      -webkit-overflow-scrolling: auto;
     }
     
     * {
-      -webkit-overflow-scrolling: auto !important;
+      -webkit-overflow-scrolling: auto;
     }
   }
 
   /* EDGE/CHROMIUM SPECIFIC OVERRIDES */
   @supports (scrollbar-gutter: stable) {
     html, body {
-      scrollbar-gutter: stable both-edges !important;
+      scrollbar-gutter: stable both-edges;
     }
     
     * {
-      scrollbar-gutter: stable both-edges !important;
+      scrollbar-gutter: stable both-edges;
     }
-  }
-
-  /* DISABLE ALL AUTO-HIDING BEHAVIOR */
-  * {
-    /* Force scrollbars to always be visible */
-    overflow: visible !important;
-  }
-
-  /* Override any browser-specific auto-hiding */
-  html, body {
-    /* Prevent overlay scrollbars */
-    -webkit-overflow-scrolling: auto !important;
-    overflow: auto !important;
-    
-    /* Force traditional scrollbar behavior */
-    scrollbar-width: auto !important;
-    scrollbar-gutter: stable both-edges !important;
   }
 }
 

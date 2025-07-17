@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, qbDataService } from '../utils/supabase.js';
+import { supabase, qbDataService, isSupabaseAvailable } from '../utils/supabase.js';
 import { runAllExamples } from '../utils/thirdAndShortExample.js';
 import { getTeamInfo } from '../constants/teamData.js';
 
@@ -23,6 +23,12 @@ const SupabaseTest = () => {
   const testConnection = async () => {
     try {
       setConnectionStatus('testing');
+      
+      if (!isSupabaseAvailable()) {
+        setConnectionStatus('unavailable');
+        setError('Supabase is not configured or unavailable');
+        return;
+      }
       
       // Test basic connection using the season summary view
       const { data, error } = await supabase
@@ -56,6 +62,10 @@ const SupabaseTest = () => {
     setThirdAndShortError(null);
     
     try {
+      if (!isSupabaseAvailable()) {
+        throw new Error('Supabase is not available');
+      }
+
       console.log('🧪 Testing 3rd & 1-3 data extraction...');
       
       // First, find Mahomes' correct player ID
@@ -105,6 +115,11 @@ const SupabaseTest = () => {
   const runExamples = async () => {
     setExamplesOutput('Running examples...\n');
     
+    if (!isSupabaseAvailable()) {
+      setExamplesOutput('Supabase is not available - cannot run examples');
+      return;
+    }
+    
     // Capture console output
     const originalLog = console.log;
     const logs = [];
@@ -137,6 +152,11 @@ const SupabaseTest = () => {
 
   const runDiagnostic = async () => {
     setDiagnosticOutput('Running diagnostic...\n');
+    
+    if (!isSupabaseAvailable()) {
+      setDiagnosticOutput('Supabase is not available - cannot run diagnostic');
+      return;
+    }
     
     // Capture console output
     const originalLog = console.log;
@@ -173,6 +193,7 @@ const SupabaseTest = () => {
       case 'connected': return 'text-green-400';
       case 'failed': return 'text-red-400';
       case 'testing': return 'text-yellow-400';
+      case 'unavailable': return 'text-orange-400';
       default: return 'text-gray-400';
     }
   };
@@ -182,6 +203,7 @@ const SupabaseTest = () => {
       case 'connected': return '✅';
       case 'failed': return '❌';
       case 'testing': return '⏳';
+      case 'unavailable': return '⚠️';
       default: return '❓';
     }
   };
@@ -219,6 +241,7 @@ const SupabaseTest = () => {
               {connectionStatus === 'failed' && 'Failed to connect to Supabase'}
               {connectionStatus === 'testing' && 'Testing connection...'}
               {connectionStatus === 'checking' && 'Checking connection...'}
+              {connectionStatus === 'unavailable' && 'Supabase is not configured or unavailable'}
             </p>
           </div>
         </div>
