@@ -13,7 +13,8 @@
  * 5. Used React.memo for all sub-components to prevent unnecessary re-renders
  */
 import React, { useState, useEffect, useMemo, useCallback, startTransition } from 'react';
-import { useQBData } from '../hooks/useQBData.js';
+import { Link } from 'react-router-dom';
+import { useUnifiedQBData } from '../hooks/useUnifiedQBData.js';
 import { calculateQEI, calculateQBMetrics } from '../utils/qbCalculations.js';
 
 import { PHILOSOPHY_PRESETS, getTeamInfo } from '../constants/teamData.js';
@@ -28,11 +29,19 @@ import GlobalSettings from './GlobalSettings.jsx';
 import WeightControls from './WeightControls.jsx';
 import QBRankingsTable from './QBRankingsTable.jsx';
 import ShareModal from './ShareModal.jsx';
+
 import { captureTop10QBsScreenshot } from '../utils/screenshotUtils.js';
 import { URLShortener } from '../utils/urlShortener.js';
 
-const DynamicQBRankings = ({ onShowDocumentation }) => {
-  const { qbData, loading, error, lastFetch, shouldRefreshData, fetchAllQBData } = useQBData();
+const DynamicQBRankings = () => {
+  const { 
+    qbData, 
+    loading, 
+    error, 
+    lastFetch, 
+    shouldRefreshData, 
+    fetchAllQBData
+  } = useUnifiedQBData('csv'); // Default to CSV for main rankings
   
   const [weights, setWeights] = useState({
     team: 35,
@@ -1176,6 +1185,40 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
           </p>
         </div>
 
+        {/* Navigation Bar */}
+        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 mb-6">
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link
+              to="/"
+              className="bg-blue-500/20 hover:bg-blue-500/30 px-4 py-2 rounded-lg font-bold transition-colors text-blue-200 hover:text-white"
+            >
+              🏈 QB Rankings
+            </Link>
+            <Link
+              to="/splits-comparison"
+              className="bg-orange-500/20 hover:bg-orange-500/30 px-4 py-2 rounded-lg font-bold transition-colors text-orange-200 hover:text-white"
+            >
+              📊 Splits Comparison
+            </Link>
+            <Link
+              to="/documentation"
+              className="bg-purple-500/20 hover:bg-purple-500/30 px-4 py-2 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
+            >
+              📚 Documentation
+            </Link>
+            <Link
+              to="/sql-test"
+              className="bg-green-500/20 hover:bg-green-500/30 px-4 py-2 rounded-lg font-bold transition-colors text-green-200 hover:text-white"
+            >
+              🧪 SQL Test
+            </Link>
+          </div>
+        </div>
+
+
+
+
+
         {/* Quick Philosophy Presets - Collapsible */}
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl mb-6">
           {/* Presets Accordion Header */}
@@ -1404,14 +1447,34 @@ const DynamicQBRankings = ({ onShowDocumentation }) => {
               <br />📊 <strong>Full Detail</strong>: Includes all sub-component weight customizations
             </p>
             <div className="mt-4 pt-4 border-t border-white/10">
-              <button 
-                onClick={onShowDocumentation}
-                className="bg-purple-500/20 hover:bg-purple-500/30 px-6 py-2 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
-              >
-                📚 View Scoring Methodology & Documentation
-              </button>
+              <div className="flex flex-wrap justify-center gap-3 mb-2">
+                <Link 
+                  to="/documentation"
+                  className="bg-purple-500/20 hover:bg-purple-500/30 px-6 py-2 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
+                >
+                  📚 View Scoring Methodology & Documentation
+                </Link>
+                <Link 
+                  to="/sql-test"
+                  className="bg-green-500/20 hover:bg-green-500/30 px-6 py-2 rounded-lg font-bold transition-colors text-green-200 hover:text-white"
+                >
+                  🧪 SQL Test & Data Examples
+                </Link>
+                <Link 
+                  to="/splits-comparison"
+                  className="bg-orange-500/20 hover:bg-orange-500/30 px-6 py-2 rounded-lg font-bold transition-colors text-orange-200 hover:text-white"
+                >
+                  📊 Splits Comparison Tool
+                </Link>
+              </div>
               <p className="text-xs text-purple-300 mt-2">
                 Learn how our QB evaluation system works - from team success to clutch performance
+              </p>
+              <p className="text-xs text-green-300 mt-1">
+                Test Supabase connections and explore 3rd & 1-3 quarterback data
+              </p>
+              <p className="text-xs text-orange-300 mt-1">
+                Compare any statistic from qb_splits or qb_splits_advanced tables
               </p>
             </div>
           </div>

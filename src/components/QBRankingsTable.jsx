@@ -101,7 +101,7 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
         <h3 className="text-xl font-bold text-white">🏆 QB Rankings ({rankedQBs.length} Active QBs)</h3>
       </div>
       
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto custom-scrollbar">
         <table className="w-full">
           <thead className="bg-white/5">
             <tr>
@@ -168,19 +168,19 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
                     )}
                   </td>
                   <td className="px-4 py-3 text-center text-blue-200">
-                    <div>{qb.stats.yardsPerGame.toFixed(1)} yds/g</div>
-                    <div className="text-xs">{qb.stats.tdsPerGame.toFixed(2)} TD/g, {qb.stats.turnoversPerGame.toFixed(2)} TO/g</div>
+                    <div>{qb.stats?.yardsPerGame?.toFixed(1) || '0.0'} yds/g</div>
+                    <div className="text-xs">{qb.stats?.tdsPerGame?.toFixed(2) || '0.00'} TD/g, {qb.stats?.turnoversPerGame?.toFixed(2) || '0.00'} TO/g</div>
                   </td>
                   <td className="px-4 py-3 text-center text-white">
                     <div>{qb.experience}</div>
-                    <div className="text-xs text-blue-200">{qb.stats.gamesStarted} starts</div>
+                    <div className="text-xs text-blue-200">{qb.stats?.gamesStarted || 0} starts</div>
                     {includePlayoffs && playoffStarts > 0 && (
                       <div className="text-xs text-yellow-300 mt-1">
                         {playoffStarts} playoff starts
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-center text-blue-200">{qb.stats.passerRating.toFixed(1)}</td>
+                  <td className="px-4 py-3 text-center text-blue-200">{qb.stats?.passerRating?.toFixed(1) || '0.0'}</td>
                 </tr>
               );
             })}

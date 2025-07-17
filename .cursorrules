@@ -1,0 +1,875 @@
+# NFL QB Rankings - Cursor Rules
+
+## Table of Contents
+1. [Project Overview](#project-overview)
+2. [Code Standards](#code-standards)
+3. [Component Architecture](#component-architecture)
+4. [File Organization](#file-organization)
+5. [Development Patterns](#development-patterns)
+6. [Performance Standards](#performance-standards)
+7. [Quality Standards](#quality-standards)
+8. [AI Assistant Guidelines](#ai-assistant-guidelines)
+9. [Anti-patterns](#anti-patterns)
+10. [Validation Rules](#validation-rules)
+
+---
+
+## Project Overview
+
+### Technology Stack
+- **Frontend**: React 19 with modern hooks
+- **Build Tool**: Vite 6.3.5 with HMR
+- **Styling**: Tailwind CSS 3.4.0 (utility-first)
+- **Icons**: Lucide React 0.513.0
+- **Analytics**: Vercel Analytics + Google Analytics 4
+- **Backend**: Vercel Edge Functions + Redis
+- **Data**: CSV-based with ESPN API integration
+- **Deployment**: Vercel platform
+
+### Architecture Philosophy
+- **Component-Based**: Modular, reusable components with clear separation of concerns
+- **Performance-First**: Memoization, lazy loading, and optimized re-renders
+- **Data-Driven**: CSV-first approach with real-time API integration
+- **User-Centric**: Responsive design with accessibility considerations
+- **Scalable**: Serverless backend with caching strategies
+
+### Key Dependencies Purpose
+- `@vercel/analytics`: Performance monitoring and user insights
+- `html2canvas`: Screenshot generation for sharing
+- `nanoid`: Unique ID generation for URL shortening
+- `react-ga4`: Google Analytics integration
+- `redis`: URL shortening and caching layer
+
+---
+
+## Code Standards
+
+### JavaScript/React Configuration
+```javascript
+// ✅ Use ES modules consistently
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { ComponentName } from './ComponentName.jsx';
+
+// ✅ Use .jsx extension for React components
+// ✅ Use .js extension for utilities and hooks
+```
+
+### React Patterns
+```javascript
+// ✅ Functional components with hooks
+const ComponentName = ({ prop1, prop2, onAction }) => {
+  const [state, setState] = useState(initialValue);
+  
+  const memoizedValue = useMemo(() => {
+    return expensiveCalculation(prop1, prop2);
+  }, [prop1, prop2]);
+  
+  const handleAction = useCallback(() => {
+    onAction(memoizedValue);
+  }, [onAction, memoizedValue]);
+  
+  return <div>...</div>;
+};
+
+// ✅ Export as default for components
+export default ComponentName;
+```
+
+### Styling Approach (Tailwind CSS)
+```javascript
+// ✅ Use Tailwind utility classes consistently
+// ✅ Group related classes logically
+// ✅ Use responsive prefixes (sm:, md:, lg:)
+// ✅ Use opacity modifiers for overlays (/10, /20, etc.)
+
+const className = `
+  min-h-screen 
+  bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 
+  p-6
+  sm:p-8 
+  lg:p-12
+`;
+```
+
+### Import/Export Conventions
+```javascript
+// ✅ Named imports for utilities and hooks
+import { parseCSV, calculateQEI } from '../utils/dataUtils.js';
+import { useQBData } from '../hooks/useQBData.js';
+
+// ✅ Default imports for components
+import DynamicQBRankings from './DynamicQBRankings.jsx';
+
+// ✅ Barrel exports for related functionality
+export { calculateTeamScore, calculateStatsScore } from './scoringCategories/index.js';
+```
+
+### Naming Conventions
+```javascript
+// ✅ Components: PascalCase
+const QBRankingsTable = () => {};
+
+// ✅ Hooks: camelCase with 'use' prefix
+const useQBData = () => {};
+
+// ✅ Utilities: camelCase
+const parseCSV = () => {};
+
+// ✅ Constants: UPPER_SNAKE_CASE
+const CACHE_DURATION = 15 * 60 * 1000;
+
+// ✅ Files: kebab-case for utilities, PascalCase for components
+// utils/csv-parser.js ✅
+// components/QBRankingsTable.jsx ✅
+```
+
+---
+
+## Component Architecture
+
+### Component Structure Template
+```javascript
+/**
+ * ComponentName - Brief description of component purpose
+ * 
+ * Performance Optimizations:
+ * 1. Memoized with React.memo to prevent unnecessary re-renders
+ * 2. useCallback for event handlers
+ * 3. useMemo for expensive calculations
+ * 4. Single responsibility principle
+ */
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+
+const ComponentName = memo(({ 
+  // Props with clear types and descriptions
+  prop1,           // string - Description of prop1
+  prop2,           // number - Description of prop2
+  onAction         // function - Callback for user actions
+}) => {
+  // State management
+  const [localState, setLocalState] = useState(initialValue);
+  
+  // Memoized calculations
+  const calculatedValue = useMemo(() => {
+    return expensiveCalculation(prop1, prop2);
+  }, [prop1, prop2]);
+  
+  // Event handlers with useCallback
+  const handleClick = useCallback(() => {
+    onAction(calculatedValue);
+  }, [onAction, calculatedValue]);
+  
+  // Effects for side effects
+  useEffect(() => {
+    // Side effect logic
+    return () => {
+      // Cleanup logic
+    };
+  }, [dependencies]);
+  
+  return (
+    <div className="component-container">
+      {/* Component JSX */}
+    </div>
+  );
+});
+
+export default ComponentName;
+```
+
+### Props Interface Patterns
+```javascript
+// ✅ Use JSDoc for prop documentation
+/**
+ * @param {Object} props
+ * @param {string} props.category - The scoring category name
+ * @param {number} props.value - Current weight value (0-100)
+ * @param {function} props.onUpdateWeight - Weight update callback
+ * @param {boolean} [props.disabled=false] - Whether the control is disabled
+ */
+```
+
+### State Management Guidelines
+```javascript
+// ✅ Local state for UI interactions
+const [isOpen, setIsOpen] = useState(false);
+const [showDetails, setShowDetails] = useState(false);
+
+// ✅ Complex state objects for related data
+const [weights, setWeights] = useState({
+  team: 35,
+  stats: 35,
+  clutch: 0,
+  durability: 10,
+  support: 15
+});
+
+// ✅ Custom hooks for data management
+const { qbData, loading, error, fetchData } = useQBData();
+```
+
+### Event Handling Patterns
+```javascript
+// ✅ Always use useCallback for event handlers
+const handleWeightChange = useCallback((category, value) => {
+  const validatedValue = validateNumberInput(value, 0, 100);
+  setWeights(prev => ({
+    ...prev,
+    [category]: validatedValue
+  }));
+}, [validateNumberInput]);
+
+// ✅ Validate inputs before state updates
+const validateNumberInput = useCallback((value, min = 0, max = 100) => {
+  const numValue = parseInt(value);
+  if (isNaN(numValue)) return min;
+  return Math.max(min, Math.min(max, numValue));
+}, []);
+```
+
+### Performance Optimization Patterns
+```javascript
+// ✅ Memoize expensive calculations
+const rankedQBs = useMemo(() => {
+  return qbData
+    .map(qb => ({ ...qb, qei: calculateQEI(qb, weights) }))
+    .sort((a, b) => b.qei - a.qei);
+}, [qbData, weights]);
+
+// ✅ Memoize component with React.memo
+const WeightSlider = memo(({ category, value, onChange }) => {
+  // Component logic
+});
+
+// ✅ Stable references for child components
+const showDetailsHandlers = useMemo(() => ({
+  team: () => setShowTeamDetails(prev => !prev),
+  stats: () => setShowStatsDetails(prev => !prev),
+  // ... other handlers
+}), []);
+```
+
+---
+
+## File Organization
+
+### Folder Structure Standards
+```
+src/
+├── components/           # React components
+│   ├── scoringCategories/  # Scoring algorithm components
+│   └── index.js          # Barrel exports
+├── hooks/               # Custom React hooks
+├── utils/               # Utility functions
+├── constants/           # Application constants
+├── data/                # Static data files
+└── assets/              # Static assets
+```
+
+### File Naming Conventions
+```javascript
+// ✅ Components: PascalCase.jsx
+DynamicQBRankings.jsx
+QBRankingsTable.jsx
+WeightSlider.jsx
+
+// ✅ Hooks: camelCase.js with 'use' prefix
+useQBData.js
+useAnalytics.js
+
+// ✅ Utilities: camelCase.js
+csvParser.js
+qbCalculations.js
+screenshotUtils.js
+
+// ✅ Constants: camelCase.js
+teamData.js
+scoringConstants.js
+```
+
+### Co-location Rules
+```javascript
+// ✅ Keep related files together
+components/
+├── DynamicQBRankings.jsx
+├── DynamicQBRankings.test.jsx    // Tests co-located
+└── DynamicQBRankings.styles.css  // Styles co-located (if not Tailwind)
+
+// ✅ Barrel exports for clean imports
+// components/index.js
+export { default as DynamicQBRankings } from './DynamicQBRankings.jsx';
+export { default as QBRankingsTable } from './QBRankingsTable.jsx';
+```
+
+### Asset Organization
+```javascript
+// ✅ Static data in public/data/
+public/data/
+├── 2024.csv
+├── 2023.csv
+└── 2022.csv
+
+// ✅ Images and icons in src/assets/
+src/assets/
+├── react.svg
+└── icons/
+```
+
+---
+
+## Development Patterns
+
+### Custom Hooks Patterns
+```javascript
+// ✅ Custom hook template
+export const useQBData = () => {
+  const [qbData, setQbData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Data fetching logic
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+  
+  return { qbData, loading, error, fetchData };
+};
+```
+
+### Utility Functions Organization
+```javascript
+// ✅ Pure functions with clear inputs/outputs
+export const parseCSV = (csvText) => {
+  if (!csvText || csvText.trim().length === 0) {
+    console.warn('Empty CSV text provided');
+    return [];
+  }
+  
+  // Processing logic
+  return processedData;
+};
+
+// ✅ Helper functions for common operations
+export const validateNumberInput = (value, min = 0, max = 100) => {
+  const numValue = parseInt(value);
+  if (isNaN(numValue)) return min;
+  return Math.max(min, Math.min(max, numValue));
+};
+```
+
+### API Integration Patterns
+```javascript
+// ✅ Centralized API calls with error handling
+const fetchQBData = async (include2024Only = false) => {
+  try {
+    const response = await fetch('/data/2024.csv');
+    if (!response.ok) throw new Error('Failed to load data');
+    
+    const csvText = await response.text();
+    return parseCSV(csvText);
+  } catch (error) {
+    console.error('Error fetching QB data:', error);
+    throw error;
+  }
+};
+
+// ✅ Caching strategy
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+```
+
+### Form Handling Standards
+```javascript
+// ✅ Controlled components with validation
+const [weight, setWeight] = useState(35);
+
+const handleWeightChange = useCallback((event) => {
+  const value = validateNumberInput(event.target.value, 0, 100);
+  setWeight(value);
+}, []);
+
+// ✅ Real-time validation feedback
+const isValid = weight >= 0 && weight <= 100;
+```
+
+### Error Handling Strategies
+```javascript
+// ✅ Try-catch with meaningful error messages
+try {
+  const data = await fetchData();
+  setQbData(data);
+} catch (error) {
+  console.error('Failed to fetch QB data:', error);
+  setError(`Failed to load QB data: ${error.message}`);
+}
+
+// ✅ Error boundaries for component errors
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  
+  componentDidCatch(error, errorInfo) {
+    console.error('Component error:', error, errorInfo);
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      return <div>Something went wrong. Please refresh the page.</div>;
+    }
+    return this.props.children;
+  }
+}
+```
+
+---
+
+## Performance Standards
+
+### React Performance Requirements
+```javascript
+// ✅ MUST use React.memo for all components
+const Component = memo(({ props }) => {
+  // Component logic
+});
+
+// ✅ MUST use useCallback for all event handlers
+const handleClick = useCallback(() => {
+  // Handler logic
+}, [dependencies]);
+
+// ✅ MUST use useMemo for expensive calculations
+const expensiveValue = useMemo(() => {
+  return heavyCalculation(data);
+}, [data]);
+
+// ✅ MUST avoid defining components inside render functions
+// ❌ BAD: Component defined inside another component
+const ParentComponent = () => {
+  const ChildComponent = () => <div>...</div>; // This breaks performance
+  return <ChildComponent />;
+};
+
+// ✅ GOOD: Component defined outside
+const ChildComponent = memo(() => <div>...</div>);
+const ParentComponent = () => {
+  return <ChildComponent />;
+};
+```
+
+### Caching Strategy
+```javascript
+// ✅ Client-side caching for API responses
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+
+const shouldRefreshData = () => {
+  if (!lastFetch) return true;
+  return Date.now() - lastFetch > CACHE_DURATION;
+};
+
+// ✅ Redis caching for server-side data
+await client.setEx(`short:${shortId}`, 2592000, url); // 30 days
+```
+
+### Bundle Optimization
+```javascript
+// ✅ Lazy loading for large components
+const LazyComponent = lazy(() => import('./LazyComponent.jsx'));
+
+// ✅ Code splitting by routes
+const Documentation = lazy(() => import('./Documentation.jsx'));
+
+// ✅ Tree shaking with ES modules
+import { specificFunction } from './utils.js'; // Only imports what's needed
+```
+
+### Memory Management
+```javascript
+// ✅ Cleanup effects properly
+useEffect(() => {
+  const handleScroll = () => {
+    // Scroll logic
+  };
+  
+  window.addEventListener('scroll', handleScroll);
+  return () => window.removeEventListener('scroll', handleScroll);
+}, []);
+
+// ✅ Avoid memory leaks in event listeners
+useEffect(() => {
+  const controller = new AbortController();
+  
+  fetch('/api/data', { signal: controller.signal })
+    .then(response => response.json())
+    .catch(error => {
+      if (error.name !== 'AbortError') {
+        console.error('Fetch error:', error);
+      }
+    });
+    
+  return () => controller.abort();
+}, []);
+```
+
+---
+
+## Quality Standards
+
+### Code Quality Requirements
+```javascript
+// ✅ ESLint configuration compliance
+// ✅ No unused variables (except constants)
+// ✅ Proper React hooks usage
+// ✅ Consistent import/export patterns
+
+// ✅ Prettier formatting
+// ✅ Consistent indentation (2 spaces)
+// ✅ Proper line breaks and spacing
+// ✅ Consistent quote usage (single quotes)
+```
+
+### Testing Patterns
+```javascript
+// ✅ Unit tests for utility functions
+describe('parseCSV', () => {
+  it('should parse valid CSV data', () => {
+    const csv = 'Player,Team,Stats\nJohn,Team1,100';
+    const result = parseCSV(csv);
+    expect(result).toHaveLength(1);
+    expect(result[0].Player).toBe('John');
+  });
+  
+  it('should handle empty CSV', () => {
+    const result = parseCSV('');
+    expect(result).toEqual([]);
+  });
+});
+
+// ✅ Component tests with React Testing Library
+import { render, screen, fireEvent } from '@testing-library/react';
+
+test('WeightSlider updates value on change', () => {
+  const mockOnChange = jest.fn();
+  render(<WeightSlider value={50} onChange={mockOnChange} />);
+  
+  const slider = screen.getByRole('slider');
+  fireEvent.change(slider, { target: { value: '75' } });
+  
+  expect(mockOnChange).toHaveBeenCalledWith(75);
+});
+```
+
+### Accessibility Standards (WCAG 2.1 AA)
+```javascript
+// ✅ Semantic HTML elements
+<button onClick={handleClick} aria-label="Update weight">
+  Update
+</button>
+
+// ✅ Proper ARIA labels
+<input 
+  type="range" 
+  aria-label="Team success weight"
+  aria-describedby="team-description"
+/>
+
+// ✅ Keyboard navigation support
+const handleKeyDown = useCallback((event) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    handleClick();
+  }
+}, [handleClick]);
+
+// ✅ Color contrast compliance
+// Use Tailwind's built-in color palette for proper contrast
+```
+
+### Security Considerations
+```javascript
+// ✅ Input validation and sanitization
+const validateNumberInput = (value, min = 0, max = 100) => {
+  const numValue = parseInt(value);
+  if (isNaN(numValue)) return min;
+  return Math.max(min, Math.min(max, numValue));
+};
+
+// ✅ URL validation for external links
+const isValidUrl = (url) => {
+  return url.startsWith('https://quarterbackranking.com/') || 
+         url.startsWith('https://www.quarterbackranking.com/');
+};
+
+// ✅ Environment variable usage
+const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID || 'G-XXXXXXXXXX';
+```
+
+---
+
+## AI Assistant Guidelines
+
+### Response Format Preferences
+```javascript
+// ✅ Provide complete, runnable code examples
+// ✅ Include imports and dependencies
+// ✅ Show before/after comparisons when refactoring
+// ✅ Explain the reasoning behind changes
+
+// ✅ Use consistent code formatting
+// ✅ Include error handling in examples
+// ✅ Provide TypeScript types when applicable
+```
+
+### Code Generation Standards
+```javascript
+// ✅ Follow established patterns from the codebase
+// ✅ Use the same naming conventions
+// ✅ Include performance optimizations (memo, useCallback, useMemo)
+// ✅ Add proper JSDoc documentation
+// ✅ Include error boundaries where appropriate
+```
+
+### Refactoring Approaches
+```javascript
+// ✅ Incremental refactoring with backward compatibility
+// ✅ Maintain existing API contracts
+// ✅ Preserve performance optimizations
+// ✅ Update tests alongside code changes
+// ✅ Document breaking changes clearly
+```
+
+### Documentation Requirements
+```javascript
+// ✅ Component-level documentation with purpose and optimizations
+/**
+ * ComponentName - Brief description
+ * 
+ * Performance Optimizations:
+ * 1. Memoized with React.memo
+ * 2. useCallback for event handlers
+ * 3. useMemo for expensive calculations
+ */
+
+// ✅ Function documentation with parameters and return values
+/**
+ * Calculates QB performance score
+ * @param {Object} qb - Quarterback data object
+ * @param {Object} weights - Scoring weights
+ * @returns {number} Performance score (0-100)
+ */
+```
+
+### Context Awareness Instructions
+```javascript
+// ✅ Understand the scoring system architecture
+// ✅ Respect the CSV-first data approach
+// ✅ Maintain performance optimization patterns
+// ✅ Follow the established component hierarchy
+// ✅ Use Tailwind CSS for styling
+```
+
+---
+
+## Anti-patterns
+
+### React Anti-patterns to Avoid
+```javascript
+// ❌ DON'T: Define components inside render functions
+const ParentComponent = () => {
+  const ChildComponent = () => <div>...</div>; // BREAKS PERFORMANCE
+  return <ChildComponent />;
+};
+
+// ❌ DON'T: Create functions without useCallback
+const handleClick = () => {
+  // This recreates on every render
+};
+
+// ❌ DON'T: Use useState for derived values
+const [derivedValue, setDerivedValue] = useState(0);
+// Use useMemo instead
+
+// ❌ DON'T: Forget dependency arrays in useEffect
+useEffect(() => {
+  // Missing dependency array
+});
+
+// ❌ DON'T: Use inline styles when Tailwind classes exist
+<div style={{ backgroundColor: 'blue' }}> // Use Tailwind instead
+```
+
+### Performance Anti-patterns
+```javascript
+// ❌ DON'T: Recalculate expensive operations on every render
+const expensiveValue = heavyCalculation(data); // Use useMemo
+
+// ❌ DON'T: Create new objects/arrays in render
+const config = { key: value }; // Use useMemo
+
+// ❌ DON'T: Use index as React key
+{items.map((item, index) => (
+  <Item key={index} /> // Use unique IDs instead
+))}
+
+// ❌ DON'T: Forget to memoize child components
+const ChildComponent = ({ data }) => <div>{data}</div>; // Use React.memo
+```
+
+### Security Anti-patterns
+```javascript
+// ❌ DON'T: Trust user input without validation
+const userValue = event.target.value;
+setState(userValue); // Validate first
+
+// ❌ DON'T: Expose sensitive data in client-side code
+const API_KEY = 'secret-key'; // Use environment variables
+
+// ❌ DON'T: Use innerHTML with user content
+<div dangerouslySetInnerHTML={{ __html: userContent }} /> // Sanitize first
+```
+
+### Code Organization Anti-patterns
+```javascript
+// ❌ DON'T: Mix concerns in single components
+// Keep data fetching, UI logic, and calculations separate
+
+// ❌ DON'T: Use inconsistent naming conventions
+const componentName = () => {}; // Use PascalCase for components
+
+// ❌ DON'T: Forget to export components
+const Component = () => <div>...</div>; // Add export default
+```
+
+---
+
+## Validation Rules
+
+### Pre-commit Checklist
+```javascript
+// ✅ Code quality checks
+- [ ] ESLint passes (npm run lint)
+- [ ] No console errors or warnings
+- [ ] All imports are used
+- [ ] No unused variables
+
+// ✅ Performance checks
+- [ ] Components are memoized with React.memo
+- [ ] Event handlers use useCallback
+- [ ] Expensive calculations use useMemo
+- [ ] No components defined inside render functions
+
+// ✅ Functionality checks
+- [ ] All features work as expected
+- [ ] No breaking changes to existing APIs
+- [ ] Error handling is in place
+- [ ] Loading states are implemented
+```
+
+### Code Review Requirements
+```javascript
+// ✅ Architecture review
+- [ ] Follows established patterns
+- [ ] Maintains separation of concerns
+- [ ] Uses appropriate abstractions
+- [ ] Respects component hierarchy
+
+// ✅ Performance review
+- [ ] No unnecessary re-renders
+- [ ] Proper memoization usage
+- [ ] Efficient data structures
+- [ ] Optimized bundle size
+
+// ✅ Quality review
+- [ ] Clean, readable code
+- [ ] Proper error handling
+- [ ] Accessibility compliance
+- [ ] Security considerations
+```
+
+### Quality Gates Before Deployment
+```javascript
+// ✅ Build verification
+- [ ] Production build succeeds
+- [ ] No TypeScript errors
+- [ ] Bundle size within limits
+- [ ] All assets load correctly
+
+// ✅ Functionality verification
+- [ ] Core features work in production
+- [ ] Data fetching works correctly
+- [ ] User interactions function properly
+- [ ] Error states are handled gracefully
+
+// ✅ Performance verification
+- [ ] Page load time < 3 seconds
+- [ ] No memory leaks
+- [ ] Smooth interactions
+- [ ] Responsive design works
+```
+
+---
+
+## Quick Reference
+
+### Common Patterns
+```javascript
+// Component template
+const Component = memo(({ prop1, onAction }) => {
+  const [state, setState] = useState(initialValue);
+  const memoizedValue = useMemo(() => calculation(prop1), [prop1]);
+  const handleAction = useCallback(() => onAction(memoizedValue), [onAction, memoizedValue]);
+  return <div>...</div>;
+});
+
+// Custom hook template
+export const useCustomHook = () => {
+  const [data, setData] = useState(null);
+  const fetchData = useCallback(async () => { /* logic */ }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
+  return { data, fetchData };
+};
+
+// Utility function template
+export const utilityFunction = (input) => {
+  if (!input) return defaultValue;
+  // Processing logic
+  return result;
+};
+```
+
+### File Structure Template
+```
+src/
+├── components/
+│   ├── ComponentName.jsx
+│   └── index.js
+├── hooks/
+│   └── useHookName.js
+├── utils/
+│   └── utilityName.js
+└── constants/
+    └── constantName.js
+```
+
+### Naming Conventions Summary
+- **Components**: PascalCase.jsx
+- **Hooks**: camelCase.js (use prefix)
+- **Utilities**: camelCase.js
+- **Constants**: UPPER_SNAKE_CASE
+- **Files**: kebab-case for utilities, PascalCase for components
+
+This comprehensive .cursorrules file establishes coding standards, architecture patterns, and development guidelines specifically tailored to your NFL QB rankings React project. It emphasizes performance optimization, component reusability, and maintainable code structure while following the patterns already established in your codebase. 

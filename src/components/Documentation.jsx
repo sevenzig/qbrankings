@@ -1,6 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
+import { Link } from 'react-router-dom';
 
-const Documentation = ({ onBack }) => {
+/**
+ * Documentation - Comprehensive QB rankings methodology documentation
+ * 
+ * Performance Optimizations:
+ * 1. Memoized with React.memo to prevent unnecessary re-renders
+ * 2. Scroll event listener with proper cleanup
+ * 3. Single responsibility principle - documentation display only
+ */
+const Documentation = memo(() => {
   // Scroll to top functionality
   const [showScrollTop, setShowScrollTop] = useState(false);
 
@@ -24,12 +33,12 @@ const Documentation = ({ onBack }) => {
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <button
-            onClick={onBack}
+          <Link
+            to="/"
             className="mb-4 bg-blue-500/20 hover:bg-blue-500/30 px-4 py-2 rounded-lg text-blue-200 hover:text-white transition-colors"
           >
             ← Back to Rankings
-          </button>
+          </Link>
           <h1 className="text-4xl font-bold text-white mb-4">
             🏈 QB Rankings Methodology
           </h1>
@@ -316,12 +325,12 @@ const Documentation = ({ onBack }) => {
 
         {/* Footer */}
         <div className="text-center mt-12 py-8 border-t border-white/10">
-          <button
-            onClick={onBack}
+          <Link
+            to="/"
             className="bg-blue-500/20 hover:bg-blue-500/30 px-6 py-3 rounded-lg text-blue-200 hover:text-white transition-colors font-medium"
           >
             ← Return to QB Rankings
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -339,6 +348,6 @@ const Documentation = ({ onBack }) => {
       )}
     </div>
   );
-};
+});
 
 export default Documentation; 

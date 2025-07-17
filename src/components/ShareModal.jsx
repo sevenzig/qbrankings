@@ -115,7 +115,7 @@ const ShareModal = ({ isOpen, onClose, screenshotUrl, shareLink, shareType }) =>
         </div>
 
         {/* Content - Two Column Layout on Desktop */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)] custom-scrollbar">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
             {/* Left Column - Screenshot */}
             <div className="order-1">
