@@ -265,6 +265,50 @@ const SplitsComparison = memo(() => {
     }
   }, [comprehensiveData]);
 
+  // Calculate averages for each column
+  const calculateAverages = useCallback((data, columns) => {
+    if (!data || data.length === 0) return {};
+    
+    const averages = {};
+    
+    columns.forEach(column => {
+      const field = column.field;
+      const values = data
+        .map(qb => qb[field])
+        .filter(value => value !== null && value !== undefined && !isNaN(parseFloat(value)));
+      
+      if (values.length > 0) {
+        const sum = values.reduce((acc, val) => acc + parseFloat(val), 0);
+        const avg = sum / values.length;
+        
+        // Format based on column type
+        if (column.type === 'percentage') {
+          averages[field] = avg.toFixed(1);
+        } else if (column.type === 'numeric') {
+          // Integer columns (no decimal places)
+          const integerColumns = ['att', 'cmp', 'yds', 'td', 'int', 'sk', 'inc', 'sk_yds', 'g', 'w', 'l', 't', 'rush_att', 'rush_yds', 'rush_td', 'rush_first_downs', 'first_downs', 'total_td', 'pts', 'fmb', 'fl', 'ff', 'fr', 'fr_yds', 'fr_td'];
+          if (integerColumns.includes(field.toLowerCase())) {
+            averages[field] = Math.round(avg).toString();
+          } else {
+            averages[field] = avg.toFixed(2);
+          }
+        } else {
+          averages[field] = avg.toFixed(2);
+        }
+      } else {
+        averages[field] = '-';
+      }
+    });
+    
+    return averages;
+  }, []);
+
+  // Get averages for the current data
+  const averages = useMemo(() => {
+    if (!comprehensiveData || !comprehensiveData.data) return {};
+    return calculateAverages(comprehensiveData.data, comprehensiveData.columns);
+  }, [comprehensiveData, calculateAverages]);
+
   if (loading && !comprehensiveData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 p-6">
@@ -484,6 +528,54 @@ const SplitsComparison = memo(() => {
                     </tr>
                   </thead>
                   <tbody>
+                    {/* Averages Row */}
+                    <tr className="bg-blue-800/40 border-b-2 border-blue-400/50 font-semibold">
+                      {getReorderedColumns(comprehensiveData.columns).map((column) => {
+                        const avgValue = averages[column.field];
+                        
+                        // Special handling for team column
+                        if (column.field === 'team') {
+                          return (
+                            <td key={column.field} className="py-1 px-1 text-xs text-center">
+                              <span className="text-blue-300 font-bold">AVG</span>
+                            </td>
+                          );
+                        }
+                        
+                        // Special handling for player_name column
+                        if (column.field === 'player_name') {
+                          return (
+                            <td key={column.field} className="py-1 px-1 text-xs text-center">
+                              <span className="text-blue-300 font-bold">AVERAGE</span>
+                            </td>
+                          );
+                        }
+                        
+                        // Format different data types for averages
+                        let displayValue = avgValue;
+                        if (avgValue === null || avgValue === undefined || avgValue === '-') {
+                          displayValue = '-';
+                        } else if (column.type === 'percentage' && typeof avgValue === 'string') {
+                          displayValue = `${avgValue}%`;
+                        } else if (column.type === 'numeric' && typeof avgValue === 'string') {
+                          // Integer columns (no decimal places)
+                          const integerColumns = ['att', 'cmp', 'yds', 'td', 'int', 'sk', 'inc', 'sk_yds', 'g', 'w', 'l', 't', 'rush_att', 'rush_yds', 'rush_td', 'rush_first_downs', 'first_downs', 'total_td', 'pts', 'fmb', 'fl', 'ff', 'fr', 'fr_yds', 'fr_td'];
+                          if (integerColumns.includes(column.field.toLowerCase())) {
+                            displayValue = avgValue;
+                          } else {
+                            displayValue = avgValue;
+                          }
+                        }
+                        
+                        return (
+                          <td key={column.field} className="py-1 px-1 text-xs whitespace-nowrap text-blue-300 font-bold text-center">
+                            {displayValue}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    
+                    {/* Data Rows */}
                     {getSortedData(comprehensiveData.data).map((qb, index) => {
                       const teamInfo = getTeamInfo(qb.team);
                       return (
