@@ -10,51 +10,79 @@
  * This maps the actual values found in the database to their proper split types
  */
 export const SPLITS_MAPPING = {
-  // League splits
+  // Down splits (from qb_splits_advanced)
+  '1st': 'Down',
+  '2nd': 'Down',
+  '3rd': 'Down',
+  '4th': 'Down',
+  
+  // Yards To Go splits (from qb_splits_advanced)
+  '1-3': 'Yards To Go',
+  '4-6': 'Yards To Go',
+  '7-9': 'Yards To Go',
+  '10+': 'Yards To Go',
+  
+  // Down & Yards to Go splits (from qb_splits_advanced)
+  '1st & 10': 'Down & Yards to Go',
+  '1st & <10': 'Down & Yards to Go',
+  '2nd & 1-3': 'Down & Yards to Go',
+  '2nd & 4-6': 'Down & Yards to Go',
+  '2nd & 7-9': 'Down & Yards to Go',
+  '2nd & 10+': 'Down & Yards to Go',
+  '3rd & 1-3': 'Down & Yards to Go',
+  '3rd & 4-6': 'Down & Yards to Go',
+  '3rd & 7-9': 'Down & Yards to Go',
+  '3rd & 10+': 'Down & Yards to Go',
+  '4th & 1-3': 'Down & Yards to Go',
+  '4th & 4-6': 'Down & Yards to Go',
+  '4th & 7-9': 'Down & Yards to Go',
+  '4th & 10+': 'Down & Yards to Go',
+  
+  // League splits (from qb_splits)
   'NFL': 'League',
   
-  // Place splits
+  // Place splits (from qb_splits)
   'Home': 'Place',
   'Road': 'Place',
   
-  // Result splits
+  // Result splits (from qb_splits)
   'Win': 'Result',
   'Loss': 'Result',
   
-  // Final Margin splits
+  // Final Margin splits (from qb_splits)
   '0-7 points': 'Final Margin',
   '8-14 points': 'Final Margin',
   '15+ points': 'Final Margin',
   
-  // Month splits
+  // Month splits (from qb_splits)
   'September': 'Month',
   'October': 'Month',
   'November': 'Month',
   'December': 'Month',
   'January': 'Month',
   
-  // Game Number splits
+  // Game Number splits (from qb_splits)
   '1-4': 'Game Number',
   '5-8': 'Game Number',
   '9-12': 'Game Number',
   '13+': 'Game Number',
   
-  // Day splits
+  // Day splits (from qb_splits)
   'Sunday': 'Day',
   'Monday': 'Day',
   'Thursday': 'Day',
   'Saturday': 'Day',
   
-  // Time splits
+  // Time splits (from qb_splits)
   'Early': 'Time',
   'Afternoon': 'Time',
   'Late': 'Time',
   
-  // Conference splits
+  // Conference splits (from qb_splits)
   'AFC': 'Conference',
   'NFC': 'Conference',
   
-  // Division splits
+  // Division splits (from qb_splits)
   'AFC East': 'Division',
   'AFC North': 'Division',
   'AFC South': 'Division',
@@ -64,7 +92,7 @@ export const SPLITS_MAPPING = {
   'NFC North': 'Division',
   'NFC West': 'Division',
   
-  // Opponent splits (all team names)
+  // Opponent splits (from qb_splits)
   'Baltimore Ravens': 'Opponent',
   'Carolina Panthers': 'Opponent',
   'Cleveland Browns': 'Opponent',
@@ -98,98 +126,29 @@ export const SPLITS_MAPPING = {
   'Seattle Seahawks': 'Opponent',
   'Tampa Bay Buccaneers': 'Opponent',
   
-  // Stadium splits
-  'dome': 'Stadium',
-  'outdoors': 'Stadium',
-  'retroof': 'Stadium',
+  // QB Start splits (from qb_splits)
+  'Started': 'QB Start',
+  'Relief': 'QB Start',
   
-  // QB Start splits
-  'Starter': 'QB Start',
+  // Stadium splits (from qb_splits)
+  'Dome': 'Stadium',
+  'Outdoors': 'Stadium',
   
-  // Down splits
-  '1st': 'Down',
-  '2nd': 'Down',
-  '3rd': 'Down',
-  '4th': 'Down',
+  // Playoffs splits (from qb_splits)
+  'Yes': 'Playoffs',
+  'No': 'Playoffs',
   
-  // Yards To Go splits
-  '1-3': 'Yards To Go',
-  '4-6': 'Yards To Go',
-  '7-9': 'Yards To Go',
-  '10+': 'Yards To Go',
-  
-  // Down & Yards to Go splits
-  '1st & 10': 'Down & Yards to Go',
-  '1st & <10': 'Down & Yards to Go',
-  '1st & >10': 'Down & Yards to Go',
-  '2nd & 1-3': 'Down & Yards to Go',
-  '2nd & 4-6': 'Down & Yards to Go',
-  '2nd & 7-9': 'Down & Yards to Go',
-  '2nd & 10+': 'Down & Yards to Go',
-  '3rd & 1-3': 'Down & Yards to Go',
-  '3rd & 4-6': 'Down & Yards to Go',
-  '3rd & 7-9': 'Down & Yards to Go',
-  '3rd & 10+': 'Down & Yards to Go',
-  '4th & 1-3': 'Down & Yards to Go',
-  '4th & 4-6': 'Down & Yards to Go',
-  '4th & 10+': 'Down & Yards to Go',
-  
-  // Field Position splits
-  'Own 1-10': 'Field Position',
-  'Own 1-20': 'Field Position',
-  'Own 21-50': 'Field Position',
-  'Opp 49-20': 'Field Position',
-  'Red Zone': 'Field Position',
-  'Opp 1-10': 'Field Position',
-  
-  // Score Differential splits
-  'Leading': 'Score Differential',
-  'Tied': 'Score Differential',
-  'Trailing': 'Score Differential',
-  
-  // Quarter splits
-  '1st Qtr': 'Quarter',
-  '2nd Qtr': 'Quarter',
-  '3rd Qtr': 'Quarter',
-  '4th Qtr': 'Quarter',
-  'OT': 'Quarter',
-  '1st Half': 'Quarter',
-  '2nd Half': 'Quarter',
-  
-  // Game Situation splits
-  'Leading, < 2 min to go': 'Game Situation',
-  'Leading, < 4 min to go': 'Game Situation',
-  'Tied, < 2 min to go': 'Game Situation',
-  'Tied, < 4 min to go': 'Game Situation',
-  'Trailing, < 2 min to go': 'Game Situation',
-  'Trailing, < 4 min to go': 'Game Situation',
-  
-  // Snap Type & Huddle splits
-  'Huddle': 'Snap Type & Huddle',
-  'No Huddle': 'Snap Type & Huddle',
-  'Shotgun': 'Snap Type & Huddle',
-  'Under Center': 'Snap Type & Huddle',
-  
-  // Play Action splits
-  'play action': 'Play Action',
-  'non-play action': 'Play Action',
-  
-  // Run/Pass Option splits
-  'rpo': 'Run/Pass Option',
-  'non-rpo': 'Run/Pass Option',
-  
-  // Time in Pocket splits
-  '< 2.5 seconds': 'Time in Pocket',
-  '2.5+ seconds': 'Time in Pocket'
+  // Continuation splits (from both tables)
+  'Continuation': 'Continuation'
 };
 
 /**
- * Get the proper split type for a given split value
- * @param {string} splitValue - The split value to categorize
- * @returns {string} The proper split type category
+ * Get the split type for a given split value
+ * @param {string} splitValue - The split value to look up
+ * @returns {string} The split type for the given value
  */
 export const getSplitTypeForValue = (splitValue) => {
-  if (!splitValue) return 'other';
+  if (!splitValue) return null;
   
   // Direct mapping lookup
   const mappedType = SPLITS_MAPPING[splitValue];
@@ -207,6 +166,12 @@ export const getSplitTypeForValue = (splitValue) => {
       return 'Down & Yards to Go';
     }
     return 'Down';
+  }
+  
+  // Yards To Go patterns
+  if (lowerValue.includes('1-3') || lowerValue.includes('4-6') || 
+      lowerValue.includes('7-9') || lowerValue.includes('10+')) {
+    return 'Yards To Go';
   }
   
   // Quarter patterns

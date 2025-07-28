@@ -232,11 +232,12 @@ export const findQBsWithSplitPattern = async (pattern, season = 2024) => {
   }
   
   try {
+    // Search in both split and value columns since data can be stored in either
     const { data, error } = await supabase
       .from('qb_splits_advanced')
       .select('pfr_id, player_name, split, value')
       .eq('season', season)
-      .ilike('split', `%${pattern}%`);
+      .or(`split.ilike.%${pattern}%,value.ilike.%${pattern}%`);
     
     if (error) {
       throw error;

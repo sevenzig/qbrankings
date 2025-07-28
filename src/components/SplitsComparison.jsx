@@ -65,7 +65,7 @@ const SplitsComparison = memo(() => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [availableSplits, setAvailableSplits] = useState({});
-  const [selectedValue, setSelectedValue] = useState('3rd & 1-3');
+  const [selectedValue, setSelectedValue] = useState('1-3'); // Changed from '3rd & 1-3' to '1-3'
   const [comprehensiveData, setComprehensiveData] = useState(null);
   const [minAttempts, setMinAttempts] = useState(10);
   const [season, setSeason] = useState(2024);
@@ -108,10 +108,11 @@ const SplitsComparison = memo(() => {
       setLoading(true);
       setError(null);
       
-      // Query by value directly (database uses 'other' as split field)
-      console.log(`🔍 Component: Querying by value '${selectedValue}'`);
+      // Get the actual split type for the selected value
+      const splitType = getSplitTypeForValue(selectedValue);
+      console.log(`🔍 Component: Querying by split '${splitType}' and value '${selectedValue}'`);
       
-      const stats = await getAvailableStatistics('other', selectedValue, season);
+      const stats = await getAvailableStatistics(splitType, selectedValue, season);
       
       // Clear any previous errors if we successfully loaded statistics
       setError(null);
@@ -132,11 +133,12 @@ const SplitsComparison = memo(() => {
       setLoading(true);
       setError(null);
       
-      // Query by value directly (database uses 'other' as split field)
-      console.log(`🔍 Component: Querying by value '${selectedValue}'`);
+      // Get the actual split type for the selected value
+      const splitType = getSplitTypeForValue(selectedValue);
+      console.log(`🔍 Component: Querying by split '${splitType}' and value '${selectedValue}'`);
       
       const data = await getAllDataForSplit(
-        'other', 
+        splitType, 
         selectedValue, 
         season, 
         minAttempts
@@ -285,12 +287,22 @@ const SplitsComparison = memo(() => {
         <div className="text-center text-white mb-8">
           <h1 className="text-4xl font-bold mb-4">📊 QB Splits Comparison</h1>
           <p className="text-xl text-blue-200">Compare any statistic from qb_splits or qb_splits_advanced tables</p>
+          <p className="text-sm text-blue-300 mt-2">
+            Available data includes: Down (1st, 2nd, 3rd, 4th), Yards To Go (1-3, 4-6, 7-9, 10+), 
+            Place (Home, Road), Result (Win, Loss), and more
+          </p>
         </div>
 
         {error && (
           <div className="bg-red-500/20 backdrop-blur-lg border border-red-400/30 text-red-200 p-4 rounded-lg mb-6">
             <p className="font-semibold">⚠️ Error:</p>
             <p>{error}</p>
+            {error.includes('No data found') && (
+              <p className="text-sm mt-2">
+                💡 Try selecting a different split value. Available options include: 
+                "1-3", "4-6", "7-9", "10+" for Yards To Go, or "Home", "Road" for Place.
+              </p>
+            )}
           </div>
         )}
 

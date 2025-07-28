@@ -53,226 +53,228 @@ export const getAvailableSplitTypes = async (season = 2024) => {
 
     console.log(`🔄 Fetching available split types for ${season}...`);
     
-    // Get all split values from both tables (all stored under 'other' split field)
+    // Get all split values from both tables
     let splitsData = null;
     let advancedSplitsData = null;
     
+    // Fetch from qb_splits
     try {
       const { data, error } = await supabase
         .from('qb_splits')
         .select('split, value')
         .eq('season', season)
-        .eq('split', 'other')
+        .not('split', 'is', null)
         .not('value', 'is', null);
       
       if (!error && data) {
-        splitsData = data.map(record => ({ ...record, table_source: 'qb_splits' }));
-        console.log(`✅ Found ${data.length} records in qb_splits for ${season}`);
-      } else {
-        console.log(`⚠️ No data in qb_splits for ${season}:`, error?.message || 'No records found');
+        splitsData = data;
+        console.log(`✅ Found ${data.length} split records in qb_splits`);
       }
     } catch (error) {
-      console.log(`⚠️ Error accessing qb_splits:`, error.message);
+      console.log(`⚠️ Error querying qb_splits:`, error.message);
     }
     
+    // Fetch from qb_splits_advanced
     try {
       const { data, error } = await supabase
         .from('qb_splits_advanced')
         .select('split, value')
         .eq('season', season)
-        .eq('split', 'other')
+        .not('split', 'is', null)
         .not('value', 'is', null);
       
       if (!error && data) {
-        advancedSplitsData = data.map(record => ({ ...record, table_source: 'qb_splits_advanced' }));
-        console.log(`✅ Found ${data.length} records in qb_splits_advanced for ${season}`);
-      } else {
-        console.log(`⚠️ No data in qb_splits_advanced for ${season}:`, error?.message || 'No records found');
-      }
-    } catch (error) {
-      console.log(`⚠️ Error accessing qb_splits_advanced:`, error.message);
-    }
-    
-    // Combine all data and organize by proper split categories using local mapping
-    const allSplitsData = [...(splitsData || []), ...(advancedSplitsData || [])];
-    
-    if (allSplitsData.length === 0) {
-      console.log('⚠️ No split data found, returning default splits for testing...');
-      return {
-        'Down & Yards to Go': {
-          values: ['3rd & 1-3', '3rd & 4-6', '3rd & 7-9', '3rd & 10+'],
-          table: 'qb_splits_advanced',
-          count: 4
-        },
-        'Field Position': {
-          values: ['Red Zone', 'Own 1-20', 'Own 21-50'],
-          table: 'qb_splits_advanced',
-          count: 3
-        },
-        'Quarter': {
-          values: ['4th Qtr', '3rd Qtr', '2nd Qtr', '1st Qtr'],
-          table: 'qb_splits_advanced',
-          count: 4
-        },
-        'Place': {
-          values: ['Home', 'Road'],
-          table: 'qb_splits_advanced',
-          count: 2
-        },
-        'Result': {
-          values: ['Win', 'Loss'],
-          table: 'qb_splits_advanced',
-          count: 2
-        }
-      };
-    }
-    
-    // Use the mapping system to organize splits by proper categories
-    const result = organizeSplitsByCategory(allSplitsData);
-    
-    console.log(`✅ Found ${Object.keys(result).length} split categories for ${season}`);
-    
-    return result;
-    
-  } catch (error) {
-    console.error('❌ Error fetching available split types:', error);
-    // Return default splits for testing
-    return {
-      'Down & Yards to Go': {
-        values: ['3rd & 1-3', '3rd & 4-6', '3rd & 7-9', '3rd & 10+'],
-        table: 'qb_splits_advanced',
-        count: 4
-      },
-      'Field Position': {
-        values: ['Red Zone', 'Own 1-20', 'Own 21-50'],
-        table: 'qb_splits_advanced',
-        count: 3
-      },
-      'Quarter': {
-        values: ['4th Qtr', '3rd Qtr', '2nd Qtr', '1st Qtr'],
-        table: 'qb_splits_advanced',
-        count: 4
-      },
-      'Place': {
-        values: ['Home', 'Road'],
-        table: 'qb_splits_advanced',
-        count: 2
-      },
-      'Result': {
-        values: ['Win', 'Loss'],
-        table: 'qb_splits_advanced',
-        count: 2
-      }
-    };
-  }
-};
-
-/**
- * Get available statistics for a given split type and value
- * @param {string} splitType - The split type (e.g., 'Down', 'Place', 'Result')
- * @param {string} splitValue - The split value (e.g., '3rd', 'Red Zone', 'Win')
- * @param {number} season - The season (default: 2024)
- * @returns {Promise<Array>} Array of available statistics
- */
-export const getAvailableStatistics = async (splitType, splitValue, season = 2024) => {
-  try {
-    if (!isSupabaseAvailable()) {
-      console.warn('⚠️ Supabase is not available - returning default statistics');
-      return [
-        'completions', 'attempts', 'completion_pct', 'yards', 'yards_per_attempt',
-        'touchdowns', 'interceptions', 'rating', 'sacks', 'sack_yards'
-      ];
-    }
-
-    console.log(`🔄 Fetching available statistics for ${splitType} = ${splitValue} in ${season}...`);
-    
-    // Query database by 'other' split field and specific value, then categorize locally
-    console.log(`🔍 Querying by value '${splitValue}' (database uses 'other' as split field)`);
-    
-    // Try both tables with better error handling
-    let sampleRecord = null;
-    let tableUsed = '';
-    
-    // Try qb_splits_advanced first
-    try {
-      const { data, error } = await supabase
-        .from('qb_splits_advanced')
-        .select('*')
-        .eq('split', 'other')
-        .eq('value', splitValue)
-        .eq('season', season)
-        .limit(1);
-      
-      if (!error && data && data.length > 0) {
-        sampleRecord = data[0];
-        tableUsed = 'qb_splits_advanced';
-        console.log(`✅ Found sample record in qb_splits_advanced`);
+        advancedSplitsData = data;
+        console.log(`✅ Found ${data.length} split records in qb_splits_advanced`);
       }
     } catch (error) {
       console.log(`⚠️ Error querying qb_splits_advanced:`, error.message);
     }
     
-    // Try qb_splits if no record found
-    if (!sampleRecord) {
+    // Combine and organize the data
+    const allSplits = [...(splitsData || []), ...(advancedSplitsData || [])];
+    
+    if (allSplits.length === 0) {
+      console.log(`⚠️ No split data found for ${season}`);
+      return {};
+    }
+    
+    // Group by split type
+    const splitMap = {};
+    allSplits.forEach(record => {
+      if (!splitMap[record.split]) {
+        splitMap[record.split] = new Set();
+      }
+      splitMap[record.split].add(record.value);
+    });
+    
+    // Convert to the expected format
+    const result = {};
+    Object.entries(splitMap).forEach(([splitType, values]) => {
+      result[splitType] = {
+        values: Array.from(values).sort(),
+        table: 'qb_splits_advanced', // Default to advanced table
+        count: values.size
+      };
+    });
+    
+    console.log(`✅ Found ${Object.keys(result).length} split types with ${allSplits.length} total values`);
+    return result;
+    
+  } catch (error) {
+    console.error('❌ Error fetching available split types:', error);
+    return {};
+  }
+};
+
+/**
+ * Get available statistics for a specific split type and value
+ * @param {string} splitType - The split type (e.g., 'Down', 'Place')
+ * @param {string} splitValue - The split value (e.g., '3rd', 'Home')
+ * @param {number} season - The season (default: 2024)
+ * @returns {Promise<Array>} Array of available statistics
+ */
+export const getAvailableStatistics = async (splitType, splitValue, season = 2024) => {
+  try {
+    console.log(`🔄 Getting available statistics for ${splitType} = ${splitValue} in ${season}...`);
+    
+    // Try both tables to find data
+    let data = [];
+    let tableUsed = '';
+    
+    // Try qb_splits_advanced first
+    try {
+      const { data: advancedData, error: advancedError } = await supabase
+        .from('qb_splits_advanced')
+        .select('*')
+        .eq('split', splitType)
+        .eq('value', splitValue)
+        .eq('season', season)
+        .limit(5);
+      
+      if (!advancedError && advancedData && advancedData.length > 0) {
+        data = advancedData;
+        tableUsed = 'qb_splits_advanced';
+        console.log(`✅ Found ${data.length} records in qb_splits_advanced`);
+      }
+    } catch (error) {
+      console.log(`⚠️ Error querying qb_splits_advanced:`, error.message);
+    }
+    
+    // Try qb_splits if no data found
+    if (data.length === 0) {
       try {
-        const { data, error } = await supabase
+        const { data: splitsData, error: splitsError } = await supabase
           .from('qb_splits')
           .select('*')
-          .eq('split', 'other')
+          .eq('split', splitType)
           .eq('value', splitValue)
           .eq('season', season)
-          .limit(1);
+          .limit(5);
         
-        if (!error && data && data.length > 0) {
-          sampleRecord = data[0];
+        if (!splitsError && splitsData && splitsData.length > 0) {
+          data = splitsData;
           tableUsed = 'qb_splits';
-          console.log(`✅ Found sample record in qb_splits`);
+          console.log(`✅ Found ${data.length} records in qb_splits`);
         }
       } catch (error) {
         console.log(`⚠️ Error querying qb_splits:`, error.message);
       }
     }
     
-    if (!sampleRecord) {
+    if (data.length === 0) {
       console.log(`⚠️ No data found for ${splitType} = ${splitValue} in ${season}`);
-      // Return default statistics for testing
-      return [
-        'completions', 'attempts', 'completion_pct', 'yards', 'yards_per_attempt',
-        'touchdowns', 'interceptions', 'rating', 'sacks', 'sack_yards'
-      ];
+      return [];
     }
     
-    // Get all numeric fields (potential statistics)
-    const statistics = [];
-    Object.entries(sampleRecord).forEach(([key, value]) => {
-      if (typeof value === 'number' || (typeof value === 'string' && !isNaN(parseFloat(value)))) {
-        statistics.push({
-          field: key,
-          displayName: formatFieldName(key),
-          type: 'numeric',
-          sampleValue: value
-        });
-      }
+    // Get all available fields from the data
+    const sampleRecord = data[0];
+    const availableFields = Object.keys(sampleRecord).filter(field => 
+      field !== 'id' && 
+      field !== 'pfr_id' && 
+      field !== 'player_name' && 
+      field !== 'season' && 
+      field !== 'split' && 
+      field !== 'value' && 
+      field !== 'scraped_at' && 
+      field !== 'updated_at' &&
+      sampleRecord[field] !== null &&
+      sampleRecord[field] !== undefined
+    );
+    
+    // Define field types and display names
+    const fieldDefinitions = {
+      // Basic stats
+      'att': { displayName: 'Attempts', type: 'numeric' },
+      'cmp': { displayName: 'Completions', type: 'numeric' },
+      'yds': { displayName: 'Yards', type: 'numeric' },
+      'td': { displayName: 'Touchdowns', type: 'numeric' },
+      'int': { displayName: 'Interceptions', type: 'numeric' },
+      'rate': { displayName: 'Passer Rating', type: 'numeric' },
+      'sk': { displayName: 'Sacks', type: 'numeric' },
+      'sk_yds': { displayName: 'Sack Yards', type: 'numeric' },
+      
+      // Rate stats
+      'cmp_pct': { displayName: 'Completion %', type: 'percentage' },
+      'y_a': { displayName: 'Yards/Attempt', type: 'numeric' },
+      'ay_a': { displayName: 'Adj Yards/Attempt', type: 'numeric' },
+      'sk_pct': { displayName: 'Sack %', type: 'percentage' },
+      
+      // Game stats
+      'g': { displayName: 'Games', type: 'numeric' },
+      'w': { displayName: 'Wins', type: 'numeric' },
+      'l': { displayName: 'Losses', type: 'numeric' },
+      't': { displayName: 'Ties', type: 'numeric' },
+      
+      // Rushing stats
+      'rush_att': { displayName: 'Rush Attempts', type: 'numeric' },
+      'rush_yds': { displayName: 'Rush Yards', type: 'numeric' },
+      'rush_td': { displayName: 'Rush TDs', type: 'numeric' },
+      'rush_y_a': { displayName: 'Rush Y/A', type: 'numeric' },
+      
+      // Advanced stats
+      'first_downs': { displayName: 'First Downs', type: 'numeric' },
+      'rush_first_downs': { displayName: 'Rush First Downs', type: 'numeric' },
+      'inc': { displayName: 'Incompletions', type: 'numeric' },
+      'a_g': { displayName: 'Attempts/Game', type: 'numeric' },
+      'y_g': { displayName: 'Yards/Game', type: 'numeric' },
+      'rush_a_g': { displayName: 'Rush Attempts/Game', type: 'numeric' },
+      'rush_y_g': { displayName: 'Rush Yards/Game', type: 'numeric' },
+      
+      // Total stats
+      'total_td': { displayName: 'Total TDs', type: 'numeric' },
+      'pts': { displayName: 'Points', type: 'numeric' },
+      
+      // Fumble stats
+      'fmb': { displayName: 'Fumbles', type: 'numeric' },
+      'fl': { displayName: 'Fumbles Lost', type: 'numeric' },
+      'ff': { displayName: 'Fumbles Forced', type: 'numeric' },
+      'fr': { displayName: 'Fumbles Recovered', type: 'numeric' },
+      'fr_yds': { displayName: 'Fumble Recovery Yards', type: 'numeric' },
+      'fr_td': { displayName: 'Fumble Recovery TDs', type: 'numeric' }
+    };
+    
+    // Create statistics array
+    const statistics = availableFields.map(field => {
+      const definition = fieldDefinitions[field] || { 
+        displayName: field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()), 
+        type: 'numeric' 
+      };
+      
+      return {
+        field: field,
+        displayName: definition.displayName,
+        type: definition.type,
+        sampleValue: sampleRecord[field]
+      };
     });
     
     console.log(`✅ Found ${statistics.length} available statistics`);
     return statistics;
     
   } catch (error) {
-    console.error('❌ Error fetching available statistics:', error);
-    // Return default statistics for testing
-    return [
-      { field: 'att', displayName: 'Attempts', type: 'numeric', sampleValue: 25 },
-      { field: 'cmp', displayName: 'Completions', type: 'numeric', sampleValue: 18 },
-      { field: 'yds', displayName: 'Yards', type: 'numeric', sampleValue: 245 },
-      { field: 'td', displayName: 'Touchdowns', type: 'numeric', sampleValue: 3 },
-      { field: 'int', displayName: 'Interceptions', type: 'numeric', sampleValue: 1 },
-      { field: 'rate', displayName: 'Passer Rating', type: 'numeric', sampleValue: 95.2 },
-      { field: 'completion_rate', displayName: 'Completion Rate', type: 'numeric', sampleValue: 72.0 },
-      { field: 'yards_per_attempt', displayName: 'Yards/Attempt', type: 'numeric', sampleValue: 9.8 },
-      { field: 'td_rate', displayName: 'TD Rate', type: 'numeric', sampleValue: 12.0 },
-      { field: 'int_rate', displayName: 'INT Rate', type: 'numeric', sampleValue: 4.0 }
-    ];
+    console.error('❌ Error getting available statistics:', error);
+    return [];
   }
 };
 
@@ -552,8 +554,8 @@ const formatFieldName = (fieldName) => {
 
 /**
  * Get ALL data for a given split value - comprehensive table view
- * @param {string} splitType - The split type (e.g., 'other')
- * @param {string} splitValue - The split value (e.g., '3rd & 1-3')
+ * @param {string} splitType - The split type (e.g., 'Down', 'Place', 'Result')
+ * @param {string} splitValue - The split value (e.g., '3rd', 'Home', 'Win')
  * @param {number} season - The season (default: 2024)
  * @param {number} minAttempts - Minimum attempts filter (default: 0)
  * @returns {Promise<Object>} Complete data for all QBs with all available statistics
@@ -562,8 +564,8 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
   try {
     console.log(`🔄 Fetching ALL data for ${splitType} = ${splitValue} in ${season}...`);
     
-    // Query database by 'other' split field and specific value, then categorize locally
-    console.log(`🔍 Querying by value '${splitValue}' (database uses 'other' as split field)`);
+    // Query database with the actual split type and value
+    console.log(`🔍 Querying by split '${splitType}' and value '${splitValue}'`);
     
     // Try both tables to get complete data
     let splitsData = [];
@@ -574,7 +576,7 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
       const { data, error } = await supabase
         .from('qb_splits')
         .select('*')
-        .eq('split', 'other')
+        .eq('split', splitType)
         .eq('value', splitValue)
         .eq('season', season)
         .gte('att', minAttempts)
@@ -593,7 +595,7 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
       const { data, error } = await supabase
         .from('qb_splits_advanced')
         .select('*')
-        .eq('split', 'other')
+        .eq('split', splitType)
         .eq('value', splitValue)
         .eq('season', season)
         .gte('att', minAttempts)
@@ -673,32 +675,53 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
       'int': { displayName: 'Interceptions', type: 'numeric', order: 8 },
       
       // Rate stats
-      'completion_rate': { displayName: 'Completion %', type: 'percentage', order: 9 },
-      'yards_per_attempt': { displayName: 'Yards/Attempt', type: 'numeric', order: 10 },
-      'td_rate': { displayName: 'TD %', type: 'percentage', order: 11 },
-      'int_rate': { displayName: 'INT %', type: 'percentage', order: 12 },
-      'passer_rating': { displayName: 'Passer Rating', type: 'numeric', order: 13 },
+      'cmp_pct': { displayName: 'Completion %', type: 'percentage', order: 9 },
+      'y_a': { displayName: 'Yards/Attempt', type: 'numeric', order: 10 },
+      'ay_a': { displayName: 'Adj Yards/Attempt', type: 'numeric', order: 11 },
+      'rate': { displayName: 'Passer Rating', type: 'numeric', order: 12 },
       
       // Advanced stats (if available)
-      'sack': { displayName: 'Sacks', type: 'numeric', order: 14 },
-      'sack_rate': { displayName: 'Sack %', type: 'percentage', order: 15 },
-      'first_down_rate': { displayName: '1st Down %', type: 'percentage', order: 16 },
-      'air_yards_per_attempt': { displayName: 'Air Yards/Att', type: 'numeric', order: 17 },
-      'yards_after_catch_per_attempt': { displayName: 'YAC/Att', type: 'numeric', order: 18 },
+      'sk': { displayName: 'Sacks', type: 'numeric', order: 13 },
+      'sk_yds': { displayName: 'Sack Yards', type: 'numeric', order: 14 },
+      'sk_pct': { displayName: 'Sack %', type: 'percentage', order: 15 },
+      'first_downs': { displayName: '1st Down %', type: 'percentage', order: 16 },
       
-      // Additional advanced stats
-      'rate': { displayName: 'Rate', type: 'numeric', order: 19 },
-      'sk': { displayName: 'Sacks', type: 'numeric', order: 20 },
-      'sk_pct': { displayName: 'Sack %', type: 'percentage', order: 21 },
-      'ny_a': { displayName: 'Net Yards/Att', type: 'numeric', order: 22 },
-      'any_a': { displayName: 'Adj Net Yards/Att', type: 'numeric', order: 23 },
-      'ay_a': { displayName: 'Adj Yards/Att', type: 'numeric', order: 24 },
-      'y_c': { displayName: 'Yards/Completion', type: 'numeric', order: 25 },
+      // Game stats
+      'g': { displayName: 'Games', type: 'numeric', order: 17 },
+      'w': { displayName: 'Wins', type: 'numeric', order: 18 },
+      'l': { displayName: 'Losses', type: 'numeric', order: 19 },
+      't': { displayName: 'Ties', type: 'numeric', order: 20 },
       
-      // Metadata (only value, remove split)
-      'value': { displayName: 'Value', type: 'text', order: 26 },
-      'season': { displayName: 'Season', type: 'numeric', order: 27 },
-      'table_source': { displayName: 'Source', type: 'text', order: 28 }
+      // Rushing stats
+      'rush_att': { displayName: 'Rush Attempts', type: 'numeric', order: 21 },
+      'rush_yds': { displayName: 'Rush Yards', type: 'numeric', order: 22 },
+      'rush_td': { displayName: 'Rush TDs', type: 'numeric', order: 23 },
+      'rush_y_a': { displayName: 'Rush Y/A', type: 'numeric', order: 24 },
+      'rush_first_downs': { displayName: 'Rush 1st Downs', type: 'numeric', order: 25 },
+      
+      // Additional stats
+      'inc': { displayName: 'Incompletions', type: 'numeric', order: 26 },
+      'a_g': { displayName: 'Attempts/Game', type: 'numeric', order: 27 },
+      'y_g': { displayName: 'Yards/Game', type: 'numeric', order: 28 },
+      'rush_a_g': { displayName: 'Rush Attempts/Game', type: 'numeric', order: 29 },
+      'rush_y_g': { displayName: 'Rush Yards/Game', type: 'numeric', order: 30 },
+      
+      // Total stats
+      'total_td': { displayName: 'Total TDs', type: 'numeric', order: 31 },
+      'pts': { displayName: 'Points', type: 'numeric', order: 32 },
+      
+      // Fumble stats
+      'fmb': { displayName: 'Fumbles', type: 'numeric', order: 33 },
+      'fl': { displayName: 'Fumbles Lost', type: 'numeric', order: 34 },
+      'ff': { displayName: 'Fumbles Forced', type: 'numeric', order: 35 },
+      'fr': { displayName: 'Fumbles Recovered', type: 'numeric', order: 36 },
+      'fr_yds': { displayName: 'Fumble Recovery Yards', type: 'numeric', order: 37 },
+      'fr_td': { displayName: 'Fumble Recovery TDs', type: 'numeric', order: 38 },
+      
+      // Metadata
+      'value': { displayName: 'Value', type: 'text', order: 39 },
+      'season': { displayName: 'Season', type: 'numeric', order: 40 },
+      'table_source': { displayName: 'Source', type: 'text', order: 41 }
     };
     
     // Create ordered columns array
@@ -725,8 +748,8 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
     // Calculate summary statistics
     const totalQBs = deduplicatedData.length;
     const totalAttempts = deduplicatedData.reduce((sum, qb) => sum + (qb.att || 0), 0);
-    const avgCompletionRate = deduplicatedData.reduce((sum, qb) => sum + (qb.completion_rate || 0), 0) / totalQBs;
-    const avgYardsPerAttempt = deduplicatedData.reduce((sum, qb) => sum + (qb.yards_per_attempt || 0), 0) / totalQBs;
+    const avgCompletionRate = deduplicatedData.reduce((sum, qb) => sum + (qb.cmp_pct || 0), 0) / totalQBs;
+    const avgYardsPerAttempt = deduplicatedData.reduce((sum, qb) => sum + (qb.y_a || 0), 0) / totalQBs;
     
     return {
       data: deduplicatedData,

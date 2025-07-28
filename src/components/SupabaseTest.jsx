@@ -1,20 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, qbDataService, isSupabaseAvailable } from '../utils/supabase.js';
-import { runAllExamples } from '../utils/thirdAndShortExample.js';
+import { supabase, isSupabaseAvailable } from '../utils/supabase.js';
 import { getTeamInfo } from '../constants/teamData.js';
 
 const SupabaseTest = () => {
   const [connectionStatus, setConnectionStatus] = useState('checking');
-  const [testData, setTestData] = useState(null);
   const [error, setError] = useState(null);
-
-  const [thirdAndShortData, setThirdAndShortData] = useState(null);
-  const [thirdAndShortLoading, setThirdAndShortLoading] = useState(false);
-  const [thirdAndShortError, setThirdAndShortError] = useState(null);
-  const [thirdAndShortSummary, setThirdAndShortSummary] = useState(null);
-
-  const [examplesOutput, setExamplesOutput] = useState('');
+  const [tableStats, setTableStats] = useState({});
+  const [sampleData, setSampleData] = useState({});
   const [diagnosticOutput, setDiagnosticOutput] = useState('');
+  const [isRunningDiagnostic, setIsRunningDiagnostic] = useState(false);
 
   useEffect(() => {
     testConnection();
@@ -30,25 +24,53 @@ const SupabaseTest = () => {
         return;
       }
       
-      // Test basic connection using the season summary view
-      const { data, error } = await supabase
-        .from('qb_season_summary')
-        .select('count')
-        .limit(1);
+      // Test basic connection by querying each table
+      const tables = ['players', 'qb_passing_stats', 'qb_splits', 'qb_splits_advanced', 'teams'];
+      const stats = {};
+      const samples = {};
       
-      if (error) {
-        throw error;
+      for (const table of tables) {
+        try {
+          console.log(`🔄 Testing connection to ${table} table...`);
+          
+          // Get count
+          const { count, error: countError } = await supabase
+            .from(table)
+            .select('*', { count: 'exact', head: true });
+          
+          if (countError) {
+            console.error(`❌ Error counting ${table}:`, countError);
+            stats[table] = { count: 0, error: countError.message };
+            continue;
+          }
+          
+          stats[table] = { count: count || 0, error: null };
+          
+          // Get sample data
+          const { data: sampleData, error: sampleError } = await supabase
+            .from(table)
+            .select('*')
+            .limit(3);
+          
+          if (sampleError) {
+            console.error(`❌ Error getting sample from ${table}:`, sampleError);
+            samples[table] = { error: sampleError.message };
+          } else {
+            samples[table] = { data: sampleData || [] };
+          }
+          
+          console.log(`✅ ${table}: ${count} records`);
+          
+        } catch (err) {
+          console.error(`❌ Error testing ${table}:`, err);
+          stats[table] = { count: 0, error: err.message };
+          samples[table] = { error: err.message };
+        }
       }
       
+      setTableStats(stats);
+      setSampleData(samples);
       setConnectionStatus('connected');
-      
-      // Test actual data fetch
-      const qbData = await qbDataService.fetchAllQBData(true); // 2024 only
-      setTestData(qbData);
-      
-      // Test database stats
-      const stats = await qbDataService.getDatabaseStats();
-      console.log('📊 Database stats:', stats);
       
     } catch (err) {
       console.error('Supabase connection test failed:', err);
@@ -57,104 +79,13 @@ const SupabaseTest = () => {
     }
   };
 
-  const testThirdAndShortData = async () => {
-    setThirdAndShortLoading(true);
-    setThirdAndShortError(null);
-    
-    try {
-      if (!isSupabaseAvailable()) {
-        throw new Error('Supabase is not available');
-      }
-
-      console.log('🧪 Testing 3rd & 1-3 data extraction...');
-      
-      // First, find Mahomes' correct player ID
-      console.log('🔍 Finding Mahomes\' player ID...');
-      const { data: mahomesSearch, error: searchError } = await supabase
-        .from('qb_splits_advanced')
-        .select('pfr_id, player_name')
-        .eq('season', 2024)
-        .ilike('player_name', '%Patrick Mahomes%')
-        .limit(5);
-      
-      if (searchError) {
-        throw new Error(`Error searching for Mahomes: ${searchError.message}`);
-      }
-      
-      if (!mahomesSearch || mahomesSearch.length === 0) {
-        throw new Error('No Mahomes found in database');
-      }
-      
-      const mahomesId = mahomesSearch[0].pfr_id;
-      console.log(`✅ Found Mahomes with ID: ${mahomesId} (${mahomesSearch[0].player_name})`);
-      
-      // Test individual QB data with correct ID
-      const testQBData = await qbDataService.fetchThirdAndShortDataForQB(mahomesId);
-      console.log('✅ Test QB 3rd & 1-3 data:', testQBData);
-      
-      // Test summary statistics
-      const summary = await qbDataService.getThirdAndShortSummary2024();
-      console.log('✅ 3rd & 1-3 summary:', summary);
-      
-      setThirdAndShortSummary(summary);
-      
-      // Test raw data for all QBs
-      const allData = await qbDataService.fetchThirdAndShortData2024();
-      console.log('✅ All 3rd & 1-3 data:', allData);
-      
-      setThirdAndShortData(allData);
-      
-    } catch (error) {
-      console.error('❌ Error testing 3rd & 1-3 data:', error);
-      setThirdAndShortError(error.message);
-    } finally {
-      setThirdAndShortLoading(false);
-    }
-  };
-
-  const runExamples = async () => {
-    setExamplesOutput('Running examples...\n');
-    
-    if (!isSupabaseAvailable()) {
-      setExamplesOutput('Supabase is not available - cannot run examples');
-      return;
-    }
-    
-    // Capture console output
-    const originalLog = console.log;
-    const logs = [];
-    
-    console.log = (...args) => {
-      // Properly format objects and arrays for display
-      const formattedArgs = args.map(arg => {
-        if (typeof arg === 'object' && arg !== null) {
-          try {
-            return JSON.stringify(arg, null, 2);
-          } catch (e) {
-            return '[Complex Object]';
-          }
-        }
-        return String(arg);
-      });
-      logs.push(formattedArgs.join(' '));
-      originalLog(...args);
-    };
-    
-    try {
-      await runAllExamples();
-      setExamplesOutput(logs.join('\n'));
-    } catch (error) {
-      setExamplesOutput(logs.join('\n') + '\n\nError: ' + error.message);
-    } finally {
-      console.log = originalLog;
-    }
-  };
-
-  const runDiagnostic = async () => {
-    setDiagnosticOutput('Running diagnostic...\n');
+  const runComprehensiveDiagnostic = async () => {
+    setIsRunningDiagnostic(true);
+    setDiagnosticOutput('Running comprehensive diagnostic...\n');
     
     if (!isSupabaseAvailable()) {
       setDiagnosticOutput('Supabase is not available - cannot run diagnostic');
+      setIsRunningDiagnostic(false);
       return;
     }
     
@@ -163,7 +94,6 @@ const SupabaseTest = () => {
     const logs = [];
     
     console.log = (...args) => {
-      // Properly format objects and arrays for display
       const formattedArgs = args.map(arg => {
         if (typeof arg === 'object' && arg !== null) {
           try {
@@ -179,13 +109,258 @@ const SupabaseTest = () => {
     };
     
     try {
-      const diagnostic = await qbDataService.diagnoseThirdDownData();
+      const diagnostic = await performComprehensiveDiagnostic();
       setDiagnosticOutput(logs.join('\n') + '\n\nDiagnostic Result: ' + JSON.stringify(diagnostic, null, 2));
     } catch (error) {
       setDiagnosticOutput(logs.join('\n') + '\n\nError: ' + error.message);
     } finally {
       console.log = originalLog;
+      setIsRunningDiagnostic(false);
     }
+  };
+
+  const performComprehensiveDiagnostic = async () => {
+    const diagnostic = {
+      timestamp: new Date().toISOString(),
+      tables: {},
+      relationships: {},
+      dataQuality: {},
+      recommendations: []
+    };
+
+    // Test each table individually
+    const tables = [
+      { name: 'players', description: 'Player information' },
+      { name: 'qb_passing_stats', description: 'QB passing statistics' },
+      { name: 'qb_splits', description: 'QB situational splits' },
+      { name: 'qb_splits_advanced', description: 'QB advanced situational splits' },
+      { name: 'teams', description: 'Team information' }
+    ];
+
+    for (const table of tables) {
+      console.log(`\n🔍 Diagnosing ${table.name} table...`);
+      
+      try {
+        // Get table structure
+        const { data: columns, error: columnsError } = await supabase
+          .from(table.name)
+          .select('*')
+          .limit(0);
+        
+        if (columnsError) {
+          diagnostic.tables[table.name] = {
+            status: 'error',
+            error: columnsError.message,
+            description: table.description
+          };
+          continue;
+        }
+
+        // Get record count
+        const { count, error: countError } = await supabase
+          .from(table.name)
+          .select('*', { count: 'exact', head: true });
+
+        if (countError) {
+          diagnostic.tables[table.name] = {
+            status: 'error',
+            error: countError.message,
+            description: table.description
+          };
+          continue;
+        }
+
+        // Get sample data
+        const { data: sample, error: sampleError } = await supabase
+          .from(table.name)
+          .select('*')
+          .limit(5);
+
+        if (sampleError) {
+          diagnostic.tables[table.name] = {
+            status: 'error',
+            error: sampleError.message,
+            description: table.description
+          };
+          continue;
+        }
+
+        // Analyze data quality
+        const quality = analyzeDataQuality(table.name, sample);
+        
+        diagnostic.tables[table.name] = {
+          status: 'ok',
+          count: count || 0,
+          description: table.description,
+          sampleColumns: sample && sample.length > 0 ? Object.keys(sample[0]) : [],
+          dataQuality: quality
+        };
+
+        console.log(`✅ ${table.name}: ${count} records, ${sample.length} sample records`);
+
+      } catch (error) {
+        console.error(`❌ Error diagnosing ${table.name}:`, error);
+        diagnostic.tables[table.name] = {
+          status: 'error',
+          error: error.message,
+          description: table.description
+        };
+      }
+    }
+
+    // Test relationships between tables
+    console.log('\n🔍 Testing table relationships...');
+    await testTableRelationships(diagnostic);
+
+    // Generate recommendations
+    console.log('\n🔍 Generating recommendations...');
+    generateRecommendations(diagnostic);
+
+    return diagnostic;
+  };
+
+  const analyzeDataQuality = (tableName, sampleData) => {
+    if (!sampleData || sampleData.length === 0) {
+      return { status: 'no_data', issues: ['No sample data available'] };
+    }
+
+    const issues = [];
+    const sample = sampleData[0];
+    const columns = Object.keys(sample);
+
+    // Check for common data quality issues
+    if (tableName === 'players') {
+      if (!columns.includes('pfr_id')) issues.push('Missing pfr_id column');
+      if (!columns.includes('player_name')) issues.push('Missing player_name column');
+    }
+
+    if (tableName === 'qb_passing_stats') {
+      if (!columns.includes('pfr_id')) issues.push('Missing pfr_id column');
+      if (!columns.includes('season')) issues.push('Missing season column');
+      if (!columns.includes('team')) issues.push('Missing team column');
+    }
+
+    if (tableName === 'qb_splits' || tableName === 'qb_splits_advanced') {
+      if (!columns.includes('pfr_id')) issues.push('Missing pfr_id column');
+      if (!columns.includes('season')) issues.push('Missing season column');
+      if (!columns.includes('split')) issues.push('Missing split column');
+    }
+
+    if (tableName === 'teams') {
+      if (!columns.includes('team_abbr')) issues.push('Missing team_abbr column');
+      if (!columns.includes('team_name')) issues.push('Missing team_name column');
+    }
+
+    // Check for null values in critical columns
+    const nullIssues = [];
+    sampleData.forEach((record, index) => {
+      columns.forEach(column => {
+        if (record[column] === null || record[column] === undefined) {
+          nullIssues.push(`Record ${index + 1} has null ${column}`);
+        }
+      });
+    });
+
+    if (nullIssues.length > 0) {
+      issues.push(`Found ${nullIssues.length} null value issues in sample data`);
+    }
+
+    return {
+      status: issues.length === 0 ? 'good' : 'issues_found',
+      issues: issues.length > 0 ? issues : ['No obvious data quality issues']
+    };
+  };
+
+  const testTableRelationships = async (diagnostic) => {
+    diagnostic.relationships = {};
+
+    try {
+      // Test players -> qb_passing_stats relationship
+      console.log('🔍 Testing players -> qb_passing_stats relationship...');
+      const { data: playerStats, error: playerStatsError } = await supabase
+        .from('players')
+        .select(`
+          pfr_id,
+          player_name,
+          qb_passing_stats!inner(season, team, rate)
+        `)
+        .limit(5);
+
+      if (playerStatsError) {
+        diagnostic.relationships['players_qb_passing_stats'] = {
+          status: 'error',
+          error: playerStatsError.message
+        };
+      } else {
+        diagnostic.relationships['players_qb_passing_stats'] = {
+          status: 'ok',
+          sampleCount: playerStats?.length || 0
+        };
+      }
+
+      // Note: qb_passing_stats -> qb_splits relationships are not defined as FKs
+      // They are linked by pfr_id but don't have explicit FK constraints
+      console.log('🔍 Note: qb_passing_stats -> qb_splits relationships use pfr_id but no FK constraints');
+      diagnostic.relationships['qb_passing_stats_qb_splits'] = {
+        status: 'info',
+        message: 'Linked by pfr_id (no FK constraint)'
+      };
+      
+      diagnostic.relationships['qb_passing_stats_qb_splits_advanced'] = {
+        status: 'info',
+        message: 'Linked by pfr_id (no FK constraint)'
+      };
+
+      // Note: teams -> qb_passing_stats relationship is not used in current queries
+      // Team codes are stored directly in qb_passing_stats.team field
+      console.log('🔍 Note: teams table is separate, team codes stored directly in qb_passing_stats');
+      diagnostic.relationships['teams_qb_passing_stats'] = {
+        status: 'info',
+        message: 'Team codes stored directly in qb_passing_stats.team field'
+      };
+
+    } catch (error) {
+      console.error('❌ Error testing relationships:', error);
+      diagnostic.relationships['general'] = {
+        status: 'error',
+        error: error.message
+      };
+    }
+  };
+
+  const generateRecommendations = (diagnostic) => {
+    const recommendations = [];
+
+    // Check table counts
+    Object.entries(diagnostic.tables).forEach(([tableName, tableInfo]) => {
+      if (tableInfo.status === 'ok') {
+        if (tableInfo.count === 0) {
+          recommendations.push(`${tableName} table is empty - consider populating with data`);
+        } else if (tableInfo.count < 10) {
+          recommendations.push(`${tableName} table has very few records (${tableInfo.count}) - verify data completeness`);
+        }
+      } else {
+        recommendations.push(`${tableName} table has errors: ${tableInfo.error}`);
+      }
+    });
+
+    // Check relationships
+    Object.entries(diagnostic.relationships).forEach(([relName, relInfo]) => {
+      if (relInfo.status === 'error') {
+        recommendations.push(`Relationship ${relName} has errors: ${relInfo.error}`);
+      }
+    });
+
+    // Check data quality
+    Object.entries(diagnostic.tables).forEach(([tableName, tableInfo]) => {
+      if (tableInfo.status === 'ok' && tableInfo.dataQuality) {
+        if (tableInfo.dataQuality.status === 'issues_found') {
+          recommendations.push(`${tableName} has data quality issues: ${tableInfo.dataQuality.issues.join(', ')}`);
+        }
+      }
+    });
+
+    diagnostic.recommendations = recommendations;
   };
 
   const getStatusColor = () => {
@@ -210,25 +385,13 @@ const SupabaseTest = () => {
 
   const isConnected = connectionStatus === 'connected';
 
-  // Helper function to get team logo
-  const getTeamLogo = (teamAbbr) => {
-    const teamInfo = getTeamInfo(teamAbbr);
-    return teamInfo.logo || '';
-  };
-
-  // Helper function to get team name
-  const getTeamName = (teamAbbr) => {
-    const teamInfo = getTeamInfo(teamAbbr);
-    return teamInfo.name || teamAbbr;
-  };
-
   return (
     <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 mb-6">
       <h3 className="text-lg font-semibold text-white mb-4">
-        🔧 Supabase Connection Test
+        🔧 Supabase Database Test (5-Table Schema)
       </h3>
       
-      <div className="space-y-4">
+      <div className="space-y-6">
         {/* Connection Status */}
         <div className="flex items-center gap-3">
           <span className="text-2xl">{getStatusIcon()}</span>
@@ -254,207 +417,73 @@ const SupabaseTest = () => {
           </div>
         )}
 
-        {/* Test Data Display */}
-        {testData && (
-          <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3">
-            <p className="text-green-200 text-sm font-medium">✅ Data Test Successful</p>
-            <p className="text-green-300 text-xs">
-              Fetched {testData.length} QB records from Supabase
-            </p>
-            {testData.length > 0 && (
-              <div className="mt-2">
-                <p className="text-green-300 text-xs font-medium">Sample data:</p>
-                <p className="text-green-300 text-xs">
-                  {testData[0].player_name} - {testData[0].team} ({testData[0].season})
-                </p>
-                <p className="text-green-300 text-xs">
-                  Rating: {testData[0].passer_rating} | Games: {testData[0].games_started}
-                </p>
-              </div>
-            )}
+        {/* Table Statistics */}
+        {Object.keys(tableStats).length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h4 className="text-lg font-semibold text-gray-800 mb-4">Table Statistics</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(tableStats).map(([tableName, stats]) => (
+                <div key={tableName} className={`p-4 rounded-lg border ${
+                  stats.error ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h5 className="font-medium text-gray-800 capitalize">{tableName.replace(/_/g, ' ')}</h5>
+                    <span className={`text-sm px-2 py-1 rounded ${
+                      stats.error ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                    }`}>
+                      {stats.error ? 'Error' : 'OK'}
+                    </span>
+                  </div>
+                  {stats.error ? (
+                    <p className="text-red-600 text-sm">{stats.error}</p>
+                  ) : (
+                    <p className="text-green-600 text-sm font-medium">{stats.count} records</p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* 3rd & 1-3 Data Test Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">
-            3rd & 1-3 Splits Data Test
-          </h3>
+        {/* Sample Data Display */}
+        {Object.keys(sampleData).length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h4 className="text-lg font-semibold text-gray-800 mb-4">Sample Data</h4>
+            <div className="space-y-4">
+              {Object.entries(sampleData).map(([tableName, sample]) => (
+                <div key={tableName} className="border border-gray-200 rounded-lg p-4">
+                  <h5 className="font-medium text-gray-800 mb-2 capitalize">{tableName.replace(/_/g, ' ')}</h5>
+                  {sample.error ? (
+                    <p className="text-red-600 text-sm">{sample.error}</p>
+                  ) : (
+                    <div className="bg-gray-50 p-3 rounded overflow-x-auto">
+                      <pre className="text-xs text-gray-800">
+                        {JSON.stringify(sample.data, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Comprehensive Diagnostic */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h4 className="text-lg font-semibold text-gray-800 mb-4">Comprehensive Diagnostic</h4>
           
           <div className="space-y-4">
             <button
-              onClick={testThirdAndShortData}
-              disabled={thirdAndShortLoading || !isConnected}
+              onClick={runComprehensiveDiagnostic}
+              disabled={isRunningDiagnostic || !isConnected}
               className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {thirdAndShortLoading ? 'Loading...' : 'Test 3rd & 1-3 Data'}
+              {isRunningDiagnostic ? 'Running Diagnostic...' : 'Run Comprehensive Diagnostic'}
             </button>
-            
-            {thirdAndShortError && (
-              <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-                <strong>Error:</strong> {thirdAndShortError}
-              </div>
-            )}
-            
-            {thirdAndShortSummary && (
-              <div className="space-y-4">
-                <h4 className="text-lg font-semibold text-gray-700">Summary Statistics</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-blue-50 p-3 rounded">
-                    <div className="text-sm text-blue-600">Total QBs</div>
-                    <div className="text-xl font-bold text-blue-800">{thirdAndShortSummary.totalQBs}</div>
-                  </div>
-                  <div className="bg-green-50 p-3 rounded">
-                    <div className="text-sm text-green-600">Total Attempts</div>
-                    <div className="text-xl font-bold text-green-800">{thirdAndShortSummary.totalAttempts}</div>
-                  </div>
-                  <div className="bg-yellow-50 p-3 rounded">
-                    <div className="text-sm text-yellow-600">Avg Comp %</div>
-                    <div className="text-xl font-bold text-yellow-800">{thirdAndShortSummary.averageCompletionRate}%</div>
-                  </div>
-                  <div className="bg-purple-50 p-3 rounded">
-                    <div className="text-sm text-purple-600">Avg Y/A</div>
-                    <div className="text-xl font-bold text-purple-800">{thirdAndShortSummary.averageYardsPerAttempt}</div>
-                  </div>
-                </div>
-                
-                <h4 className="text-lg font-semibold text-gray-700">QB Breakdown (Top 10 by Attempts)</h4>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full bg-white border border-gray-200">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        <th className="px-4 py-2 text-left border-b">QB</th>
-                        <th className="px-4 py-2 text-center border-b">Team</th>
-                        <th className="px-4 py-2 text-center border-b">Att</th>
-                        <th className="px-4 py-2 text-center border-b">Comp</th>
-                        <th className="px-4 py-2 text-center border-b">Yds</th>
-                        <th className="px-4 py-2 text-center border-b">TD</th>
-                        <th className="px-4 py-2 text-center border-b">Int</th>
-                        <th className="px-4 py-2 text-center border-b">Comp%</th>
-                        <th className="px-4 py-2 text-center border-b">Y/A</th>
-                        <th className="px-4 py-2 text-center border-b">TD%</th>
-                        <th className="px-4 py-2 text-center border-b">Int%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {thirdAndShortSummary.qbBreakdown.slice(0, 10).map((qb, index) => (
-                        <tr key={index} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 border-b font-medium">{qb.player_name}</td>
-                          <td className="px-4 py-2 border-b text-center">
-                            {(() => {
-                              const teamAbbr = qb.team;
-                              const teamInfo = getTeamInfo(teamAbbr);
-                              const logoUrl = teamInfo.logo;
-                              
-                              if (logoUrl) {
-                                return (
-                                  <div className="flex items-center justify-center">
-                                    <img 
-                                      src={logoUrl} 
-                                      alt={teamInfo.name || teamAbbr}
-                                      className="w-6 h-6 object-contain"
-                                      onError={(e) => {
-                                        e.target.style.display = 'none';
-                                        e.target.nextSibling.style.display = 'inline';
-                                      }}
-                                    />
-                                    <span className="text-xs text-gray-600 hidden ml-1">{teamAbbr}</span>
-                                  </div>
-                                );
-                              } else {
-                                return (
-                                  <span className="text-xs text-gray-600">
-                                    {teamAbbr}
-                                  </span>
-                                );
-                              }
-                            })()}
-                          </td>
-                          <td className="px-4 py-2 border-b text-center">{qb.attempts}</td>
-                          <td className="px-4 py-2 border-b text-center">{qb.completions}</td>
-                          <td className="px-4 py-2 border-b text-center">{qb.yards}</td>
-                          <td className="px-4 py-2 border-b text-center">{qb.tds}</td>
-                          <td className="px-4 py-2 border-b text-center">{qb.ints}</td>
-                          <td className="px-4 py-2 border-b text-center">{qb.completion_rate}%</td>
-                          <td className="px-4 py-2 border-b text-center">{qb.yards_per_attempt}</td>
-                          <td className="px-4 py-2 border-b text-center">{qb.td_rate}%</td>
-                          <td className="px-4 py-2 border-b text-center">{qb.int_rate}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-            
-            {thirdAndShortData && (
-              <div className="space-y-4">
-                <h4 className="text-lg font-semibold text-gray-700">Raw Data (First 5 Records)</h4>
-                <div className="bg-gray-50 p-4 rounded overflow-x-auto">
-                  <pre className="text-sm text-gray-800">
-                    {JSON.stringify(thirdAndShortData.slice(0, 5), null, 2)}
-                  </pre>
-                </div>
-                <p className="text-sm text-gray-600">
-                  Total records: {thirdAndShortData.length}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 3rd & 1-3 Examples Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">
-            3rd & 1-3 Data Examples
-          </h3>
-          
-          <div className="space-y-4">
-            <div className="flex gap-4">
-              <button
-                onClick={runExamples}
-                disabled={!isConnected}
-                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Run All Examples
-              </button>
-              
-              <button
-                onClick={runDiagnostic}
-                disabled={!isConnected}
-                className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Run Diagnostic
-              </button>
-              
-              <button
-                onClick={() => {
-                  console.log('🧪 Testing team logos:');
-                  ['CIN', 'KAN', 'DEN', 'MIN', 'NYJ', 'DET', 'HOU', 'TAM', 'SEA', 'LAR', 'BUF', 'MIA', 'WAS', 'CHI', 'SFO'].forEach(team => {
-                    const info = getTeamInfo(team);
-                    console.log(`${team}:`, info);
-                  });
-                }}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-              >
-                Test Team Logos
-              </button>
-            </div>
-            
-            {examplesOutput && (
-              <div className="space-y-4">
-                <h4 className="text-lg font-semibold text-gray-700">Example Output</h4>
-                <div className="bg-gray-50 p-4 rounded overflow-x-auto max-h-96 overflow-y-auto">
-                  <pre className="text-sm text-gray-800 whitespace-pre-wrap">
-                    {examplesOutput}
-                  </pre>
-                </div>
-              </div>
-            )}
             
             {diagnosticOutput && (
               <div className="space-y-4">
-                <h4 className="text-lg font-semibold text-gray-700">Diagnostic Output</h4>
+                <h5 className="text-md font-semibold text-gray-700">Diagnostic Output</h5>
                 <div className="bg-gray-50 p-4 rounded overflow-x-auto max-h-96 overflow-y-auto">
                   <pre className="text-sm text-gray-800 whitespace-pre-wrap">
                     {diagnosticOutput}

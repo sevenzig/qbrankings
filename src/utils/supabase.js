@@ -34,10 +34,10 @@ if (supabaseUrl && supabaseAnonKey) {
   console.warn('⚠️ Supabase client not initialized - missing credentials');
 }
 
-// QB data fetching utilities
+// QB data fetching utilities for 5-table schema
 export const qbDataService = {
   /**
-   * Fetch all QB data from Supabase using the season summary view
+   * Fetch all QB data from Supabase using the 5-table schema (no views)
    * @param {boolean} include2024Only - Whether to fetch only 2024 data
    * @returns {Promise<Array>} Array of QB data objects
    */
@@ -48,12 +48,16 @@ export const qbDataService = {
         return [];
       }
 
-      console.log(`🔄 Fetching QB data from Supabase... (2024 Only: ${include2024Only})`);
+      console.log(`🔄 Fetching QB data from Supabase (5-table schema, no views)... (2024 Only: ${include2024Only})`);
       
+      // Build query to join qb_passing_stats with players
       let query = supabase
-        .from('qb_season_summary')
-        .select('*')
-        .order('passer_rating', { ascending: false });
+        .from('qb_passing_stats')
+        .select(`
+          *,
+          players!inner(pfr_id, player_name)
+        `)
+        .order('rate', { ascending: false });
       
       // Filter by year if 2024-only mode is enabled
       if (include2024Only) {
@@ -67,8 +71,29 @@ export const qbDataService = {
         throw new Error(`Failed to fetch QB data: ${error.message}`);
       }
       
-      console.log(`✅ Successfully fetched ${data.length} QB records from Supabase`);
-      return data;
+      // Transform the data to match expected format
+      const transformedData = data.map(record => ({
+        ...record,
+        player_name: record.players?.player_name || record.player_name,
+        team: record.teams?.team_abbr || record.team,
+        team_name: record.teams?.team_name,
+        // Map field names to match expected format
+        passer_rating: record.rate,
+        games_started: record.gs,
+        completions: record.cmp,
+        attempts: record.att,
+        completion_pct: record.cmp_pct,
+        pass_yards: record.yds,
+        pass_tds: record.td,
+        interceptions: record.int,
+        sacks: record.sk,
+        sack_yards: record.sk_yds,
+        fourth_quarter_comebacks: record.four_qc,
+        game_winning_drives: record.gwd
+      }));
+      
+      console.log(`✅ Successfully fetched ${transformedData.length} QB records from Supabase`);
+      return transformedData;
       
     } catch (error) {
       console.error('❌ Error fetching QB data from Supabase:', error);
@@ -92,18 +117,42 @@ export const qbDataService = {
       console.log(`🔄 Fetching QB data for ${year} from Supabase...`);
       
       const { data, error } = await supabase
-        .from('qb_season_summary')
-        .select('*')
+        .from('qb_passing_stats')
+        .select(`
+          *,
+          players!inner(pfr_id, player_name)
+        `)
         .eq('season', year)
-        .order('passer_rating', { ascending: false });
+        .order('rate', { ascending: false });
       
       if (error) {
         console.error('❌ Supabase query error:', error);
         throw new Error(`Failed to fetch ${year} QB data: ${error.message}`);
       }
       
-      console.log(`✅ Successfully fetched ${data.length} QB records for ${year}`);
-      return data;
+      // Transform the data to match expected format
+      const transformedData = data.map(record => ({
+        ...record,
+        player_name: record.players?.player_name || record.player_name,
+        team: record.team, // Use team directly from qb_passing_stats
+        team_name: record.team, // Use team code as team name for now
+        // Map field names to match expected format
+        passer_rating: record.rate,
+        games_started: record.gs,
+        completions: record.cmp,
+        attempts: record.att,
+        completion_pct: record.cmp_pct,
+        pass_yards: record.yds,
+        pass_tds: record.td,
+        interceptions: record.int,
+        sacks: record.sk,
+        sack_yards: record.sk_yds,
+        fourth_quarter_comebacks: record.four_qc,
+        game_winning_drives: record.gwd
+      }));
+      
+      console.log(`✅ Successfully fetched ${transformedData.length} QB records for ${year}`);
+      return transformedData;
       
     } catch (error) {
       console.error(`❌ Error fetching ${year} QB data from Supabase:`, error);
@@ -126,9 +175,12 @@ export const qbDataService = {
       console.log(`🔄 Fetching QB data for ${playerName} from Supabase...`);
       
       const { data, error } = await supabase
-        .from('qb_season_summary')
-        .select('*')
-        .ilike('player_name', `%${playerName}%`)
+        .from('qb_passing_stats')
+        .select(`
+          *,
+          players!inner(pfr_id, player_name)
+        `)
+        .ilike('players.player_name', `%${playerName}%`)
         .order('season', { ascending: false });
       
       if (error) {
@@ -136,8 +188,29 @@ export const qbDataService = {
         throw new Error(`Failed to fetch QB data for ${playerName}: ${error.message}`);
       }
       
-      console.log(`✅ Successfully fetched ${data.length} records for ${playerName}`);
-      return data;
+      // Transform the data to match expected format
+      const transformedData = data.map(record => ({
+        ...record,
+        player_name: record.players?.player_name || record.player_name,
+        team: record.team, // Use team directly from qb_passing_stats
+        team_name: record.team, // Use team code as team name for now
+        // Map field names to match expected format
+        passer_rating: record.rate,
+        games_started: record.gs,
+        completions: record.cmp,
+        attempts: record.att,
+        completion_pct: record.cmp_pct,
+        pass_yards: record.yds,
+        pass_tds: record.td,
+        interceptions: record.int,
+        sacks: record.sk,
+        sack_yards: record.sk_yds,
+        fourth_quarter_comebacks: record.four_qc,
+        game_winning_drives: record.gwd
+      }));
+      
+      console.log(`✅ Successfully fetched ${transformedData.length} records for ${playerName}`);
+      return transformedData;
       
     } catch (error) {
       console.error(`❌ Error fetching QB data for ${playerName} from Supabase:`, error);
@@ -164,8 +237,11 @@ export const qbDataService = {
       console.log('🔄 Fetching QB data with filters from Supabase...', filters);
       
       let query = supabase
-        .from('qb_season_summary')
-        .select('*');
+        .from('qb_passing_stats')
+        .select(`
+          *,
+          players!inner(pfr_id, player_name)
+        `);
       
       // Apply filters
       if (filters.year) {
@@ -177,22 +253,43 @@ export const qbDataService = {
       }
       
       if (filters.minGames) {
-        query = query.gte('games_started', filters.minGames);
+        query = query.gte('gs', filters.minGames);
       }
       
       if (filters.minRating) {
-        query = query.gte('passer_rating', filters.minRating);
+        query = query.gte('rate', filters.minRating);
       }
       
-      const { data, error } = await query.order('passer_rating', { ascending: false });
+      const { data, error } = await query.order('rate', { ascending: false });
       
       if (error) {
         console.error('❌ Supabase query error:', error);
         throw new Error(`Failed to fetch filtered QB data: ${error.message}`);
       }
       
-      console.log(`✅ Successfully fetched ${data.length} QB records with filters`);
-      return data;
+      // Transform the data to match expected format
+      const transformedData = data.map(record => ({
+        ...record,
+        player_name: record.players?.player_name || record.player_name,
+        team: record.teams?.team_abbr || record.team,
+        team_name: record.teams?.team_name,
+        // Map field names to match expected format
+        passer_rating: record.rate,
+        games_started: record.gs,
+        completions: record.cmp,
+        attempts: record.att,
+        completion_pct: record.cmp_pct,
+        pass_yards: record.yds,
+        pass_tds: record.td,
+        interceptions: record.int,
+        sacks: record.sk,
+        sack_yards: record.sk_yds,
+        fourth_quarter_comebacks: record.four_qc,
+        game_winning_drives: record.gwd
+      }));
+      
+      console.log(`✅ Successfully fetched ${transformedData.length} QB records with filters`);
+      return transformedData;
       
     } catch (error) {
       console.error('❌ Error fetching filtered QB data from Supabase:', error);
@@ -218,7 +315,11 @@ export const qbDataService = {
       // Fetch passing stats
       const { data: passingStats, error: passingError } = await supabase
         .from('qb_passing_stats')
-        .select('*')
+        .select(`
+          *,
+          players!inner(pfr_id, player_name),
+          teams!inner(team_abbr, team_name)
+        `)
         .eq('pfr_id', pfrId)
         .eq('season', season)
         .single();
@@ -293,20 +394,35 @@ export const qbDataService = {
 
       console.log(`🔄 Fetching ${splitType} splits for ${pfrId} in ${season}...`);
       
-      const { data, error } = await supabase
-        .rpc('get_splits_by_type', {
-          target_pfr_id: pfrId,
-          target_season: season,
-          split_type: splitType
-        });
+      // Try both splits tables
+      let splitsData = [];
       
-      if (error) {
-        console.error('❌ Supabase RPC error:', error);
-        throw new Error(`Failed to fetch ${splitType} splits: ${error.message}`);
+      // Try qb_splits first
+      const { data: basicSplits, error: basicError } = await supabase
+        .from('qb_splits')
+        .select('*')
+        .eq('pfr_id', pfrId)
+        .eq('season', season)
+        .eq('split', splitType);
+      
+      if (!basicError && basicSplits) {
+        splitsData = splitsData.concat(basicSplits);
       }
       
-      console.log(`✅ Successfully fetched ${data.length} ${splitType} splits`);
-      return data || [];
+      // Try qb_splits_advanced
+      const { data: advancedSplits, error: advancedError } = await supabase
+        .from('qb_splits_advanced')
+        .select('*')
+        .eq('pfr_id', pfrId)
+        .eq('season', season)
+        .eq('split', splitType);
+      
+      if (!advancedError && advancedSplits) {
+        splitsData = splitsData.concat(advancedSplits);
+      }
+      
+      console.log(`✅ Successfully fetched ${splitsData.length} ${splitType} splits`);
+      return splitsData;
       
     } catch (error) {
       console.error(`❌ Error fetching ${splitType} splits for ${pfrId} in ${season}:`, error);
@@ -315,33 +431,40 @@ export const qbDataService = {
   },
 
   /**
-   * Get database statistics
-   * @returns {Promise<Array>} Array of table statistics
+   * Get database statistics for the 5-table schema
+   * @returns {Promise<Object>} Database statistics object
    */
   async getDatabaseStats() {
     try {
       if (!supabase) {
-        console.warn('⚠️ Supabase not available - returning empty array');
-        return [];
+        console.warn('⚠️ Supabase not available - returning empty object');
+        return {};
       }
 
-      console.log('🔄 Fetching database statistics...');
+      console.log('🔄 Fetching database statistics for 5-table schema...');
       
-      const { data, error } = await supabase
-        .from('database_stats')
-        .select('*');
+      const tables = ['players', 'qb_passing_stats', 'qb_splits', 'qb_splits_advanced', 'teams'];
+      const stats = {};
       
-      if (error) {
-        console.error('❌ Supabase query error:', error);
-        throw new Error(`Failed to fetch database stats: ${error.message}`);
+      for (const table of tables) {
+        const { count, error } = await supabase
+          .from(table)
+          .select('*', { count: 'exact', head: true });
+        
+        if (error) {
+          console.error(`❌ Error counting ${table}:`, error);
+          stats[table] = { count: 0, error: error.message };
+        } else {
+          stats[table] = { count: count || 0, error: null };
+        }
       }
       
       console.log('✅ Successfully fetched database statistics');
-      return data;
+      return stats;
       
     } catch (error) {
       console.error('❌ Error fetching database statistics:', error);
-      return [];
+      return {};
     }
   },
 
@@ -365,11 +488,14 @@ export const qbDataService = {
       console.log('🔄 Searching players with filters...', searchParams);
       
       let query = supabase
-        .from('qb_season_summary')
-        .select('*');
+        .from('qb_passing_stats')
+        .select(`
+          *,
+          players!inner(pfr_id, player_name)
+        `);
       
       if (searchParams.name) {
-        query = query.ilike('player_name', `%${searchParams.name}%`);
+        query = query.ilike('players.player_name', `%${searchParams.name}%`);
       }
       
       if (searchParams.team) {
@@ -377,11 +503,11 @@ export const qbDataService = {
       }
       
       if (searchParams.minRating) {
-        query = query.gte('passer_rating', searchParams.minRating);
+        query = query.gte('rate', searchParams.minRating);
       }
       
       if (searchParams.minGames) {
-        query = query.gte('games_started', searchParams.minGames);
+        query = query.gte('gs', searchParams.minGames);
       }
       
       if (searchParams.season) {
@@ -389,7 +515,7 @@ export const qbDataService = {
       }
       
       const { data, error } = await query
-        .order('passer_rating', { ascending: false })
+        .order('rate', { ascending: false })
         .limit(50);
       
       if (error) {
@@ -397,8 +523,29 @@ export const qbDataService = {
         throw new Error(`Failed to search players: ${error.message}`);
       }
       
-      console.log(`✅ Found ${data.length} players matching search criteria`);
-      return data;
+      // Transform the data to match expected format
+      const transformedData = data.map(record => ({
+        ...record,
+        player_name: record.players?.player_name || record.player_name,
+        team: record.team, // Use team directly from qb_passing_stats
+        team_name: record.team, // Use team code as team name for now
+        // Map field names to match expected format
+        passer_rating: record.rate,
+        games_started: record.gs,
+        completions: record.cmp,
+        attempts: record.att,
+        completion_pct: record.cmp_pct,
+        pass_yards: record.yds,
+        pass_tds: record.td,
+        interceptions: record.int,
+        sacks: record.sk,
+        sack_yards: record.sk_yds,
+        fourth_quarter_comebacks: record.four_qc,
+        game_winning_drives: record.gwd
+      }));
+      
+      console.log(`✅ Found ${transformedData.length} players matching search criteria`);
+      return transformedData;
       
     } catch (error) {
       console.error('❌ Error searching players:', error);
@@ -419,114 +566,105 @@ export const qbDataService = {
 
       console.log('🔄 Fetching 3rd & 1-3 splits data for all 2024 QBs...');
       
-      // Try multiple possible table structures for 3rd & 1-3 data
-      let thirdDownData = [];
-      let thirdDownError = null;
+      // Based on diagnostic findings, data is stored as:
+      // split = 'Continuation' AND value = '3rd' (for 3rd down)
+      // split = 'Yards To Go' AND value = '1-3' (for 1-3 yards)
       
-      // Try qb_splits_advanced first - exact match for 3rd & 1-3
-      const { data: advancedData, error: advancedError } = await supabase
+      // First, get all 3rd down data
+      const { data: thirdDownData, error: thirdDownError } = await supabase
         .from('qb_splits_advanced')
-        .select('*')
-        .eq('split', 'other')
-        .eq('value', '3rd & 1-3')
+        .select(`
+          *,
+          players!inner(pfr_id, player_name),
+          qb_passing_stats!inner(team)
+        `)
+        .eq('split', 'Continuation')
+        .eq('value', '3rd')
         .eq('season', 2024);
       
-      console.log('🔍 Exact query results:', { 
-        advancedData: advancedData?.length || 0, 
-        advancedError: advancedError ? advancedError.message : null 
-      });
-      
-      if (!advancedError && advancedData && advancedData.length > 0) {
-        thirdDownData = advancedData;
-        console.log(`✅ Found ${thirdDownData.length} records in qb_splits_advanced`);
-      } else {
-        // Try qb_splits table
-        const { data: splitsData, error: splitsError } = await supabase
-          .from('qb_splits')
-          .select('*')
-          .eq('split', 'other')
-          .eq('value', '3rd & 1-3')
-          .eq('season', 2024);
-        
-        if (!splitsError && splitsData && splitsData.length > 0) {
-          thirdDownData = splitsData;
-          console.log(`✅ Found ${thirdDownData.length} records in qb_splits`);
-        } else {
-          // Try different value formats
-          const { data: altData, error: altError } = await supabase
-            .from('qb_splits_advanced')
-            .select('*')
-            .eq('split', 'other')
-            .eq('season', 2024)
-            .or('value.eq.3rd & 1-3,value.eq.3rd and 1-3,value.eq.1-3');
-          
-          console.log('🔍 Split-only query results:', { 
-            altData: altData?.length || 0, 
-            altError: altError ? altError.message : null 
-          });
-          if (altData && altData.length > 0) {
-            console.log('🔍 Sample altData record:', altData[0]);
-          }
-          
-          if (!altError && altData && altData.length > 0) {
-            thirdDownData = altData;
-            console.log(`✅ Found ${thirdDownData.length} records with split='3rd & 1-3' (any value)`);
-          } else {
-                      // Try looking for 3rd & 1-3 data specifically (not all 3rd down)
-          const { data: broadData, error: broadError } = await supabase
-            .from('qb_splits_advanced')
-            .select('*')
-            .eq('season', 2024)
-            .eq('split', 'other')
-            .or('value.eq.3rd & 1-3,value.eq.3rd and 1-3,value.eq.1-3,value.eq.3rd');
-          
-          console.log('🔍 Broad query results:', { 
-            broadData: broadData?.length || 0, 
-            broadError: broadError ? broadError.message : null 
-          });
-          if (broadData && broadData.length > 0) {
-            console.log('🔍 Sample broadData record:', broadData[0]);
-          }
-            
-            if (!broadError && broadData && broadData.length > 0) {
-              thirdDownData = broadData;
-              console.log(`✅ Found ${thirdDownData.length} records with broad 3rd/1-3 search`);
-            } else {
-              thirdDownError = new Error('No 3rd & 1-3 data found in any table');
-            }
-          }
-        }
-      }
-      
       if (thirdDownError) {
+        console.error('❌ Error fetching 3rd down data:', thirdDownError);
         throw thirdDownError;
       }
       
-      console.log(`📊 Found ${thirdDownData.length} QBs with 3rd & 1-3 data in 2024`);
+      console.log(`📊 Found ${thirdDownData?.length || 0} QBs with 3rd down data`);
       
-      // Transform the data to match expected format
-      const thirdAndShortData = thirdDownData.map(record => ({
-        pfr_id: record.pfr_id,
-        player_name: record.player_name,
-        team: record.team,
-        season: record.season,
-        split: '3rd & 1-3',
-        value: '1-3 yards',
-        att: record.att,
-        cmp: record.cmp,
-        yds: record.yds,
-        td: record.td,
-        int: record.int,
-        rate: record.rate,
-        // Add calculated fields
-        completion_rate: record.att > 0 ? (record.cmp / record.att * 100).toFixed(1) : 0,
-        yards_per_attempt: record.att > 0 ? (record.yds / record.att).toFixed(1) : 0,
-        td_rate: record.att > 0 ? (record.td / record.att * 100).toFixed(1) : 0,
-        int_rate: record.att > 0 ? (record.int / record.att * 100).toFixed(1) : 0
-      }));
+      // Then, get all 1-3 yards data
+      const { data: yardsData, error: yardsError } = await supabase
+        .from('qb_splits_advanced')
+        .select(`
+          *,
+          players!inner(pfr_id, player_name),
+          qb_passing_stats!inner(team)
+        `)
+        .eq('split', 'Yards To Go')
+        .eq('value', '1-3')
+        .eq('season', 2024);
       
-      console.log(`✅ Successfully fetched 3rd & 1-3 data for ${thirdAndShortData.length} QBs`);
-      return thirdAndShortData;
+      if (yardsError) {
+        console.error('❌ Error fetching 1-3 yards data:', yardsError);
+        throw yardsError;
+      }
+      
+      console.log(`📊 Found ${yardsData?.length || 0} QBs with 1-3 yards data`);
+      
+      // Combine the data - we'll use 3rd down data as primary and merge with 1-3 yards data
+      const combinedData = [];
+      
+      // Create a map of 3rd down data by pfr_id
+      const thirdDownMap = {};
+      if (thirdDownData) {
+        thirdDownData.forEach(record => {
+          thirdDownMap[record.pfr_id] = record;
+        });
+      }
+      
+      // Create a map of 1-3 yards data by pfr_id
+      const yardsMap = {};
+      if (yardsData) {
+        yardsData.forEach(record => {
+          yardsMap[record.pfr_id] = record;
+        });
+      }
+      
+      // Combine data for QBs that have both 3rd down and 1-3 yards data
+      const allQBs = new Set([
+        ...Object.keys(thirdDownMap),
+        ...Object.keys(yardsMap)
+      ]);
+      
+      allQBs.forEach(pfrId => {
+        const thirdDownRecord = thirdDownMap[pfrId];
+        const yardsRecord = yardsMap[pfrId];
+        
+        // Use 3rd down data as primary, fall back to 1-3 yards data
+        const primaryRecord = thirdDownRecord || yardsRecord;
+        
+        if (primaryRecord) {
+          combinedData.push({
+            pfr_id: primaryRecord.pfr_id,
+            player_name: primaryRecord.players?.player_name || primaryRecord.player_name,
+            team: primaryRecord.qb_passing_stats?.team || primaryRecord.team,
+            season: primaryRecord.season,
+            split: '3rd & 1-3',
+            value: '1-3 yards',
+            att: primaryRecord.att,
+            cmp: primaryRecord.cmp,
+            yds: primaryRecord.yds,
+            td: primaryRecord.td,
+            int: primaryRecord.int,
+            rate: primaryRecord.rate,
+            // Add calculated fields
+            completion_rate: primaryRecord.att > 0 ? (primaryRecord.cmp / primaryRecord.att * 100).toFixed(1) : 0,
+            yards_per_attempt: primaryRecord.att > 0 ? (primaryRecord.yds / primaryRecord.att).toFixed(1) : 0,
+            td_rate: primaryRecord.att > 0 ? (primaryRecord.td / primaryRecord.att * 100).toFixed(1) : 0,
+            int_rate: primaryRecord.att > 0 ? (primaryRecord.int / primaryRecord.att * 100).toFixed(1) : 0
+          });
+        }
+      });
+      
+      console.log(`✅ Successfully fetched 3rd & 1-3 data for ${combinedData.length} QBs`);
+      return combinedData;
       
     } catch (error) {
       console.error('❌ Error fetching 3rd & 1-3 data:', error);
@@ -548,88 +686,73 @@ export const qbDataService = {
 
       console.log(`🔄 Fetching 3rd & 1-3 splits for QB ${pfrId} in 2024...`);
       
-      // Try multiple possible table structures for 3rd & 1-3 data
-      let data = [];
-      let error = null;
+      // Based on diagnostic findings, data is stored as:
+      // split = 'Continuation' AND value = '3rd' (for 3rd down)
+      // split = 'Yards To Go' AND value = '1-3' (for 1-3 yards)
       
-      // Try qb_splits_advanced first
-      const { data: advancedData, error: advancedError } = await supabase
+      // First, get 3rd down data for this QB
+      const { data: thirdDownData, error: thirdDownError } = await supabase
         .from('qb_splits_advanced')
-        .select('*')
+        .select(`
+          *,
+          players!inner(pfr_id, player_name),
+          qb_passing_stats!inner(team)
+        `)
         .eq('pfr_id', pfrId)
-        .eq('split', 'other')
-        .eq('value', '3rd & 1-3')
+        .eq('split', 'Continuation')
+        .eq('value', '3rd')
         .eq('season', 2024);
       
-      if (!advancedError && advancedData && advancedData.length > 0) {
-        data = advancedData;
-      } else {
-        // Try qb_splits table
-        const { data: splitsData, error: splitsError } = await supabase
-          .from('qb_splits')
-          .select('*')
-          .eq('pfr_id', pfrId)
-          .eq('split', 'other')
-          .eq('value', '3rd & 1-3')
-          .eq('season', 2024);
-        
-        if (!splitsError && splitsData && splitsData.length > 0) {
-          data = splitsData;
-        } else {
-          // Try different value formats
-          const { data: altData, error: altError } = await supabase
-            .from('qb_splits_advanced')
-            .select('*')
-            .eq('pfr_id', pfrId)
-            .eq('split', 'other')
-            .eq('season', 2024)
-            .or('value.eq.3rd & 1-3,value.eq.3rd and 1-3,value.eq.1-3');
-          
-          if (!altError && altData && altData.length > 0) {
-            data = altData;
-          } else {
-            // Try looking for 3rd & 1-3 data specifically (not all 3rd down)
-            const { data: broadData, error: broadError } = await supabase
-              .from('qb_splits_advanced')
-              .select('*')
-              .eq('pfr_id', pfrId)
-              .eq('season', 2024)
-              .eq('split', 'other')
-              .or('value.eq.3rd & 1-3,value.eq.3rd and 1-3,value.eq.1-3,value.eq.3rd');
-            
-            if (!broadError && broadData && broadData.length > 0) {
-              data = broadData;
-            } else {
-              error = new Error(`No 3rd & 1-3 data found for QB ${pfrId}`);
-            }
-          }
-        }
+      if (thirdDownError) {
+        console.error('❌ Error fetching 3rd down data:', thirdDownError);
+        throw thirdDownError;
       }
       
-      if (error) {
-        throw error;
+      // Then, get 1-3 yards data for this QB
+      const { data: yardsData, error: yardsError } = await supabase
+        .from('qb_splits_advanced')
+        .select(`
+          *,
+          players!inner(pfr_id, player_name),
+          qb_passing_stats!inner(team)
+        `)
+        .eq('pfr_id', pfrId)
+        .eq('split', 'Yards To Go')
+        .eq('value', '1-3')
+        .eq('season', 2024);
+      
+      if (yardsError) {
+        console.error('❌ Error fetching 1-3 yards data:', yardsError);
+        throw yardsError;
+      }
+      
+      // Combine the data - use 3rd down data as primary, fall back to 1-3 yards data
+      const primaryRecord = thirdDownData?.[0] || yardsData?.[0];
+      
+      if (!primaryRecord) {
+        throw new Error(`No 3rd & 1-3 data found for QB ${pfrId}`);
       }
       
       // Transform the data to match expected format
-      const transformedData = data.map(record => ({
-        pfr_id: record.pfr_id,
-        player_name: record.player_name,
-        team: record.team,
-        season: record.season,
+      const transformedData = [{
+        pfr_id: primaryRecord.pfr_id,
+        player_name: primaryRecord.players?.player_name || primaryRecord.player_name,
+        team: primaryRecord.qb_passing_stats?.team || primaryRecord.team,
+        season: primaryRecord.season,
         split: '3rd & 1-3',
         value: '1-3 yards',
-        att: record.att,
-        cmp: record.cmp,
-        yds: record.yds,
-        td: record.td,
-        int: record.int,
-        rate: record.rate,
+        att: primaryRecord.att,
+        cmp: primaryRecord.cmp,
+        yds: primaryRecord.yds,
+        td: primaryRecord.td,
+        int: primaryRecord.int,
+        rate: primaryRecord.rate,
         // Add calculated fields
-        completion_rate: record.att > 0 ? (record.cmp / record.att * 100).toFixed(1) : 0,
-        yards_per_attempt: record.att > 0 ? (record.yds / record.att).toFixed(1) : 0,
-        td_rate: record.att > 0 ? (record.td / record.att * 100).toFixed(1) : 0,
-        int_rate: record.att > 0 ? (record.int / record.att * 100).toFixed(1) : 0
-      }));
+        completion_rate: primaryRecord.att > 0 ? (primaryRecord.cmp / primaryRecord.att * 100).toFixed(1) : 0,
+        yards_per_attempt: primaryRecord.att > 0 ? (primaryRecord.yds / primaryRecord.att).toFixed(1) : 0,
+        td_rate: primaryRecord.att > 0 ? (primaryRecord.td / primaryRecord.att * 100).toFixed(1) : 0,
+        int_rate: primaryRecord.att > 0 ? (primaryRecord.int / primaryRecord.att * 100).toFixed(1) : 0
+      }];
       
       console.log(`✅ Successfully fetched ${transformedData.length} 3rd & 1-3 splits for QB ${pfrId}`);
       return transformedData;
@@ -746,38 +869,6 @@ export const qbDataService = {
         averageIntsPerAttempt: totals.attempts > 0 ? (totals.ints / totals.attempts * 100).toFixed(1) : 0,
         qbBreakdown
       };
-      
-      // If any QBs have missing team info, try to fetch it from main QB data
-      const qbsWithMissingTeams = qbBreakdown.filter(qb => !qb.team || qb.team === 'Unknown');
-      if (qbsWithMissingTeams.length > 0) {
-        console.log(`🔍 Fetching team info for ${qbsWithMissingTeams.length} QBs with missing team data...`);
-        
-        try {
-          const { data: qbData, error: qbError } = await supabase
-            .from('qb_passing_stats')
-            .select('pfr_id, team')
-            .eq('season', 2024)
-            .in('pfr_id', qbsWithMissingTeams.map(qb => qb.pfr_id));
-          
-          if (!qbError && qbData) {
-            const teamMap = {};
-            qbData.forEach(qb => {
-              teamMap[qb.pfr_id] = qb.team;
-            });
-            
-            // Update QBs with missing team info
-            qbBreakdown.forEach(qb => {
-              if (!qb.team || qb.team === 'Unknown') {
-                qb.team = teamMap[qb.pfr_id] || 'Unknown';
-              }
-            });
-            
-            console.log(`✅ Updated team info for ${Object.keys(teamMap).length} QBs`);
-          }
-        } catch (error) {
-          console.warn('⚠️ Could not fetch team info from main QB data:', error.message);
-        }
-      }
       
       console.log('✅ Successfully generated 3rd & 1-3 summary statistics');
       return summary;

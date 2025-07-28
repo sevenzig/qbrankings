@@ -109,8 +109,49 @@ const ThirdAndShortDiagnostic = memo(() => {
     try {
       console.log('🧪 Testing specific QB data...');
       
-      // Test with the hardcoded ID that's failing
-      const diagnostic = await diagnoseQBData('MahomPa00', 2024);
+      // First, let's find what QBs are actually available
+      const { supabase } = await import('../utils/supabase.js');
+      
+      // Search for Mahomes by name
+      const { data: mahomesSearch, error: searchError } = await supabase
+        .from('qb_splits_advanced')
+        .select('pfr_id, player_name')
+        .eq('season', 2024)
+        .ilike('player_name', '%Mahomes%')
+        .limit(5);
+      
+      if (searchError) {
+        throw new Error(`Error searching for Mahomes: ${searchError.message}`);
+      }
+      
+      if (!mahomesSearch || mahomesSearch.length === 0) {
+        // If no Mahomes found, let's see what QBs are available
+        const { data: allQBs, error: allQBsError } = await supabase
+          .from('qb_splits_advanced')
+          .select('pfr_id, player_name')
+          .eq('season', 2024)
+          .limit(10);
+        
+        if (allQBsError) {
+          throw new Error(`Error fetching QBs: ${allQBsError.message}`);
+        }
+        
+        setResults({
+          qbDiagnostic: {
+            message: 'No Mahomes found in database',
+            availableQBs: allQBs || []
+          },
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+      
+      // Use the first Mahomes found
+      const mahomesId = mahomesSearch[0].pfr_id;
+      console.log(`✅ Found Mahomes with ID: ${mahomesId} (${mahomesSearch[0].player_name})`);
+      
+      // Test with the correct ID
+      const diagnostic = await diagnoseQBData(mahomesId, 2024);
       
       setResults({
         qbDiagnostic: diagnostic,
@@ -188,7 +229,34 @@ const ThirdAndShortDiagnostic = memo(() => {
             disabled={isRunning}
             className="px-4 py-2 bg-pink-600 text-white rounded hover:bg-pink-700 disabled:opacity-50"
           >
-            🧪 Test MahomPa00
+            🧪 Find & Test Mahomes
+          </button>
+          
+          <button
+            onClick={async () => {
+              try {
+                const { supabase } = await import('../utils/supabase.js');
+                const { data: allQBs, error } = await supabase
+                  .from('qb_splits_advanced')
+                  .select('pfr_id, player_name')
+                  .eq('season', 2024)
+                  .order('player_name')
+                  .limit(20);
+                
+                if (error) throw error;
+                
+                setResults({
+                  availableQBs: allQBs || [],
+                  timestamp: new Date().toISOString()
+                });
+              } catch (err) {
+                setError(err.message);
+              }
+            }}
+            disabled={isRunning}
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
+          >
+            📋 Show Available QBs
           </button>
         </div>
       </div>
@@ -348,6 +416,24 @@ const ThirdAndShortDiagnostic = memo(() => {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+          
+          {results.availableQBs && (
+            <div className="bg-gray-100 p-4 rounded">
+              <h3 className="text-lg font-semibold mb-3">
+                📋 Available QBs in Database (2024)
+              </h3>
+              <div className="bg-white p-3 rounded border">
+                <div className="space-y-2">
+                  {results.availableQBs.map((qb, index) => (
+                    <div key={index} className="p-2 bg-gray-50 rounded flex justify-between">
+                      <span className="font-medium">{qb.player_name}</span>
+                      <span className="text-sm text-gray-600 font-mono">{qb.pfr_id}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
