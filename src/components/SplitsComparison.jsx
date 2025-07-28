@@ -65,7 +65,7 @@ const SplitsComparison = memo(() => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [availableSplits, setAvailableSplits] = useState({});
-  const [selectedValue, setSelectedValue] = useState('1-3'); // Changed from '3rd & 1-3' to '1-3'
+  const [selectedValue, setSelectedValue] = useState('3rd & 1-3'); // Changed back to '3rd & 1-3' since we fixed the service
   const [comprehensiveData, setComprehensiveData] = useState(null);
   const [minAttempts, setMinAttempts] = useState(10);
   const [season, setSeason] = useState(2024);
@@ -293,16 +293,41 @@ const SplitsComparison = memo(() => {
           </p>
         </div>
 
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h3 className="text-lg font-semibold text-blue-900 mb-2">📊 Available Data Types</h3>
+          <p className="text-blue-800 mb-3">
+            This tool provides comprehensive QB statistics across various game situations. 
+            Popular analysis scenarios include:
+          </p>
+          <ul className="text-blue-700 space-y-1 text-sm">
+            <li>• <strong>3rd & 1-3:</strong> Third down with 1-3 yards to go (clutch situations)</li>
+            <li>• <strong>Red Zone:</strong> Passing inside the opponent's 20-yard line</li>
+            <li>• <strong>Shotgun:</strong> Passing from shotgun formation</li>
+            <li>• <strong>Home/Road:</strong> Performance in home vs away games</li>
+            <li>• <strong>Wins/Losses:</strong> Performance in wins vs losses</li>
+            <li>• <strong>4th Quarter:</strong> Late-game performance</li>
+          </ul>
+          <p className="text-blue-600 text-sm mt-3">
+            💡 <strong>Tip:</strong> Most data is available for QBs with 10+ attempts in each situation. 
+            Try different minimum attempt thresholds to see more or fewer QBs.
+          </p>
+        </div>
+
         {error && (
-          <div className="bg-red-500/20 backdrop-blur-lg border border-red-400/30 text-red-200 p-4 rounded-lg mb-6">
-            <p className="font-semibold">⚠️ Error:</p>
-            <p>{error}</p>
-            {error.includes('No data found') && (
-              <p className="text-sm mt-2">
-                💡 Try selecting a different split value. Available options include: 
-                "1-3", "4-6", "7-9", "10+" for Yards To Go, or "Home", "Road" for Place.
-              </p>
-            )}
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <h3 className="text-lg font-semibold text-red-900 mb-2">⚠️ No Data Found</h3>
+            <p className="text-red-800 mb-3">
+              No QB data found for the selected split. This could be because:
+            </p>
+            <ul className="text-red-700 space-y-1 text-sm mb-3">
+              <li>• The minimum attempts threshold is too high</li>
+              <li>• No QBs have enough attempts in this situation</li>
+              <li>• The selected split value doesn't exist in the database</li>
+            </ul>
+            <p className="text-red-600 text-sm">
+              💡 <strong>Try:</strong> Lowering the minimum attempts threshold or selecting a different split value 
+              like "3rd & 1-3", "Red Zone", "Shotgun", "Home", or "Win".
+            </p>
           </div>
         )}
 

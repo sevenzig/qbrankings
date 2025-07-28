@@ -10,21 +10,22 @@
  * This maps the actual values found in the database to their proper split types
  */
 export const SPLITS_MAPPING = {
-  // Down splits (from qb_splits_advanced)
+  // Down splits (from qb_splits_advanced and Continuation)
   '1st': 'Down',
   '2nd': 'Down',
   '3rd': 'Down',
   '4th': 'Down',
   
-  // Yards To Go splits (from qb_splits_advanced)
+  // Yards To Go splits (from qb_splits_advanced and Continuation)
   '1-3': 'Yards To Go',
   '4-6': 'Yards To Go',
   '7-9': 'Yards To Go',
   '10+': 'Yards To Go',
   
-  // Down & Yards to Go splits (from qb_splits_advanced)
+  // Down & Yards to Go splits (from Continuation)
   '1st & 10': 'Down & Yards to Go',
   '1st & <10': 'Down & Yards to Go',
+  '1st & >10': 'Down & Yards to Go',
   '2nd & 1-3': 'Down & Yards to Go',
   '2nd & 4-6': 'Down & Yards to Go',
   '2nd & 7-9': 'Down & Yards to Go',
@@ -37,6 +38,53 @@ export const SPLITS_MAPPING = {
   '4th & 4-6': 'Down & Yards to Go',
   '4th & 7-9': 'Down & Yards to Go',
   '4th & 10+': 'Down & Yards to Go',
+  
+  // Field Position splits (from Continuation)
+  'Red Zone': 'Field Position',
+  'Own 1-20': 'Field Position',
+  'Own 21-50': 'Field Position',
+  'Opp 49-20': 'Field Position',
+  'Opp 1-10': 'Field Position',
+  
+  // Score Differential splits (from Continuation)
+  'Leading': 'Score Differential',
+  'Trailing': 'Score Differential',
+  'Tied': 'Score Differential',
+  
+  // Quarter splits (from Continuation)
+  '1st Qtr': 'Quarter',
+  '2nd Qtr': 'Quarter',
+  '3rd Qtr': 'Quarter',
+  '4th Qtr': 'Quarter',
+  '1st Half': 'Quarter',
+  '2nd Half': 'Quarter',
+  'OT': 'Quarter',
+  
+  // Game Situation splits (from Continuation)
+  'Leading, < 2 min to go': 'Game Situation',
+  'Leading, < 4 min to go': 'Game Situation',
+  'Tied, < 2 min to go': 'Game Situation',
+  'Tied, < 4 min to go': 'Game Situation',
+  'Trailing, < 2 min to go': 'Game Situation',
+  'Trailing, < 4 min to go': 'Game Situation',
+  
+  // Snap Type & Huddle splits (from Continuation)
+  'Huddle': 'Snap Type & Huddle',
+  'No Huddle': 'Snap Type & Huddle',
+  'Shotgun': 'Snap Type & Huddle',
+  'Under Center': 'Snap Type & Huddle',
+  
+  // Play Action splits (from Continuation)
+  'play action': 'Play Action',
+  'non-play action': 'Play Action',
+  
+  // Run/Pass Option splits (from Continuation)
+  'rpo': 'Run/Pass Option',
+  'non-rpo': 'Run/Pass Option',
+  
+  // Time in Pocket splits (from Continuation)
+  '< 2.5 seconds': 'Time in Pocket',
+  '2.5+ seconds': 'Time in Pocket',
   
   // League splits (from qb_splits)
   'NFL': 'League',
@@ -77,6 +125,7 @@ export const SPLITS_MAPPING = {
   'Early': 'Time',
   'Afternoon': 'Time',
   'Late': 'Time',
+  'Morning': 'Time',
   
   // Conference splits (from qb_splits)
   'AFC': 'Conference',
@@ -129,17 +178,23 @@ export const SPLITS_MAPPING = {
   // QB Start splits (from qb_splits)
   'Started': 'QB Start',
   'Relief': 'QB Start',
+  'Starter': 'QB Start',
   
   // Stadium splits (from qb_splits)
   'Dome': 'Stadium',
   'Outdoors': 'Stadium',
+  'dome': 'Stadium',
+  'outdoors': 'Stadium',
+  'retroof': 'Stadium',
   
   // Playoffs splits (from qb_splits)
   'Yes': 'Playoffs',
   'No': 'Playoffs',
-  
-  // Continuation splits (from both tables)
-  'Continuation': 'Continuation'
+  'Total': 'Playoffs',
+  'Wild Card': 'Playoffs',
+  'Divisional': 'Playoffs',
+  'Conference Championship': 'Conference Championship',
+  'Super Bowl': 'Super Bowl'
 };
 
 /**

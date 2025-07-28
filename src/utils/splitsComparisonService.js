@@ -108,6 +108,25 @@ export const getAvailableSplitTypes = async (season = 2024) => {
       splitMap[record.split].add(record.value);
     });
     
+    // Special handling for "Continuation" split type - map values to proper categories
+    if (splitMap['Continuation']) {
+      const continuationValues = Array.from(splitMap['Continuation']);
+      
+      // Map continuation values to proper split types
+      continuationValues.forEach(value => {
+        const properSplitType = mapContinuationValueToSplitType(value);
+        if (properSplitType && properSplitType !== 'Continuation') {
+          if (!splitMap[properSplitType]) {
+            splitMap[properSplitType] = new Set();
+          }
+          splitMap[properSplitType].add(value);
+        }
+      });
+      
+      // Remove the generic "Continuation" entry since we've mapped its values
+      delete splitMap['Continuation'];
+    }
+    
     // Convert to the expected format
     const result = {};
     Object.entries(splitMap).forEach(([splitType, values]) => {
@@ -125,6 +144,77 @@ export const getAvailableSplitTypes = async (season = 2024) => {
     console.error('❌ Error fetching available split types:', error);
     return {};
   }
+};
+
+/**
+ * Map continuation values to their proper split types
+ * @param {string} value - The continuation value
+ * @returns {string} The proper split type
+ */
+const mapContinuationValueToSplitType = (value) => {
+  const lowerValue = value.toLowerCase();
+  
+  // Down patterns
+  if (lowerValue === '1st' || lowerValue === '2nd' || lowerValue === '3rd' || lowerValue === '4th') {
+    return 'Down';
+  }
+  
+  // Yards To Go patterns
+  if (lowerValue === '1-3' || lowerValue === '4-6' || lowerValue === '7-9' || lowerValue === '10+') {
+    return 'Yards To Go';
+  }
+  
+  // Down & Yards to Go patterns
+  if (lowerValue.includes('&') && (lowerValue.includes('1st') || lowerValue.includes('2nd') || 
+      lowerValue.includes('3rd') || lowerValue.includes('4th'))) {
+    return 'Down & Yards to Go';
+  }
+  
+  // Quarter patterns
+  if (lowerValue.includes('qtr') || lowerValue.includes('half')) {
+    return 'Quarter';
+  }
+  
+  // Field Position patterns
+  if (lowerValue.includes('red zone') || lowerValue.includes('own') || 
+      lowerValue.includes('opp') || lowerValue.includes('field')) {
+    return 'Field Position';
+  }
+  
+  // Score Differential patterns
+  if (lowerValue.includes('leading') || lowerValue.includes('trailing') || 
+      lowerValue === 'tied') {
+    return 'Score Differential';
+  }
+  
+  // Game Situation patterns
+  if (lowerValue.includes('min to go')) {
+    return 'Game Situation';
+  }
+  
+  // Snap Type patterns
+  if (lowerValue.includes('huddle') || lowerValue.includes('shotgun') || 
+      lowerValue.includes('under center')) {
+    return 'Snap Type & Huddle';
+  }
+  
+  // Play Action patterns
+  if (lowerValue.includes('play action')) {
+    return 'Play Action';
+  }
+  
+  // RPO patterns
+  if (lowerValue.includes('rpo')) {
+    return 'Run/Pass Option';
+  }
+  
+  // Time in Pocket patterns
+  if (lowerValue.includes('seconds')) {
+    return 'Time in Pocket';
+  }
+  
+  // Default to Continuation if we can't map it
+  return 'Continuation';
 };
 
 /**
@@ -607,6 +697,29 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
       }
     } catch (error) {
       console.log(`⚠️ Error querying qb_splits_advanced:`, error.message);
+    }
+    
+    // If no data found with the direct split type, try "Continuation" split type
+    if (splitsData.length === 0 && advancedData.length === 0) {
+      console.log(`🔍 No data found for ${splitType} = ${splitValue}, trying Continuation split type...`);
+      
+      try {
+        const { data, error } = await supabase
+          .from('qb_splits_advanced')
+          .select('*')
+          .eq('split', 'Continuation')
+          .eq('value', splitValue)
+          .eq('season', season)
+          .gte('att', minAttempts)
+          .order('att', { ascending: false });
+        
+        if (!error && data) {
+          advancedData = data.map(record => ({ ...record, table_source: 'qb_splits_advanced' }));
+          console.log(`✅ Found ${data.length} records in qb_splits_advanced (Continuation)`);
+        }
+      } catch (error) {
+        console.log(`⚠️ Error querying qb_splits_advanced (Continuation):`, error.message);
+      }
     }
     
     // Combine data from both tables with deduplication
