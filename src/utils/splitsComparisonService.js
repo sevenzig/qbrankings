@@ -123,6 +123,41 @@ export const getAvailableSplitTypes = async (season = 2024) => {
         }
       });
       
+      // Special handling for team names in Continuation
+      const teamKeywords = [
+        'Ravens', 'Chiefs', 'Bills', 'Patriots', 'Dolphins', 'Jets', 'Bengals', 'Browns', 'Steelers',
+        'Texans', 'Colts', 'Jaguars', 'Titans', 'Broncos', 'Raiders', 'Chargers', 'Cowboys', 'Eagles',
+        'Giants', 'Commanders', 'Bears', 'Lions', 'Packers', 'Vikings', 'Falcons', 'Panthers', 'Saints',
+        'Buccaneers', 'Cardinals', 'Rams', '49ers', 'Seahawks'
+      ];
+      
+      continuationValues.forEach(value => {
+        const isTeamName = teamKeywords.some(keyword => 
+          value.includes(keyword) || value.toLowerCase().includes(keyword.toLowerCase())
+        );
+        
+        if (isTeamName) {
+          if (!splitMap['Opponent']) {
+            splitMap['Opponent'] = new Set();
+          }
+          splitMap['Opponent'].add(value);
+        }
+      });
+      
+      // Also check if there are any team names in the original Opponent split type
+      if (splitMap['Opponent']) {
+        const opponentValues = Array.from(splitMap['Opponent']);
+        opponentValues.forEach(value => {
+          const isTeamName = teamKeywords.some(keyword => 
+            value.includes(keyword) || value.toLowerCase().includes(keyword.toLowerCase())
+          );
+          
+          if (isTeamName) {
+            // Already in Opponent, no need to add again
+          }
+        });
+      }
+      
       // Remove the generic "Continuation" entry since we've mapped its values
       delete splitMap['Continuation'];
     }
@@ -719,6 +754,65 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
         }
       } catch (error) {
         console.log(`⚠️ Error querying qb_splits_advanced (Continuation):`, error.message);
+      }
+    }
+    
+    // Special handling for team data - check if this is a team name and look in both Opponent and Continuation
+    if (splitsData.length === 0 && advancedData.length === 0) {
+      // Check if this looks like a team name
+      const teamKeywords = [
+        'Ravens', 'Chiefs', 'Bills', 'Patriots', 'Dolphins', 'Jets', 'Bengals', 'Browns', 'Steelers',
+        'Texans', 'Colts', 'Jaguars', 'Titans', 'Broncos', 'Raiders', 'Chargers', 'Cowboys', 'Eagles',
+        'Giants', 'Commanders', 'Bears', 'Lions', 'Packers', 'Vikings', 'Falcons', 'Panthers', 'Saints',
+        'Buccaneers', 'Cardinals', 'Rams', '49ers', 'Seahawks'
+      ];
+      
+      const isTeamName = teamKeywords.some(keyword => 
+        splitValue.includes(keyword) || splitValue.toLowerCase().includes(keyword.toLowerCase())
+      );
+      
+      if (isTeamName) {
+        console.log(`🔍 Detected team name "${splitValue}", checking both Opponent and Continuation split types...`);
+        
+        // First try the original Opponent split type
+        try {
+          const { data, error } = await supabase
+            .from('qb_splits')
+            .select('*')
+            .eq('split', 'Opponent')
+            .eq('value', splitValue)
+            .eq('season', season)
+            .gte('att', minAttempts)
+            .order('att', { ascending: false });
+          
+          if (!error && data && data.length > 0) {
+            splitsData = data.map(record => ({ ...record, table_source: 'qb_splits' }));
+            console.log(`✅ Found ${data.length} team records in qb_splits (Opponent)`);
+          }
+        } catch (error) {
+          console.log(`⚠️ Error querying qb_splits (Opponent for team):`, error.message);
+        }
+        
+        // If no data found in Opponent, try Continuation split type
+        if (splitsData.length === 0) {
+          try {
+            const { data, error } = await supabase
+              .from('qb_splits')
+              .select('*')
+              .eq('split', 'Continuation')
+              .eq('value', splitValue)
+              .eq('season', season)
+              .gte('att', minAttempts)
+              .order('att', { ascending: false });
+            
+            if (!error && data && data.length > 0) {
+              splitsData = data.map(record => ({ ...record, table_source: 'qb_splits' }));
+              console.log(`✅ Found ${data.length} team records in qb_splits (Continuation)`);
+            }
+          } catch (error) {
+            console.log(`⚠️ Error querying qb_splits (Continuation for team):`, error.message);
+          }
+        }
       }
     }
     

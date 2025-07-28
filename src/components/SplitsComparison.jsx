@@ -372,20 +372,8 @@ const SplitsComparison = memo(() => {
             <li>• <strong>Home/Road:</strong> Performance in home vs away games</li>
             <li>• <strong>Wins/Losses:</strong> Performance in wins vs losses</li>
             <li>• <strong>4th Quarter:</strong> Late-game performance</li>
-            <li>• <strong>Opponent Teams:</strong> Performance vs specific teams (limited availability)</li>
+            <li>• <strong>Opponent Teams:</strong> Performance vs all 32 NFL teams</li>
           </ul>
-          <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
-            <p className="text-yellow-800 text-sm font-semibold mb-2">⚠️ Team Performance Data</p>
-            <p className="text-yellow-700 text-sm mb-2">
-              <strong>Available Teams:</strong> Arizona Cardinals, Dallas Cowboys, Carolina Panthers, Baltimore Ravens, 
-              Cincinnati Bengals, Atlanta Falcons, Buffalo Bills, Kansas City Chiefs, Cleveland Browns, 
-              Philadelphia Eagles, Denver Broncos, New England Patriots, Chicago Bears
-            </p>
-            <p className="text-yellow-600 text-xs">
-              💡 <strong>Note:</strong> Team performance data is limited to 13 teams. Many NFL teams are not available 
-              in the current dataset. Try different minimum attempt thresholds to see more data.
-            </p>
-          </div>
           <p className="text-blue-600 text-sm mt-3">
             💡 <strong>Tip:</strong> Most data is available for QBs with 10+ attempts in each situation. 
             Try different minimum attempt thresholds to see more or fewer QBs.
