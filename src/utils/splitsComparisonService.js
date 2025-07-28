@@ -144,6 +144,25 @@ export const getAvailableSplitTypes = async (season = 2024) => {
         }
       });
       
+      // Special handling for division names in Continuation
+      const divisionKeywords = [
+        'AFC East', 'AFC North', 'AFC South', 'AFC West',
+        'NFC East', 'NFC North', 'NFC South', 'NFC West'
+      ];
+      
+      continuationValues.forEach(value => {
+        const isDivisionName = divisionKeywords.some(keyword => 
+          value.includes(keyword) || value.toLowerCase().includes(keyword.toLowerCase())
+        );
+        
+        if (isDivisionName) {
+          if (!splitMap['Division']) {
+            splitMap['Division'] = new Set();
+          }
+          splitMap['Division'].add(value);
+        }
+      });
+      
       // Also check if there are any team names in the original Opponent split type
       if (splitMap['Opponent']) {
         const opponentValues = Array.from(splitMap['Opponent']);
@@ -154,6 +173,20 @@ export const getAvailableSplitTypes = async (season = 2024) => {
           
           if (isTeamName) {
             // Already in Opponent, no need to add again
+          }
+        });
+      }
+      
+      // Also check if there are any division names in the original Division split type
+      if (splitMap['Division']) {
+        const divisionValues = Array.from(splitMap['Division']);
+        divisionValues.forEach(value => {
+          const isDivisionName = divisionKeywords.some(keyword => 
+            value.includes(keyword) || value.toLowerCase().includes(keyword.toLowerCase())
+          );
+          
+          if (isDivisionName) {
+            // Already in Division, no need to add again
           }
         });
       }
@@ -757,7 +790,7 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
       }
     }
     
-    // Special handling for team data - check if this is a team name and look in both Opponent and Continuation
+    // Special handling for team and division data - check if this is a team or division name and look in appropriate split types
     if (splitsData.length === 0 && advancedData.length === 0) {
       // Check if this looks like a team name
       const teamKeywords = [
@@ -768,6 +801,16 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
       ];
       
       const isTeamName = teamKeywords.some(keyword => 
+        splitValue.includes(keyword) || splitValue.toLowerCase().includes(keyword.toLowerCase())
+      );
+      
+      // Check if this looks like a division name
+      const divisionKeywords = [
+        'AFC East', 'AFC North', 'AFC South', 'AFC West',
+        'NFC East', 'NFC North', 'NFC South', 'NFC West'
+      ];
+      
+      const isDivisionName = divisionKeywords.some(keyword => 
         splitValue.includes(keyword) || splitValue.toLowerCase().includes(keyword.toLowerCase())
       );
       
@@ -811,6 +854,48 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
             }
           } catch (error) {
             console.log(`⚠️ Error querying qb_splits (Continuation for team):`, error.message);
+          }
+        }
+      } else if (isDivisionName) {
+        console.log(`🔍 Detected division name "${splitValue}", checking both Division and Continuation split types...`);
+        
+        // First try the original Division split type
+        try {
+          const { data, error } = await supabase
+            .from('qb_splits')
+            .select('*')
+            .eq('split', 'Division')
+            .eq('value', splitValue)
+            .eq('season', season)
+            .gte('att', minAttempts)
+            .order('att', { ascending: false });
+          
+          if (!error && data && data.length > 0) {
+            splitsData = data.map(record => ({ ...record, table_source: 'qb_splits' }));
+            console.log(`✅ Found ${data.length} division records in qb_splits (Division)`);
+          }
+        } catch (error) {
+          console.log(`⚠️ Error querying qb_splits (Division for division):`, error.message);
+        }
+        
+        // If no data found in Division, try Continuation split type
+        if (splitsData.length === 0) {
+          try {
+            const { data, error } = await supabase
+              .from('qb_splits')
+              .select('*')
+              .eq('split', 'Continuation')
+              .eq('value', splitValue)
+              .eq('season', season)
+              .gte('att', minAttempts)
+              .order('att', { ascending: false });
+            
+            if (!error && data && data.length > 0) {
+              splitsData = data.map(record => ({ ...record, table_source: 'qb_splits' }));
+              console.log(`✅ Found ${data.length} division records in qb_splits (Continuation)`);
+            }
+          } catch (error) {
+            console.log(`⚠️ Error querying qb_splits (Continuation for division):`, error.message);
           }
         }
       }
