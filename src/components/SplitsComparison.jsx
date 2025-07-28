@@ -281,19 +281,19 @@ const SplitsComparison = memo(() => {
         const sum = values.reduce((acc, val) => acc + parseFloat(val), 0);
         const avg = sum / values.length;
         
-        // Format based on column type
+        // Format with 5 significant figures
         if (column.type === 'percentage') {
-          averages[field] = avg.toFixed(1);
+          averages[field] = avg.toPrecision(5);
         } else if (column.type === 'numeric') {
           // Integer columns (no decimal places)
           const integerColumns = ['att', 'cmp', 'yds', 'td', 'int', 'sk', 'inc', 'sk_yds', 'g', 'w', 'l', 't', 'rush_att', 'rush_yds', 'rush_td', 'rush_first_downs', 'first_downs', 'total_td', 'pts', 'fmb', 'fl', 'ff', 'fr', 'fr_yds', 'fr_td'];
           if (integerColumns.includes(field.toLowerCase())) {
             averages[field] = Math.round(avg).toString();
           } else {
-            averages[field] = avg.toFixed(2);
+            averages[field] = avg.toPrecision(5);
           }
         } else {
-          averages[field] = avg.toFixed(2);
+          averages[field] = avg.toPrecision(5);
         }
       } else {
         averages[field] = '-';
