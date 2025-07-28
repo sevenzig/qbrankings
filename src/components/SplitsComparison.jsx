@@ -265,47 +265,62 @@ const SplitsComparison = memo(() => {
     }
   }, [comprehensiveData]);
 
-  // Calculate averages for each column
+  // Calculate averages and medians for each column
   const calculateAverages = useCallback((data, columns) => {
-    if (!data || data.length === 0) return {};
+    if (!data || data.length === 0) return { averages: {}, medians: {} };
     
     const averages = {};
+    const medians = {};
     
     columns.forEach(column => {
       const field = column.field;
       const values = data
         .map(qb => qb[field])
-        .filter(value => value !== null && value !== undefined && !isNaN(parseFloat(value)));
+        .filter(value => value !== null && value !== undefined && !isNaN(parseFloat(value)))
+        .map(val => parseFloat(val))
+        .sort((a, b) => a - b);
       
       if (values.length > 0) {
-        const sum = values.reduce((acc, val) => acc + parseFloat(val), 0);
+        // Calculate average
+        const sum = values.reduce((acc, val) => acc + val, 0);
         const avg = sum / values.length;
+        
+        // Calculate median
+        const mid = Math.floor(values.length / 2);
+        const median = values.length % 2 === 0 
+          ? (values[mid - 1] + values[mid]) / 2 
+          : values[mid];
         
         // Format with 5 significant figures
         if (column.type === 'percentage') {
           averages[field] = avg.toPrecision(5);
+          medians[field] = median.toPrecision(5);
         } else if (column.type === 'numeric') {
           // Integer columns (no decimal places)
           const integerColumns = ['att', 'cmp', 'yds', 'td', 'int', 'sk', 'inc', 'sk_yds', 'g', 'w', 'l', 't', 'rush_att', 'rush_yds', 'rush_td', 'rush_first_downs', 'first_downs', 'total_td', 'pts', 'fmb', 'fl', 'ff', 'fr', 'fr_yds', 'fr_td'];
           if (integerColumns.includes(field.toLowerCase())) {
             averages[field] = Math.round(avg).toString();
+            medians[field] = Math.round(median).toString();
           } else {
             averages[field] = avg.toPrecision(5);
+            medians[field] = median.toPrecision(5);
           }
         } else {
           averages[field] = avg.toPrecision(5);
+          medians[field] = median.toPrecision(5);
         }
       } else {
         averages[field] = '-';
+        medians[field] = '-';
       }
     });
     
-    return averages;
+    return { averages, medians };
   }, []);
 
-  // Get averages for the current data
-  const averages = useMemo(() => {
-    if (!comprehensiveData || !comprehensiveData.data) return {};
+  // Get averages and medians for the current data
+  const { averages, medians } = useMemo(() => {
+    if (!comprehensiveData || !comprehensiveData.data) return { averages: {}, medians: {} };
     return calculateAverages(comprehensiveData.data, comprehensiveData.columns);
   }, [comprehensiveData, calculateAverages]);
 
@@ -532,6 +547,7 @@ const SplitsComparison = memo(() => {
                     <tr className="bg-blue-800/40 border-b-2 border-blue-400/50 font-semibold">
                       {getReorderedColumns(comprehensiveData.columns).map((column) => {
                         const avgValue = averages[column.field];
+                        const medianValue = medians[column.field];
                         
                         // Special handling for team column
                         if (column.field === 'team') {
@@ -564,6 +580,53 @@ const SplitsComparison = memo(() => {
                             displayValue = avgValue;
                           } else {
                             displayValue = avgValue;
+                          }
+                        }
+                        
+                        return (
+                          <td key={column.field} className="py-1 px-1 text-xs whitespace-nowrap text-blue-300 font-bold text-center">
+                            {displayValue}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    
+                    {/* Median Row */}
+                    <tr className="bg-blue-800/40 border-b-2 border-blue-400/50 font-semibold">
+                      {getReorderedColumns(comprehensiveData.columns).map((column) => {
+                        const medianValue = medians[column.field];
+                        
+                        // Special handling for team column
+                        if (column.field === 'team') {
+                          return (
+                            <td key={column.field} className="py-1 px-1 text-xs text-center">
+                              <span className="text-blue-300 font-bold">MED</span>
+                            </td>
+                          );
+                        }
+                        
+                        // Special handling for player_name column
+                        if (column.field === 'player_name') {
+                          return (
+                            <td key={column.field} className="py-1 px-1 text-xs text-center">
+                              <span className="text-blue-300 font-bold">MEDIAN</span>
+                            </td>
+                          );
+                        }
+                        
+                        // Format different data types for medians
+                        let displayValue = medianValue;
+                        if (medianValue === null || medianValue === undefined || medianValue === '-') {
+                          displayValue = '-';
+                        } else if (column.type === 'percentage' && typeof medianValue === 'string') {
+                          displayValue = `${medianValue}%`;
+                        } else if (column.type === 'numeric' && typeof medianValue === 'string') {
+                          // Integer columns (no decimal places)
+                          const integerColumns = ['att', 'cmp', 'yds', 'td', 'int', 'sk', 'inc', 'sk_yds', 'g', 'w', 'l', 't', 'rush_att', 'rush_yds', 'rush_td', 'rush_first_downs', 'first_downs', 'total_td', 'pts', 'fmb', 'fl', 'ff', 'fr', 'fr_yds', 'fr_td'];
+                          if (integerColumns.includes(column.field.toLowerCase())) {
+                            displayValue = medianValue;
+                          } else {
+                            displayValue = medianValue;
                           }
                         }
                         
@@ -610,22 +673,22 @@ const SplitsComparison = memo(() => {
                             if (value === null || value === undefined) {
                               displayValue = '-';
                             } else if (column.type === 'percentage' && typeof value === 'number') {
-                              displayValue = `${value.toFixed(1)}%`;
+                              displayValue = `${value.toPrecision(5)}%`;
                             } else if (column.type === 'numeric' && typeof value === 'number') {
                               // Integer columns (no decimal places)
-                              const integerColumns = ['att', 'cmp', 'yds', 'td', 'int', 'sk', 'inc', 'sk_yds'];
+                              const integerColumns = ['att', 'cmp', 'yds', 'td', 'int', 'sk', 'inc', 'sk_yds', 'g', 'w', 'l', 't', 'rush_att', 'rush_yds', 'rush_td', 'rush_first_downs', 'first_downs', 'total_td', 'pts', 'fmb', 'fl', 'ff', 'fr', 'fr_yds', 'fr_td'];
                               if (integerColumns.includes(column.field.toLowerCase())) {
                                 displayValue = Math.round(value).toString();
                               } else {
-                                displayValue = value.toFixed(2);
+                                displayValue = value.toPrecision(5);
                               }
                             } else if (column.type === 'numeric' && typeof value === 'string' && !isNaN(parseFloat(value))) {
                               // Integer columns (no decimal places) for string values
-                              const integerColumns = ['att', 'cmp', 'yds', 'td', 'int', 'sk', 'inc', 'sk_yds'];
+                              const integerColumns = ['att', 'cmp', 'yds', 'td', 'int', 'sk', 'inc', 'sk_yds', 'g', 'w', 'l', 't', 'rush_att', 'rush_yds', 'rush_td', 'rush_first_downs', 'first_downs', 'total_td', 'pts', 'fmb', 'fl', 'ff', 'fr', 'fr_yds', 'fr_td'];
                               if (integerColumns.includes(column.field.toLowerCase())) {
                                 displayValue = Math.round(parseFloat(value)).toString();
                               } else {
-                                displayValue = parseFloat(value).toFixed(2);
+                                displayValue = parseFloat(value).toPrecision(5);
                               }
                             }
                             
