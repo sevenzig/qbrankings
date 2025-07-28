@@ -871,14 +871,20 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
             .order('att', { ascending: false });
           
           if (!error && data && data.length > 0) {
-            splitsData = data.map(record => ({ ...record, table_source: 'qb_splits' }));
-            console.log(`✅ Found ${data.length} division records in qb_splits (Division)`);
+            // Check if we have sufficient data in Division split type (more than 1 QB)
+            if (data.length > 1) {
+              splitsData = data.map(record => ({ ...record, table_source: 'qb_splits' }));
+              console.log(`✅ Found ${data.length} division records in qb_splits (Division)`);
+            } else {
+              console.log(`⚠️ Only ${data.length} QB found in Division split type, checking Continuation for more comprehensive data...`);
+              // Continue to check Continuation split type for more comprehensive data
+            }
           }
         } catch (error) {
           console.log(`⚠️ Error querying qb_splits (Division for division):`, error.message);
         }
         
-        // If no data found in Division, try Continuation split type
+        // If no sufficient data found in Division, try Continuation split type
         if (splitsData.length === 0) {
           try {
             const { data, error } = await supabase
