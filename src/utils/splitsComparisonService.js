@@ -124,19 +124,10 @@ export const getAvailableSplitTypes = async (season = 2024) => {
       });
       
       // Special handling for team names in Continuation
-      const teamKeywords = [
-        'Ravens', 'Chiefs', 'Bills', 'Patriots', 'Dolphins', 'Jets', 'Bengals', 'Browns', 'Steelers',
-        'Texans', 'Colts', 'Jaguars', 'Titans', 'Broncos', 'Raiders', 'Chargers', 'Cowboys', 'Eagles',
-        'Giants', 'Commanders', 'Bears', 'Lions', 'Packers', 'Vikings', 'Falcons', 'Panthers', 'Saints',
-        'Buccaneers', 'Cardinals', 'Rams', '49ers', 'Seahawks'
-      ];
-      
       continuationValues.forEach(value => {
-        const isTeamName = teamKeywords.some(keyword => 
-          value.includes(keyword) || value.toLowerCase().includes(keyword.toLowerCase())
-        );
+        const mappedSplitType = getSplitTypeForValue(value);
         
-        if (isTeamName) {
+        if (mappedSplitType === 'Opponent') {
           if (!splitMap['Opponent']) {
             splitMap['Opponent'] = new Set();
           }
@@ -145,17 +136,10 @@ export const getAvailableSplitTypes = async (season = 2024) => {
       });
       
       // Special handling for division names in Continuation
-      const divisionKeywords = [
-        'AFC East', 'AFC North', 'AFC South', 'AFC West',
-        'NFC East', 'NFC North', 'NFC South', 'NFC West'
-      ];
-      
       continuationValues.forEach(value => {
-        const isDivisionName = divisionKeywords.some(keyword => 
-          value.includes(keyword) || value.toLowerCase().includes(keyword.toLowerCase())
-        );
+        const mappedSplitType = getSplitTypeForValue(value);
         
-        if (isDivisionName) {
+        if (mappedSplitType === 'Division') {
           if (!splitMap['Division']) {
             splitMap['Division'] = new Set();
           }
@@ -167,11 +151,9 @@ export const getAvailableSplitTypes = async (season = 2024) => {
       if (splitMap['Opponent']) {
         const opponentValues = Array.from(splitMap['Opponent']);
         opponentValues.forEach(value => {
-          const isTeamName = teamKeywords.some(keyword => 
-            value.includes(keyword) || value.toLowerCase().includes(keyword.toLowerCase())
-          );
+          const mappedSplitType = getSplitTypeForValue(value);
           
-          if (isTeamName) {
+          if (mappedSplitType === 'Opponent') {
             // Already in Opponent, no need to add again
           }
         });
@@ -181,11 +163,9 @@ export const getAvailableSplitTypes = async (season = 2024) => {
       if (splitMap['Division']) {
         const divisionValues = Array.from(splitMap['Division']);
         divisionValues.forEach(value => {
-          const isDivisionName = divisionKeywords.some(keyword => 
-            value.includes(keyword) || value.toLowerCase().includes(keyword.toLowerCase())
-          );
+          const mappedSplitType = getSplitTypeForValue(value);
           
-          if (isDivisionName) {
+          if (mappedSplitType === 'Division') {
             // Already in Division, no need to add again
           }
         });
@@ -792,30 +772,11 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
     
     // Special handling for team and division data - check if this is a team or division name and look in appropriate split types
     if (splitsData.length === 0 && advancedData.length === 0) {
-      // Check if this looks like a team name
-      const teamKeywords = [
-        'Ravens', 'Chiefs', 'Bills', 'Patriots', 'Dolphins', 'Jets', 'Bengals', 'Browns', 'Steelers',
-        'Texans', 'Colts', 'Jaguars', 'Titans', 'Broncos', 'Raiders', 'Chargers', 'Cowboys', 'Eagles',
-        'Giants', 'Commanders', 'Bears', 'Lions', 'Packers', 'Vikings', 'Falcons', 'Panthers', 'Saints',
-        'Buccaneers', 'Cardinals', 'Rams', '49ers', 'Seahawks'
-      ];
+      // Use the mapping utility to determine the correct split type
+      const mappedSplitType = getSplitTypeForValue(splitValue);
       
-      const isTeamName = teamKeywords.some(keyword => 
-        splitValue.includes(keyword) || splitValue.toLowerCase().includes(keyword.toLowerCase())
-      );
-      
-      // Check if this looks like a division name
-      const divisionKeywords = [
-        'AFC East', 'AFC North', 'AFC South', 'AFC West',
-        'NFC East', 'NFC North', 'NFC South', 'NFC West'
-      ];
-      
-      const isDivisionName = divisionKeywords.some(keyword => 
-        splitValue.includes(keyword) || splitValue.toLowerCase().includes(keyword.toLowerCase())
-      );
-      
-      if (isTeamName) {
-        console.log(`🔍 Detected team name "${splitValue}", checking both Opponent and Continuation split types...`);
+      if (mappedSplitType === 'Opponent') {
+        console.log(`🔍 Detected opponent team "${splitValue}", checking both Opponent and Continuation split types...`);
         
         // First try the original Opponent split type
         try {
@@ -856,7 +817,7 @@ export const getAllDataForSplit = async (splitType, splitValue, season = 2024, m
             console.log(`⚠️ Error querying qb_splits (Continuation for team):`, error.message);
           }
         }
-      } else if (isDivisionName) {
+      } else if (mappedSplitType === 'Division') {
         console.log(`🔍 Detected division name "${splitValue}", checking both Division and Continuation split types...`);
         
         // First try the original Division split type
