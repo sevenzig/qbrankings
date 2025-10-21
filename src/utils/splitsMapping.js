@@ -155,8 +155,6 @@ export const SPLITS_MAPPING = {
   'Philadelphia Eagles': 'Opponent',
   'Denver Broncos': 'Opponent',
   'New England Patriots': 'Opponent',
-  
-  // Missing teams that should be available (adding for completeness)
   'Las Vegas Raiders': 'Opponent',
   'Los Angeles Chargers': 'Opponent',
   'Tennessee Titans': 'Opponent',
