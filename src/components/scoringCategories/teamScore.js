@@ -1,4 +1,11 @@
 import { SCALING_RANGES, PLAYOFF_YEAR_WEIGHTS, REGULAR_SEASON_YEAR_WEIGHTS, STABILITY_YEAR_WEIGHTS } from './constants.js';
+import {
+  calculateZScore,
+  calculateMean,
+  calculateStandardDeviation,
+  zScoreToPercentile
+} from '../../utils/zScoreCalculations.js';
+import { calculateHierarchicalScore } from '../../utils/qbCalculations.js';
 
 /*
  * TEAM ABBREVIATION AUDIT: All 32 NFL Teams Coverage
@@ -191,58 +198,72 @@ function getPlayoffProgress(team, year) {
   return null;
 }
 
-// Helper function to calculate offensive DVOA score (0-15 points) with maximum granularity
-const calculateOffensiveDVOAScore = (team, year) => {
+/**
+ * Calculate z-score based offensive DVOA score using standardized statistics
+ * Converts DVOA values to z-scores for accurate comparison
+ * Handles multi-team seasons by weighting DVOA based on games started with each team
+ */
+const calculateOffensiveDVOAScore = (team, year, allTeams = null, teamsPlayed = null, gamesStartedPerTeam = null) => {
   const yearData = OFFENSIVE_DVOA_DATA[year];
+  
+  // Handle multi-team seasons (2TM, 3TM, etc.)
+  if (team && team.match(/^\d+TM$/) && teamsPlayed && teamsPlayed.length > 0) {
+    // Calculate weighted DVOA based on teams actually played for
+    let totalWeight = 0;
+    let weightedDVOA = 0;
+    
+    teamsPlayed.forEach((actualTeam, index) => {
+      const teamData = yearData[actualTeam];
+      if (teamData) {
+        // Use games started per team if available, otherwise equal weight
+        const weight = (gamesStartedPerTeam && gamesStartedPerTeam[index]) || 1;
+        weightedDVOA += teamData.dvoa * weight;
+        totalWeight += weight;
+      } else {
+        console.warn(`⚠️ DVOA LOOKUP FAILED: Team "${actualTeam}" not found in ${year} data for multi-team season`);
+      }
+    });
+    
+    if (totalWeight > 0) {
+      const avgDVOA = weightedDVOA / totalWeight;
+      
+      // Calculate z-score using the weighted average
+      const teams = allTeams || Object.keys(yearData);
+      const dvoaValues = teams.map(t => yearData[t]?.dvoa || 0);
+      const mean = calculateMean(dvoaValues);
+      const stdDev = calculateStandardDeviation(dvoaValues, mean);
+      const zScore = calculateZScore(avgDVOA, mean, stdDev, false);
+      
+      console.log(`📊 Multi-team DVOA (${year}): ${teamsPlayed.join('/')} → Weighted avg=${avgDVOA.toFixed(1)} (z=${zScore.toFixed(2)})`);
+      return zScore;
+    } else {
+      // Fallback if no valid teams found
+      console.warn(`⚠️ No valid teams found for multi-team season: ${team} in ${year}`);
+      return 0; // Return 0 z-score (league average) as fallback
+    }
+  }
+  
+  // Original single-team logic
   if (!yearData || !yearData[team]) {
-    console.log(`⚠️ DVOA LOOKUP FAILED: Team "${team}" not found in ${year} data`);
-    console.log(`Available teams in ${year}:`, Object.keys(yearData || {}).sort());
-    return 7.5; // League average fallback
+    console.warn(`⚠️ DVOA LOOKUP FAILED: Team "${team}" not found in ${year} data`);
+    return 0; // Return 0 z-score (league average) as fallback
   }
 
   const teamData = yearData[team];
   const dvoa = teamData.dvoa;
-  const rank = teamData.rank;
   
-  // Debug successful lookups for verification
-  if (team === 'KAN' || team === 'KC' || team === 'DEN') {
-    console.log(`✅ DVOA SUCCESS: ${team} ${year} → DVOA: ${dvoa}%, Rank: ${rank}`);
-  }
+  // Calculate population statistics for this year
+  const teams = allTeams || Object.keys(yearData);
+  const dvoaValues = teams.map(t => yearData[t]?.dvoa || 0);
   
-  // HYBRID SCORING: Combine DVOA value-based scoring with rank-based scoring for maximum differentiation
+  const mean = calculateMean(dvoaValues);
+  const stdDev = calculateStandardDeviation(dvoaValues, mean);
   
-  // 1. VALUE-BASED COMPONENT (70% weight) - More aggressive scaling
-  const clampedDVOA = Math.max(-35, Math.min(35, dvoa));
-  let valueScore = ((clampedDVOA + 35) / 70) * 15;
+  // Calculate z-score (higher DVOA is better)
+  const zScore = calculateZScore(dvoa, mean, stdDev, false);
   
-  // Apply steeper multipliers for extreme performance
-  if (dvoa >= 30) {
-    valueScore *= 1.15; // 15% boost for 30%+ DVOA
-  } else if (dvoa >= 20) {
-    valueScore *= 1.08; // 8% boost for 20%+ DVOA
-  } else if (dvoa >= 10) {
-    valueScore *= 1.03; // 3% boost for 10%+ DVOA
-  } else if (dvoa <= -25) {
-    valueScore *= 0.85; // 15% penalty for -25% DVOA
-  } else if (dvoa <= -15) {
-    valueScore *= 0.92; // 8% penalty for -15% DVOA
-  } else if (dvoa <= -5) {
-    valueScore *= 0.97; // 3% penalty for -5% DVOA
-  }
-  
-  // 2. RANK-BASED COMPONENT (30% weight) - Ensures every team gets unique score
-  // Map ranks 1-32 to 15-0 points (linear distribution)
-  const rankScore = 15 - ((rank - 1) / 31) * 15;
-  
-  // 3. COMBINE COMPONENTS with slight rank emphasis for tie-breaking
-  const finalScore = (valueScore * 0.75) + (rankScore * 0.25);
-  
-  // 4. ADD MICRO-OFFSET for absolute uniqueness (maintains proper rank ordering)
-  // Each rank gets a tiny unique offset: 0.001, 0.002, 0.003, etc.
-  const uniquenessOffset = rank * 0.001;
-  const adjustedScore = finalScore + uniquenessOffset;
-  
-  return Math.max(0, Math.min(15, adjustedScore));
+  // Return z-score (not percentile) for composite calculation
+  return zScore;
 };
 
 // Helper function to calculate weighted playoff wins based on round progression
@@ -337,14 +358,24 @@ export const calculateTeamScore = (
   teamWeights = { regularSeason: 50, offenseDVOA: 35, playoff: 15 },
   includePlayoffs,
   include2024Only = false,
-  supportScore = 50 // Default to average support if not provided
+  supportScore = 50, // Default to average support if not provided
+  allQBData = [] // Population data for z-score calculations
 ) => {
   // Debug logging for when playoffs are disabled
   const debugMode = !includePlayoffs;
   const playerName = qbData.years && Object.values(qbData.years)[0]?.Player;
   
+  // Always debug for Mahomes and Goff to diagnose ranking issue
+  const isDebugQB = playerName && (playerName.includes('Mahomes') || playerName.includes('Goff'));
+  
   if (debugMode && playerName) {
     console.log(`🔍 DEBUG TEAM SCORE - ${playerName} (Playoffs ${includePlayoffs ? 'ADJUSTMENT MODE' : 'DISABLED'})`);
+  }
+  
+  if (isDebugQB) {
+    console.log(`\n🔍 ========== TEAM SCORE DEBUG: ${playerName} ==========`);
+    console.log(`🔍 Team Weights: RegSeason=${teamWeights.regularSeason}, DVOA=${teamWeights.offenseDVOA}, Playoff=${teamWeights.playoff}`);
+    console.log(`🔍 Include Playoffs: ${includePlayoffs}, 2024 Only: ${include2024Only}`);
   }
   
   let weightedWinPct = 0;
@@ -369,9 +400,9 @@ export const calculateTeamScore = (
     const totalGames = wins + losses + ties;
     const regularSeasonWinPct = totalGames > 0 ? wins / totalGames : 0;
     
-    // MINIMUM GAMES THRESHOLD: For 2024-only mode, require at least 1 start; for previous years, require 4
+    // MINIMUM GAMES THRESHOLD: For 2024-only mode, require at least 9 starts; for multi-year, require 10 starts
     const gamesStarted = parseInt(data.GS) || 0;
-    if ((include2024Only && year === '2024' && gamesStarted < 1) || (!include2024Only && gamesStarted < 4)) {
+    if ((include2024Only && year === '2024' && gamesStarted < 9) || (!include2024Only && gamesStarted < 10)) {
       if (debugMode && playerName) {
         console.log(`🔍 ${year}: SKIPPED - Only ${gamesStarted} games started (minimum required)`);
       }
@@ -380,12 +411,14 @@ export const calculateTeamScore = (
     
     // Get team for this season
     const team = data.Team || data.team;
+    const teamsPlayed = data.teamsPlayed || [];
+    const gamesStartedPerTeam = data.gamesStartedPerTeam || [];
     
     // Calculate offensive DVOA score for this team/year
-    const offenseDVOAScore = calculateOffensiveDVOAScore(team, parseInt(year));
+    const offenseDVOAScore = calculateOffensiveDVOAScore(team, parseInt(year), null, teamsPlayed, gamesStartedPerTeam);
     
     // Debug: Store regular season data
-    if (debugMode && playerName) {
+    if ((debugMode && playerName) || isDebugQB) {
       debugRegularSeasonData.push({
         year,
         record: `${wins}-${losses}-${ties}`,
@@ -414,8 +447,9 @@ export const calculateTeamScore = (
   weightedWinPct = weightedWinPct / totalWeight;
   weightedOffenseDVOA = weightedOffenseDVOA / totalWeight;
   
-  // Second Pass: Calculate playoff performance adjustment if enabled
-  if (includePlayoffs) {
+  // Second Pass: Calculate playoff performance adjustment if enabled AND weighted
+  // CRITICAL: Only apply adjustment when includePlayoffs is true AND playoff weight > 0
+  if (includePlayoffs && teamWeights.playoff > 0) {
     let totalPlayoffWeight = 0;
     let playoffPerformanceMultiplier = 1.0;
     const playoffYearWeights = include2024Only ? { '2024': 1.0 } : PLAYOFF_YEAR_WEIGHTS;
@@ -476,7 +510,7 @@ export const calculateTeamScore = (
     }
   }
   
-  if (debugMode && playerName) {
+  if ((debugMode && playerName) || isDebugQB) {
     console.log(`🔍 REGULAR SEASON DATA:`);
     debugRegularSeasonData.forEach(season => {
       console.log(`🔍   ${season.year}: ${season.record} (${season.winPct}) weight=${season.weight} playoff=${season.hasPlayoffData}`);
@@ -548,59 +582,154 @@ export const calculateTeamScore = (
   // Cap career playoff score at much lower level to prevent inflation
   const normalizedCareerPlayoffScore = Math.min(15, careerPlayoffScore); // Reduced from 35 to 15
 
-  // CONTEXT-AWARE TEAM COMPONENT SCALING - Normalized to 0-100 base scoring
-  // Calculate individual normalized scores (0-100 scale) for each team metric
-  const regularSeasonNormalized = Math.max(0, Math.min(100, weightedWinPct * 100));
-  const offenseDVOANormalized = Math.max(0, Math.min(100, (weightedOffenseDVOA / 15) * 100));
-  const careerPlayoffNormalized = Math.max(0, Math.min(100, (normalizedCareerPlayoffScore / 15) * 100)); // Keep denominator at 15 to match reduced playoff bonuses
-
-  // Use the provided teamWeights for the weighted average
-  const totalTeamSubWeights = (teamWeights.regularSeason || 0) + (teamWeights.offenseDVOA || 0) + (teamWeights.playoff || 0);
-
-  let teamCompositeScore = 0;
-  if (totalTeamSubWeights > 0) {
-    teamCompositeScore = (
-      (regularSeasonNormalized * (teamWeights.regularSeason || 0)) +
-      (offenseDVOANormalized * (teamWeights.offenseDVOA || 0)) +
-      (careerPlayoffNormalized * (teamWeights.playoff || 0))
-    ) / totalTeamSubWeights;
+  // Z-SCORE BASED TEAM COMPONENT CALCULATION - Return composite z-score
+  
+  // Convert win percentage to z-score using actual population data
+  let winPctZ = 0;
+  
+  if (isDebugQB) {
+    console.log(`🔍 allQBData available: ${allQBData ? 'YES' : 'NO'}, length: ${allQBData?.length || 0}`);
   }
   
-  // Apply playoff adjustment to the composite score (affects all components proportionally)
-  // Cap the adjustment to prevent extreme inflation, then normalize to 0-100
-  const adjustedTeamCompositeScore = teamCompositeScore * playoffAdjustmentFactor;
+  if (allQBData && allQBData.length > 0) {
+    // Calculate actual population statistics from all QBs
+    const regularSeasonYearWeights = include2024Only ? { '2024': 1.0 } : REGULAR_SEASON_YEAR_WEIGHTS;
+    const winPctValues = [];
+    
+    if (isDebugQB) {
+      console.log(`🔍 Processing ${allQBData.length} QBs for win% population stats...`);
+    }
+    
+    allQBData.forEach(qb => {
+      // Handle both formats: years object (transformed) or seasonData array (raw)
+      if (qb.years) {
+        // Transformed format
+        Object.entries(qb.years).forEach(([year, data]) => {
+          const weight = regularSeasonYearWeights[year] || 0;
+          if (weight === 0 || !data.QBrec) return;
+          
+          const gamesStarted = parseInt(data.GS) || 0;
+          if ((include2024Only && year === '2024' && gamesStarted < 9) || (!include2024Only && gamesStarted < 10)) {
+            return;
+          }
+          
+          const [wins, losses, ties = 0] = data.QBrec.split('-').map(Number);
+          const totalGames = wins + losses + ties;
+          const winPct = totalGames > 0 ? wins / totalGames : 0;
+          
+          if (!isNaN(winPct) && isFinite(winPct)) {
+            winPctValues.push(winPct);
+          }
+        });
+      } else if (qb.seasonData) {
+        // Raw seasonData format
+        const seasonsToUse = include2024Only 
+          ? qb.seasonData.filter(s => s.year === 2024)
+          : qb.seasonData;
+          
+        seasonsToUse.forEach(season => {
+          const year = season.year.toString();
+          const weight = regularSeasonYearWeights[year] || 0;
+          if (weight === 0) return;
+          
+          const gamesStarted = season.gamesStarted || 0;
+          if ((include2024Only && season.year === 2024 && gamesStarted < 9) || (!include2024Only && gamesStarted < 10)) {
+            return;
+          }
+          
+          const wins = season.wins || 0;
+          const losses = season.losses || 0;
+          const totalGames = wins + losses;
+          const winPct = totalGames > 0 ? wins / totalGames : 0;
+          
+          if (!isNaN(winPct) && isFinite(winPct)) {
+            winPctValues.push(winPct);
+          }
+        });
+      }
+    });
+    
+    if (isDebugQB) {
+      console.log(`🔍 Collected ${winPctValues.length} win% values from population`);
+    }
+    
+    if (winPctValues.length > 0) {
+      const winPctMean = calculateMean(winPctValues);
+      const winPctStdDev = calculateStandardDeviation(winPctValues, winPctMean);
+      winPctZ = calculateZScore(weightedWinPct, winPctMean, winPctStdDev, false);
+      
+      if ((debugMode && playerName) || isDebugQB) {
+        console.log(`🔍 WIN PCT Z-SCORE: Population mean=${winPctMean.toFixed(3)}, stdDev=${winPctStdDev.toFixed(3)}, ${playerName} winPct=${weightedWinPct.toFixed(3)} → z=${winPctZ.toFixed(3)}`);
+        console.log(`🔍 Population size: ${winPctValues.length} QBs`);
+      }
+    } else {
+      // Fallback to hardcoded values if no population data available
+      if (isDebugQB) {
+        console.log(`🔍 ⚠️ NO POPULATION DATA FOUND - Using fallback hardcoded values`);
+      }
+      const winPctMean = 0.5;
+      const winPctStdDev = 0.12;
+      winPctZ = calculateZScore(weightedWinPct, winPctMean, winPctStdDev, false);
+    }
+  } else {
+    // Fallback to hardcoded values if allQBData not provided
+    if (isDebugQB) {
+      console.log(`🔍 ⚠️ allQBData NOT PROVIDED - Using fallback hardcoded values`);
+    }
+    const winPctMean = 0.5;
+    const winPctStdDev = 0.12;
+    winPctZ = calculateZScore(weightedWinPct, winPctMean, winPctStdDev, false);
+  }
   
-  // TEAM SCORE ADJUSTMENT: Reduce by 40% to normalize scoring range
-  const scaledTeamScore = adjustedTeamCompositeScore * 0.6;
-  const finalScore = Math.max(0, Math.min(100, scaledTeamScore));
+  // weightedOffenseDVOA is now a z-score from calculateOffensiveDVOAScore
+  const offenseDVOAZ = weightedOffenseDVOA;
   
-    // Debug final calculation
-  if (debugMode && playerName) {
-    console.log(`🔍 FINAL CALCULATION:`);
-    console.log(`🔍   Regular Season: ${weightedWinPct.toFixed(3)} × 100 = ${regularSeasonNormalized.toFixed(1)} (weight: ${teamWeights.regularSeason || 0}%)`);
-    console.log(`🔍   Offense Output: ${weightedOffenseDVOA.toFixed(1)}/15 × 100 = ${offenseDVOANormalized.toFixed(1)} (weight: ${teamWeights.offenseDVOA || 0}%)`);
-    console.log(`🔍   Career Playoff: ${normalizedCareerPlayoffScore.toFixed(1)}/15 × 100 = ${careerPlayoffNormalized.toFixed(1)} (weight: ${teamWeights.playoff || 0}%)`);
-    console.log(`🔍   Composite Score: (${regularSeasonNormalized.toFixed(1)} × ${teamWeights.regularSeason || 0} + ${offenseDVOANormalized.toFixed(1)} × ${teamWeights.offenseDVOA || 0} + ${careerPlayoffNormalized.toFixed(1)} × ${teamWeights.playoff || 0}) / ${totalTeamSubWeights} = ${teamCompositeScore.toFixed(1)}`);
-    console.log(`🔍   Playoff Adjustment: ${teamCompositeScore.toFixed(1)} × ${playoffAdjustmentFactor.toFixed(3)} = ${adjustedTeamCompositeScore.toFixed(1)}`);
-    console.log(`🔍   Team Score Reduction: ${adjustedTeamCompositeScore.toFixed(1)} × 0.6 = ${scaledTeamScore.toFixed(1)}`);
-    console.log(`🔍   Final Score: ${finalScore.toFixed(1)}`);
-    console.log(`🔍 ----------------------------------------`);
+  // Playoff score: convert from 0-15 scale to z-score
+  // Assume mean playoff score = 5, stdDev = 4
+  const playoffMean = 5;
+  const playoffStdDev = 4;
+  const careerPlayoffZ = calculateZScore(normalizedCareerPlayoffScore, playoffMean, playoffStdDev, false);
+
+  // Use the provided teamWeights for weighted z-score combination
+  const teamComponentZScores = {
+    regularSeason: winPctZ,
+    offenseDVOA: offenseDVOAZ, 
+    playoff: careerPlayoffZ
+  };
+
+  // Calculate hierarchical z-score composite
+  const teamCompositeZScore = calculateHierarchicalScore(teamComponentZScores, teamWeights);
+  
+  // Apply playoff adjustment to the composite z-score
+  const adjustedTeamCompositeZScore = teamCompositeZScore * playoffAdjustmentFactor;
+  
+  // Return z-score (not percentile) for higher-level composite calculation
+  
+  // Debug final calculation
+  if ((debugMode && playerName) || isDebugQB) {
+    console.log(`🔍 TEAM Z-SCORE CALCULATION:`);
+    console.log(`🔍   Regular Season Z: ${winPctZ.toFixed(3)} (weight: ${teamWeights.regularSeason || 0}%)`);
+    console.log(`🔍   Offense DVOA Z: ${offenseDVOAZ.toFixed(3)} (weight: ${teamWeights.offenseDVOA || 0}%)`);
+    console.log(`🔍   Career Playoff Z: ${careerPlayoffZ.toFixed(3)} (weight: ${teamWeights.playoff || 0}%)`);
+    console.log(`🔍   Composite Z-Score: ${teamCompositeZScore.toFixed(3)}`);
+    console.log(`🔍   Playoff Adjustment: ${teamCompositeZScore.toFixed(3)} × ${playoffAdjustmentFactor.toFixed(3)} = ${adjustedTeamCompositeZScore.toFixed(3)}`);
+    console.log(`🔍 ========== END ${playerName} ==========\n`);
   }
 
   // Debug for Mahomes and other elite playoff QBs
   if (qbData.years && Object.values(qbData.years)[0]?.Player?.includes('Mahomes')) {
-    console.log(`🏆 MAHOMES TEAM SCORE: RegSeason(${regularSeasonNormalized.toFixed(1)}) + Output(${offenseDVOANormalized.toFixed(1)}) + Career(${careerPlayoffNormalized.toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) = ${finalScore.toFixed(1)}`);
-    console.log(`🏆 PLAYOFF DATA ${includePlayoffs ? 'ADJUSTMENT APPLIED' : 'EXCLUDED'} - 2024 Only: ${include2024Only}, Playoff Weight: ${playoffAdjustmentFactor.toFixed(3)}`);
+    console.log(`🏆 MAHOMES TEAM Z-SCORE: RegSeason(${winPctZ.toFixed(2)}) + DVOA(${offenseDVOAZ.toFixed(2)}) + Career(${careerPlayoffZ.toFixed(2)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) = ${adjustedTeamCompositeZScore.toFixed(2)}`);
+    console.log(`🏆 PLAYOFF DATA ${includePlayoffs ? 'ADJUSTMENT APPLIED' : 'EXCLUDED'} - 2024 Only: ${include2024Only}`);
   }
 
   // Debug for Hurts and other Super Bowl winners
   if (qbData.years && Object.values(qbData.years)[0]?.Player?.includes('Hurts')) {
-    console.log(`🏆 HURTS TEAM SCORE: RegSeason(${regularSeasonNormalized.toFixed(1)}) + Output(${offenseDVOANormalized.toFixed(1)}) + Career(${careerPlayoffNormalized.toFixed(1)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) = ${finalScore.toFixed(1)}`);
-    console.log(`🏆 SUPER BOWL WINNER: Raw Career(${normalizedCareerPlayoffScore.toFixed(1)}) normalized to ${careerPlayoffNormalized.toFixed(1)} points!`);
+    console.log(`🏆 HURTS TEAM Z-SCORE: RegSeason(${winPctZ.toFixed(2)}) + DVOA(${offenseDVOAZ.toFixed(2)}) + Career(${careerPlayoffZ.toFixed(2)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) = ${adjustedTeamCompositeZScore.toFixed(2)}`);
+    console.log(`🏆 SUPER BOWL WINNER: Raw Career Score(${normalizedCareerPlayoffScore.toFixed(1)})`);
   }
   
-  // Score is already normalized above, return directly
-  return finalScore;
+  // Return composite z-score for higher-level calculation
+  return adjustedTeamCompositeZScore;
 };
 
 // VALIDATION FUNCTION: Verify all 32 NFL teams are covered in DVOA data

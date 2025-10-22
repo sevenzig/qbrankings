@@ -6,6 +6,7 @@ import {
   calculateDurabilityScore,
   calculateSupportScore
 } from '../components/scoringCategories/index.js';
+import { zScoreToPercentile } from './zScoreCalculations.js';
 
 // Helper function to normalize weights within a group
 const normalizeWeights = (weights) => {
@@ -108,29 +109,33 @@ const calculateSupportAdjustmentFactor = (supportQuality, supportWeight) => {
   return Math.max(0.75, Math.min(1.25, adjustmentFactor)); // Safety bounds
 };
 
-// Hierarchical weight calculation system
-const calculateHierarchicalScore = (componentScores, weights) => {
-  const normalizedWeights = normalizeWeights(weights);
+// Hierarchical weight calculation system - PRESERVES VARIANCE by using RAW weights
+// This prevents z-score compression that occurs with normalization at each level
+export const calculateHierarchicalScore = (componentScores, weights) => {
+  // DO NOT normalize weights here - use raw weights to preserve z-score magnitude
+  // Normalization only happens at the final QEI calculation
   let weightedSum = 0;
+  let totalWeight = 0;
   
   Object.keys(componentScores).forEach(key => {
-    if (normalizedWeights[key] !== undefined) {
+    if (weights[key] !== undefined) {
       const score = componentScores[key] || 0;
-      const weight = normalizedWeights[key] || 0;
+      const weight = parseFloat(weights[key]) || 0;
       
       // Ensure both score and weight are valid numbers
-      if (!isNaN(score) && isFinite(score) && !isNaN(weight) && isFinite(weight)) {
+      if (!isNaN(score) && isFinite(score) && !isNaN(weight) && isFinite(weight) && weight > 0) {
         weightedSum += score * weight;
+        totalWeight += weight;
       }
     }
   });
   
-  // Ensure the result is a valid number
-  if (isNaN(weightedSum) || !isFinite(weightedSum)) {
+  // Normalize by total weight to get weighted average
+  if (totalWeight === 0 || isNaN(weightedSum) || !isFinite(weightedSum)) {
     return 0;
   }
   
-  return weightedSum;
+  return weightedSum / totalWeight;
 };
 
 export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 65, playoff: 35 }, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, includePlayoffs = true, include2024Only = false, efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 }, protectionWeights = { sackPct: 60, turnoverRate: 40 }, volumeWeights = { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, durabilityWeights = { availability: 75, consistency: 25 }, allQBData = [], mainSupportWeight = 0) => {
@@ -169,6 +174,7 @@ export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, wea
         '4QC': season.fourthQuarterComebacks || 0,
         team: season.team,
         teamsPlayed: season.teamsPlayed, // For multi-team seasons
+        gamesStartedPerTeam: season.gamesStartedPerTeam, // Games started with each team
         Team: season.team,
         Player: qb.name,
         Age: season.age,
@@ -188,12 +194,12 @@ export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, wea
   qbSeasonData.currentTeam = qb.team;
   qbSeasonData.name = qb.name;
 
-  // Calculate scores using hierarchical weight system
+  // Calculate scores using hierarchical weight system with z-score based calculations
   const supportScore = calculateSupportScore(qbSeasonData, supportWeights, include2024Only, mainSupportWeight);
-  const teamScore = calculateTeamScore(qbSeasonData, teamWeights, includePlayoffs, include2024Only, supportScore);
-  const statsScore = calculateStatsScore(qbSeasonData, statsWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights);
+  const teamScore = calculateTeamScore(qbSeasonData, teamWeights, includePlayoffs, include2024Only, supportScore, allQBData);
+  const statsScore = calculateStatsScore(qbSeasonData, statsWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, allQBData);
   const clutchScore = calculateClutchScore(qbSeasonData, includePlayoffs, clutchWeights, include2024Only, allQBData);
-  const durabilityScore = calculateDurabilityScore(qbSeasonData, includePlayoffs, include2024Only, durabilityWeights);
+  const durabilityScore = calculateDurabilityScore(qbSeasonData, includePlayoffs, include2024Only, durabilityWeights, allQBData);
   
   return {
     team: teamScore,
@@ -276,60 +282,51 @@ function slidingLogPenalty(gamesStarted, threshold, maxPenalty = 1.2) {
   return Math.max(minPenaltyFactor, penaltyFactor);
 }
 
-// Main QEI calculation with true hierarchical weighting and per-season penalties
+// Main QEI calculation with FLATTENED weighting to preserve variance
 export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, allQBBaseScores = [], include2024Only = false, allQBsRawQei = null) => {
   // Apply season-specific game start penalties
   const penalties = applyGameStartPenalties(qb, include2024Only);
   
-  // Enhanced support-based contextual reweighting using comprehensive support data
-  // This normalizes QB performance relative to others in similar support situations
-  const supportQuality = baseScores.support || 50;
-  const supportWeight = weights.support || 0;
-  
-  // Debug support weight extraction - FORCE DEBUG FOR KEY QBs
+  // baseScores now contain composite z-scores from each category
+  // We need to flatten the hierarchy to preserve variance
   const qbName = qb?.name || 'Unknown QB';
   const isKeyQB = qbName.includes('Hurts') || qbName.includes('Burrow') || qbName.includes('Jackson') || qbName.includes('Allen');
   
-  if (isKeyQB || supportWeight > 0) {
-    console.log(`🔍 QEI CALCULATION ${qbName}: supportWeight=${supportWeight}, supportQuality=${supportQuality.toFixed(1)}, baseScores:`, baseScores);
+  if (isKeyQB) {
+    console.log(`🔍 QEI FLATTENED Z-SCORE CALCULATION ${qbName}: baseScores (composite z-scores):`, {
+      team: baseScores.team?.toFixed(3),
+      stats: baseScores.stats?.toFixed(3),
+      clutch: baseScores.clutch?.toFixed(3),
+      durability: baseScores.durability?.toFixed(3),
+      support: baseScores.support?.toFixed(3)
+    });
   }
   
+  // INVERT support z-score: Higher support (good cast) becomes negative contribution
+  // Lower support (bad cast) becomes positive contribution
+  // This creates the penalty/reward system where good supporting casts hurt QB ranking
+  const invertedSupportZScore = -(baseScores.support || 0);
+  
+  // DURABILITY CONVERSION: Durability now returns 0-100 score, not z-score
+  // Convert to z-score for hierarchical calculation
+  // 100 (full season) = +2.0 SD, 50 (half season) = 0.0 SD, 0 (no games) = -2.0 SD
+  const durabilityZScore = ((baseScores.durability || 50) - 50) / 25;
+  
+  // Use composite z-scores as-is (they already include sub-component weighting)
   let contextualScores = {
     team: baseScores.team || 0,
     stats: baseScores.stats || 0,
     clutch: baseScores.clutch || 0,
-    durability: baseScores.durability || 0,
-    support: supportQuality
+    durability: durabilityZScore,  // Converted from 0-100 to z-score
+    support: invertedSupportZScore  // INVERTED: good support becomes penalty
   };
   
-  // CORE FIX: Support should work as a PENALTY/REWARD system, not additive
-  // When support weight increases, good support should HURT QEI, poor support should HELP QEI
-  if (supportWeight > 0) {
-    // Calculate the support adjustment as a modifier to other scores, not an additive component
-    const supportAdjustmentFactor = calculateSupportAdjustmentFactor(supportQuality, supportWeight);
-    
-    // Apply the support adjustment to team and stats scores (most affected by support context)
-    contextualScores.team = (baseScores.team || 0) * supportAdjustmentFactor;
-    contextualScores.stats = (baseScores.stats || 0) * supportAdjustmentFactor;
-    
-    // Apply lighter adjustment to clutch and durability  
-    const lighterAdjustment = 1 + (supportAdjustmentFactor - 1) * 0.3;
-    contextualScores.clutch = (baseScores.clutch || 0) * lighterAdjustment;
-    contextualScores.durability = (baseScores.durability || 0) * lighterAdjustment;
-    
-    // Set support score to 0 so it doesn't add to the final score - it's now a modifier, not additive
-    contextualScores.support = 0;
-    
-    if (isKeyQB) {
-      console.log(`🔧 SUPPORT AS MODIFIER ${qbName}: Factor(${supportAdjustmentFactor.toFixed(3)}) applied to other scores`);
-      console.log(`   Team: ${(baseScores.team || 0).toFixed(1)} → ${contextualScores.team.toFixed(1)}`);
-      console.log(`   Stats: ${(baseScores.stats || 0).toFixed(1)} → ${contextualScores.stats.toFixed(1)}`);
-    }
+  if (isKeyQB) {
+    console.log(`🔄 SUPPORT INVERSION ${qbName}:`);
+    console.log(`   Original Support Z-Score: ${(baseScores.support || 0).toFixed(3)}`);
+    console.log(`   Inverted Support Z-Score: ${invertedSupportZScore.toFixed(3)}`);
+    console.log(`   Effect: ${invertedSupportZScore > 0 ? 'REWARD (bad cast)' : 'PENALTY (good cast)'}`);
   }
-  
-  // REMOVED: Support adjustment logic now handled in calculateSupportScore function
-  // The support score now comes pre-adjusted based on the main support weight
-  // No additional adjustment needed here since inversion is applied at score calculation
 
   // In multi-year mode, apply per-season penalties to scores
   // Note: This is a simplified approach - ideally we'd apply penalties to each season's 
@@ -360,7 +357,6 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
   }
 
   // Extract only top-level weights for hierarchical calculation
-  // Handle both simple weight objects and philosophy preset objects
   const topLevelWeights = {
     team: weights.team || 0,
     stats: weights.stats || 0,
@@ -368,46 +364,16 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
     durability: weights.durability || 0,
     support: weights.support || 0
   };
-  
-  // If support weight > 0, redistribute that weight to other categories since support is now a modifier
-  if (supportWeight > 0) {
-    const totalOtherWeights = topLevelWeights.team + topLevelWeights.stats + topLevelWeights.clutch + topLevelWeights.durability;
-    if (totalOtherWeights > 0) {
-      // Redistribute support weight proportionally to other categories
-      const redistributionFactor = (totalOtherWeights + supportWeight) / totalOtherWeights;
-      topLevelWeights.team *= redistributionFactor;
-      topLevelWeights.stats *= redistributionFactor;
-      topLevelWeights.clutch *= redistributionFactor;
-      topLevelWeights.durability *= redistributionFactor;
-    }
-    topLevelWeights.support = 0; // Support doesn't get direct weight since it's a modifier
-    
-    if (isKeyQB) {
-      console.log(`📊 WEIGHT REDISTRIBUTION ${qbName}: Support weight(${supportWeight}) redistributed to other categories`);
-      console.log(`   Adjusted weights: Team(${topLevelWeights.team.toFixed(1)}) Stats(${topLevelWeights.stats.toFixed(1)}) Clutch(${topLevelWeights.clutch.toFixed(1)}) Durability(${topLevelWeights.durability.toFixed(1)})`);
-    }
-  }
 
-  // Calculate weighted composite score using user's current weights (true hierarchical)
-  const compositeScore = calculateHierarchicalScore(contextualScores, topLevelWeights);
+  // Calculate weighted composite z-score using user's current weights (true hierarchical)
+  const compositeZScore = calculateHierarchicalScore(contextualScores, topLevelWeights);
   
-  // DEBUG: Show the hierarchical score calculation for key QBs
-  if (isKeyQB || supportWeight > 0) {
-    console.log(`🧮 HIERARCHICAL CALC ${qbName}:`);
-    console.log(`   Scores: Team(${contextualScores.team.toFixed(1)}) Stats(${contextualScores.stats.toFixed(1)}) Clutch(${contextualScores.clutch.toFixed(1)}) Durability(${contextualScores.durability.toFixed(1)}) Support(${contextualScores.support.toFixed(1)})`);
+  // DEBUG: Show the hierarchical z-score calculation for key QBs
+  if (isKeyQB) {
+    console.log(`🧮 HIERARCHICAL Z-SCORE CALC ${qbName}:`);
+    console.log(`   Z-Scores: Team(${contextualScores.team.toFixed(3)}) Stats(${contextualScores.stats.toFixed(3)}) Clutch(${contextualScores.clutch.toFixed(3)}) Durability(${contextualScores.durability.toFixed(3)}) Support(${contextualScores.support.toFixed(3)})`);
     console.log(`   Weights: Team(${topLevelWeights.team}) Stats(${topLevelWeights.stats}) Clutch(${topLevelWeights.clutch}) Durability(${topLevelWeights.durability}) Support(${topLevelWeights.support})`);
-    console.log(`   Composite Score: ${compositeScore.toFixed(3)}`);
-    
-    // Show individual contributions
-    const teamContrib = contextualScores.team * topLevelWeights.team;
-    const statsContrib = contextualScores.stats * topLevelWeights.stats;
-    const clutchContrib = contextualScores.clutch * topLevelWeights.clutch;
-    const durabilityContrib = contextualScores.durability * topLevelWeights.durability;
-    const supportContrib = contextualScores.support * topLevelWeights.support;
-    const totalWeight = Object.values(topLevelWeights).reduce((sum, w) => sum + w, 0);
-    
-    console.log(`   Contributions: Team(${teamContrib.toFixed(2)}) Stats(${statsContrib.toFixed(2)}) Clutch(${clutchContrib.toFixed(2)}) Durability(${durabilityContrib.toFixed(2)}) Support(${supportContrib.toFixed(2)})`);
-    console.log(`   Total Weight: ${totalWeight}, Weighted Sum: ${(teamContrib + statsContrib + clutchContrib + durabilityContrib + supportContrib).toFixed(3)}`);
+    console.log(`   Composite Z-Score: ${compositeZScore.toFixed(3)}`);
   }
   
   // Apply experience penalty for rookies and near-rookies in 2024-only mode only
@@ -421,51 +387,27 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
     }
   }
   
-  // Calculate final QEI score
-  let finalScore = compositeScore * experienceModifier;
+  // Apply experience penalty to composite z-score
+  const adjustedCompositeZScore = compositeZScore * experienceModifier;
+  
+  // **CRITICAL STEP**: Convert final composite z-score to percentile (0-100)
+  const finalPercentile = zScoreToPercentile(adjustedCompositeZScore);
   
   // Ensure minimum score of 0 and handle NaN/Infinity
-  if (isNaN(finalScore) || !isFinite(finalScore)) {
-    finalScore = 0;
+  if (isNaN(finalPercentile) || !isFinite(finalPercentile)) {
+    return 0;
   }
   
   // DEBUG: Show final score calculation for key QBs
-  if (isKeyQB || supportWeight > 0) {
-    console.log(`🏆 FINAL QEI ${qbName}: Composite(${compositeScore.toFixed(3)}) × Experience(${experienceModifier.toFixed(3)}) = Final(${finalScore.toFixed(3)})`);
+  if (isKeyQB) {
+    console.log(`🏆 FINAL QEI ${qbName}:`);
+    console.log(`   Composite Z-Score: ${compositeZScore.toFixed(3)}`);
+    console.log(`   Experience Modifier: ${experienceModifier.toFixed(3)}`);
+    console.log(`   Adjusted Z-Score: ${adjustedCompositeZScore.toFixed(3)}`);
+    console.log(`   Final Percentile: ${finalPercentile.toFixed(2)}`);
     console.log(`───────────────────────────────────────────────────────────────────────`);
   }
   
-  return Math.max(0, finalScore);
+  // Return percentile (0-100)
+  return finalPercentile;
 };
-
-// Helper: Normalize QEI scores so top = 100, median = 65, min = 0
-function normalizeQeiScores(qeiScores) {
-  if (!qeiScores || qeiScores.length === 0) return [];
-  const sorted = [...qeiScores].sort((a, b) => a - b);
-  const min = sorted[0];
-  const max = sorted[sorted.length - 1];
-  const median = sorted[Math.floor(sorted.length / 2)];
-  // Avoid divide by zero
-  if (max === min) return qeiScores.map(() => 65);
-  // Linear stretch: min -> 0, median -> 65, max -> 100
-  // For scores below median: scale [min, median] to [0, 65]
-  // For scores above median: scale [median, max] to [65, 100]
-  return qeiScores.map(score => {
-    if (score <= median) {
-      return ((score - min) / (median - min)) * 65;
-    } else {
-      return 65 + ((score - median) / (max - median)) * 35;
-    }
-  });
-}
-
-// Normalize all QEI scores across the dataset
-export function normalizeAllQeiScores(qbQeiList) {
-  const qeiValues = qbQeiList.map(qb => qb.qei || 0);
-  const normalizedValues = normalizeQeiScores(qeiValues);
-  
-  return qbQeiList.map((qb, index) => ({
-    ...qb,
-    qei: normalizedValues[index]
-  }));
-}

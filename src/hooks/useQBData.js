@@ -122,9 +122,23 @@ export const useQBData = () => {
       // Convert combined data to our QB format
       const processedQBs = processQBData(combinedQBData, include2024Only);
       
-      // Calculate QEI metrics
+      // Calculate QEI metrics - pass processedQBs as allQBData for z-score calculations
       const qbsWithMetrics = processedQBs.map(qb => {
-        const baseScores = calculateQBMetrics(qb);
+        const baseScores = calculateQBMetrics(
+          qb,
+          { offensiveLine: 55, weapons: 30, defense: 15 }, // supportWeights
+          { efficiency: 45, protection: 25, volume: 30 }, // statsWeights
+          { regularSeason: 65, playoff: 35 }, // teamWeights
+          { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, // clutchWeights
+          true, // includePlayoffs
+          include2024Only,
+          { anyA: 45, tdPct: 30, completionPct: 25 }, // efficiencyWeights
+          { sackPct: 60, turnoverRate: 40 }, // protectionWeights
+          { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, // volumeWeights
+          { availability: 75, consistency: 25 }, // durabilityWeights
+          processedQBs, // allQBData for z-score calculations
+          0 // mainSupportWeight
+        );
         return {
           ...qb,
           baseScores

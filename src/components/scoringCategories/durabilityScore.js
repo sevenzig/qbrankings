@@ -1,19 +1,30 @@
 import { STABILITY_YEAR_WEIGHTS } from './constants.js';
 
-// Linear Durability Score that complements existing logarithmic penalty system (0-100)
-export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, include2024Only = false, durabilityWeights = { availability: 75, consistency: 25 }) => {
+/**
+ * Linear-scaled Durability Score (0-100)
+ * Uses absolute benchmarks rather than z-scores
+ * - Availability: 17 starts per season = 100, scales linearly down
+ * - Consistency: Number of valid seasons with 8+ starts
+ */
+export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, include2024Only = false, durabilityWeights = { availability: 75, consistency: 25 }, allQBData = []) => {
   
   // In 2024-only mode, only process 2024 data with 100% weight
   const yearWeights = include2024Only ? { '2024': 1.0 } : STABILITY_YEAR_WEIGHTS;
   
-  // Calculate total weighted games played
+  // AVAILABILITY SCORING: Linear scale based on games started
+  // Target: 17 regular season games (18 including playoffs for deep runs)
+  const MAX_GAMES_PER_SEASON = includePlayoffs ? 18 : 17; // Allow for 1 playoff game credit
+  
   let totalWeightedGames = 0;
   let totalWeightSum = 0;
   let validSeasons = 0;
+  let totalPossibleSeasons = 0;
   
   Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
     const weight = yearWeights[year] || 0;
     if (weight === 0) return;
+    
+    totalPossibleSeasons++;
     
     const gamesStarted = parseInt(data.GS) || 0;
     let totalGames = gamesStarted;
@@ -33,8 +44,8 @@ export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, i
       }
     }
     
-    // Count valid seasons for consistency scoring
-    if (gamesStarted >= 4) { // Must have meaningful participation
+    // Count valid seasons for consistency scoring (8+ starts = meaningful contribution)
+    if (gamesStarted >= 8) {
       validSeasons++;
     }
     
@@ -44,71 +55,48 @@ export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, i
   
   if (totalWeightSum === 0) return 0;
   
-  // LINEAR AVAILABILITY SCORING
-  // Mode-specific thresholds that align with logarithmic penalty thresholds
-  let maxGames, minThreshold, availabilityScore;
+  // Calculate average games per season
+  const avgGamesPerSeason = totalWeightedGames / totalWeightSum;
+  
+  // AVAILABILITY SCORE: Linear scale (0-100)
+  // 17+ games = 100, 0 games = 0, linear in between
+  const availabilityScore = Math.min(100, (avgGamesPerSeason / MAX_GAMES_PER_SEASON) * 100);
+  
+  // CONSISTENCY SCORE: Percentage of available seasons where QB was healthy starter
+  // In 2024-only mode: 1 season possible, so it's binary (100 if valid, 0 if not)
+  // In multi-year mode: percentage of seasons with 8+ starts
+  let consistencyScore = 0;
+  if (totalPossibleSeasons > 0) {
+    consistencyScore = (validSeasons / totalPossibleSeasons) * 100;
+  }
+  
+  // In single-season mode (2024-only), consistency doesn't apply
+  // Only use availability score
+  const normalizedWeights = normalizeWeights(durabilityWeights);
+  let compositeDurabilityScore;
   
   if (include2024Only) {
-    // 2024-only mode: Per-season linear scale from 9-17 games
-    const avgGamesPerSeason = totalWeightedGames / totalWeightSum;
-    maxGames = 17; // Perfect attendance (17 regular season games)
-    minThreshold = 9; // Matches logarithmic penalty threshold
-    
-    if (avgGamesPerSeason >= maxGames) {
-      availabilityScore = 100;
-    } else if (avgGamesPerSeason <= minThreshold) {
-      availabilityScore = 0; // Logarithmic penalty will handle further reduction
-    } else {
-      // Linear scale from 9 games (0 points) to 17 games (100 points)
-      availabilityScore = ((avgGamesPerSeason - minThreshold) / (maxGames - minThreshold)) * 100;
-    }
+    // Single season mode: ignore consistency component entirely
+    compositeDurabilityScore = availabilityScore;
   } else {
-    // 3-year mode: Total games across all years
-    maxGames = 51; // 17 games × 3 years (perfect attendance)
-    minThreshold = 15; // Matches logarithmic penalty threshold for 3-year mode
-    
-    if (totalWeightedGames >= maxGames) {
-      availabilityScore = 100;
-    } else if (totalWeightedGames <= minThreshold) {
-      availabilityScore = 0; // Logarithmic penalty will handle further reduction
-    } else {
-      // Linear scale from 15 total games (0 points) to 51 total games (100 points)
-      availabilityScore = ((totalWeightedGames - minThreshold) / (maxGames - minThreshold)) * 100;
-    }
+    // Multi-year mode: apply both components
+    compositeDurabilityScore = 
+      (availabilityScore * normalizedWeights.availability) + 
+      (consistencyScore * normalizedWeights.consistency);
   }
   
-  // CONSISTENCY SCORING - Simplified to complement availability
-  // Rewards consistent performance across multiple seasons (3-year mode only)
-  let consistencyScore = 50; // Default for 2024-only mode
-  
-  if (!include2024Only) {
-    // Multi-year consistency bonus based on number of seasons with meaningful participation
-    if (validSeasons >= 3) {
-      consistencyScore = 85; // High consistency across all 3 years
-    } else if (validSeasons >= 2) {
-      consistencyScore = 70; // Good consistency across 2 years
-    } else {
-      consistencyScore = 35; // Limited consistency data
-    }
-  }
-  
-  // Apply durability sub-component weights
-  const availabilityNormalized = Math.max(0, Math.min(100, availabilityScore));
-  const consistencyNormalized = Math.max(0, Math.min(100, consistencyScore));
+  // Return raw 0-100 score (NOT converted to z-score or percentile)
+  // This gives absolute scoring: 17 games = 100 score, regardless of population
+  return compositeDurabilityScore;
+};
 
-  // Calculate weighted average of normalized scores using sub-component weights
-  const totalDurabilitySubWeights = durabilityWeights.availability + durabilityWeights.consistency;
-  
-  let compositeScore = 0;
-  if (totalDurabilitySubWeights > 0) {
-    compositeScore = ((availabilityNormalized * durabilityWeights.availability) +
-                     (consistencyNormalized * durabilityWeights.consistency)) / totalDurabilitySubWeights;
-  }
-
-  // ELITE PERFORMANCE SCALING: Apply 1.15x multiplier to push elite performers to 100+ range
-  // This addresses the psychological impact of reaching the 100 threshold
-  const scaledScore = compositeScore * 1.15;
-  const finalScore = Math.max(0, Math.min(150, scaledScore)); // Increased cap to 150 to allow elite scores
-
-  return finalScore;
+// Helper function to normalize weights
+const normalizeWeights = (weights) => {
+  const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
+  if (total === 0) return weights;
+  const normalized = {};
+  Object.keys(weights).forEach(key => {
+    normalized[key] = weights[key] / total;
+  });
+  return normalized;
 }; 

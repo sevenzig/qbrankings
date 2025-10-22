@@ -265,13 +265,12 @@ const SplitsComparison = memo(() => {
     }
   }, [comprehensiveData]);
 
-  // Calculate averages, medians, and modes for each column
+  // Calculate averages and medians for each column
   const calculateAverages = useCallback((data, columns) => {
-    if (!data || data.length === 0) return { averages: {}, medians: {}, modes: {} };
+    if (!data || data.length === 0) return { averages: {}, medians: {} };
     
     const averages = {};
     const medians = {};
-    const modes = {};
     
     columns.forEach(column => {
       const field = column.field;
@@ -292,42 +291,29 @@ const SplitsComparison = memo(() => {
           ? (values[mid - 1] + values[mid]) / 2 
           : values[mid];
         
-        // Calculate mode
-        const valueCounts = {};
-        values.forEach(val => {
-          valueCounts[val] = (valueCounts[val] || 0) + 1;
-        });
-        const maxCount = Math.max(...Object.values(valueCounts));
-        const modeValues = Object.keys(valueCounts).filter(key => valueCounts[key] === maxCount);
-        const mode = modeValues.length > 0 ? parseFloat(modeValues[0]) : null;
-        
         // Format with 5 significant figures for all numeric columns
         if (column.type === 'percentage') {
           averages[field] = avg.toPrecision(5);
           medians[field] = median.toPrecision(5);
-          modes[field] = mode !== null ? mode.toPrecision(5) : '-';
         } else if (column.type === 'numeric') {
           averages[field] = avg.toPrecision(5);
           medians[field] = median.toPrecision(5);
-          modes[field] = mode !== null ? mode.toPrecision(5) : '-';
         } else {
           averages[field] = avg.toPrecision(5);
           medians[field] = median.toPrecision(5);
-          modes[field] = mode !== null ? mode.toPrecision(5) : '-';
         }
       } else {
         averages[field] = '-';
         medians[field] = '-';
-        modes[field] = '-';
       }
     });
     
-    return { averages, medians, modes };
+    return { averages, medians };
   }, []);
 
-  // Get averages, medians, and modes for the current data
-  const { averages, medians, modes } = useMemo(() => {
-    if (!comprehensiveData || !comprehensiveData.data) return { averages: {}, medians: {}, modes: {} };
+  // Get averages and medians for the current data
+  const { averages, medians } = useMemo(() => {
+    if (!comprehensiveData || !comprehensiveData.data) return { averages: {}, medians: {} };
     return calculateAverages(comprehensiveData.data, comprehensiveData.columns);
   }, [comprehensiveData, calculateAverages]);
 
@@ -555,8 +541,6 @@ const SplitsComparison = memo(() => {
                     <tr className="bg-blue-800/40 border-b-2 border-blue-400/50 font-semibold">
                       {getReorderedColumns(comprehensiveData.columns).map((column) => {
                         const avgValue = averages[column.field];
-                        const medianValue = medians[column.field];
-                        const modeValue = modes[column.field];
                         
                         // Special handling for team column
                         if (column.field === 'team') {
@@ -604,7 +588,6 @@ const SplitsComparison = memo(() => {
                     <tr className="bg-blue-800/40 border-b-2 border-blue-400/50 font-semibold">
                       {getReorderedColumns(comprehensiveData.columns).map((column) => {
                         const medianValue = medians[column.field];
-                        const modeValue = modes[column.field];
                         
                         // Special handling for team column
                         if (column.field === 'team') {
@@ -637,53 +620,6 @@ const SplitsComparison = memo(() => {
                             displayValue = medianValue;
                           } else {
                             displayValue = medianValue;
-                          }
-                        }
-                        
-                        return (
-                          <td key={column.field} className="py-1 px-1 text-xs whitespace-nowrap text-blue-300 font-bold text-center">
-                            {displayValue}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                    
-                    {/* Mode Row */}
-                    <tr className="bg-blue-800/40 border-b-2 border-blue-400/50 font-semibold">
-                      {getReorderedColumns(comprehensiveData.columns).map((column) => {
-                        const modeValue = modes[column.field];
-                        
-                        // Special handling for team column
-                        if (column.field === 'team') {
-                          return (
-                            <td key={column.field} className="py-1 px-1 text-xs text-center">
-                              <span className="text-blue-300 font-bold">MODE</span>
-                            </td>
-                          );
-                        }
-                        
-                        // Special handling for player_name column
-                        if (column.field === 'player_name') {
-                          return (
-                            <td key={column.field} className="py-1 px-1 text-xs text-center">
-                              <span className="text-blue-300 font-bold">MODE</span>
-                            </td>
-                          );
-                        }
-                        
-                        // Format different data types for modes
-                        let displayValue = modeValue;
-                        if (modeValue === null || modeValue === undefined || modeValue === '-') {
-                          displayValue = '-';
-                        } else if (column.type === 'percentage' && typeof modeValue === 'string') {
-                          displayValue = `${modeValue}%`;
-                        } else if (column.type === 'numeric' && typeof modeValue === 'string') {
-                          // Integer columns (no decimal places)
-                          const integerColumns = ['att', 'cmp', 'yds', 'td', 'int', 'sk', 'inc', 'sk_yds', 'g', 'w', 'l', 't', 'rush_att', 'rush_yds', 'rush_td', 'rush_first_downs', 'first_downs', 'total_td', 'pts', 'fmb', 'fl', 'ff', 'fr', 'fr_yds', 'fr_td'];
-                          if (integerColumns.includes(column.field.toLowerCase())) {
-                            displayValue = modeValue;
-                          } else {
-                            displayValue = modeValue;
                           }
                         }
                         

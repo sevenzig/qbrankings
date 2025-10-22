@@ -215,7 +215,10 @@ export const getSeasonDataForCalculations = (supabaseData) => {
     rushingYards: record.rush_yds || 0,
     rushingTDs: record.rush_td || 0,
     fumbles: record.fmb || 0,
-    age: record.age
+    age: record.age,
+    // Initialize empty arrays for multi-team tracking (populated in dataProcessor)
+    teamsPlayed: [],
+    gamesStartedPerTeam: []
   }));
 };
 

@@ -1,7 +1,14 @@
 // Supporting Cast Quality Score (0-100)
 // Higher score = Better supporting cast quality
-// Updated: Inverted from difficulty adjustment to direct quality scoring
+// Updated: Uses z-score based calculations for standardized scoring
 import { PERFORMANCE_YEAR_WEIGHTS } from './constants.js';
+import {
+  calculateZScore,
+  calculateMean,
+  calculateStandardDeviation,
+  zScoreToPercentile,
+  calculateCompositeZScore
+} from '../../utils/zScoreCalculations.js';
 
 // 2024 NFL Supporting Cast Data - REALISTIC SCORING based on performance benchmarks
 const SUPPORT_DATA_2024 = {
@@ -444,43 +451,11 @@ const SUPPORTING_CAST_SUM_2022 = {
   'SEA': 36   // 6 + 26 + 4
 };
 
-// Helper: Apply support adjustment to individual component scores - INVERSION LOGIC
-const applySupportComponentAdjustment = (componentScore, maxScore, componentWeight) => {
-  // Normalize component score to 0-100 scale
-  const normalizedScore = (componentScore / maxScore) * 100;
-  
-  // INVERSION: Higher component quality = penalty, Lower component quality = reward
-  // The adjustment strength scales with component weight (0-100%)
-  const adjustmentStrength = componentWeight / 100; // 0.0 to 1.0
-  
-  let adjustmentFactor;
-  
-  if (normalizedScore >= 80) {
-    // Elite component: PENALTY scales from 0% to 15% as component weight increases
-    const penaltyAmount = 0.15 * adjustmentStrength;
-    adjustmentFactor = 1.0 - penaltyAmount;
-  } else if (normalizedScore >= 60) {
-    // Good component: PENALTY scales from 0% to 8% as component weight increases
-    const penaltyAmount = 0.08 * adjustmentStrength;
-    adjustmentFactor = 1.0 - penaltyAmount;
-  } else if (normalizedScore >= 40) {
-    // Average component: REWARD scales from 0% to 5% as component weight increases
-    const rewardAmount = 0.05 * adjustmentStrength;
-    adjustmentFactor = 1.0 + rewardAmount;
-  } else if (normalizedScore >= 20) {
-    // Poor component: REWARD scales from 0% to 15% as component weight increases
-    const rewardAmount = 0.15 * adjustmentStrength;
-    adjustmentFactor = 1.0 + rewardAmount;
-  } else {
-    // Terrible component: REWARD scales from 0% to 20% as component weight increases
-    const rewardAmount = 0.20 * adjustmentStrength;
-    adjustmentFactor = 1.0 + rewardAmount;
-  }
-  
-  return Math.max(0.75, Math.min(1.25, adjustmentFactor));
-};
-
-const calculateWeightedSupportScore = (team, year, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }) => {
+/**
+ * Calculate z-score based support score for a team in a specific year
+ * Uses population statistics from all teams to standardize scoring
+ */
+const calculateWeightedSupportScore = (team, year, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, allTeams = null) => {
   const yearData = year === 2024 ? SUPPORT_DATA_2024 : 
                    year === 2023 ? SUPPORT_DATA_2023 : 
                    SUPPORT_DATA_2022;
@@ -489,34 +464,61 @@ const calculateWeightedSupportScore = (team, year, supportWeights = { offensiveL
   const weapons = yearData.weapons[team] || 20;
   const defense = yearData.defense[team] || 12;
   
-  // Apply component-specific adjustments based on sub-slider weights
-  const oLineAdjustment = applySupportComponentAdjustment(oLine, 35, supportWeights.offensiveLine);
-  const weaponsAdjustment = applySupportComponentAdjustment(weapons, 40, supportWeights.weapons);
-  const defenseAdjustment = applySupportComponentAdjustment(defense, 25, supportWeights.defense);
+  // Calculate population statistics for each component
+  const allTeamsData = allTeams || Object.keys(yearData.offensiveLine);
   
-  // Apply adjustments to normalized scores
-  const oLineNormalized = (oLine / 35) * oLineAdjustment;
-  const weaponsNormalized = (weapons / 40) * weaponsAdjustment;
-  const defenseNormalized = (defense / 25) * defenseAdjustment;
+  // Offensive Line z-score
+  const oLineValues = allTeamsData.map(t => yearData.offensiveLine[t] || 15);
+  const oLineMean = calculateMean(oLineValues);
+  const oLineStdDev = calculateStandardDeviation(oLineValues, oLineMean);
+  const oLineZ = calculateZScore(oLine, oLineMean, oLineStdDev, false); // Higher is better
   
-  // Apply dynamic weights and scale to 100
-  const weightedScore = (
-    oLineNormalized * (supportWeights.offensiveLine / 100) + 
-    weaponsNormalized * (supportWeights.weapons / 100) + 
-    defenseNormalized * (supportWeights.defense / 100)
-  ) * 100;
+  // Weapons z-score
+  const weaponsValues = allTeamsData.map(t => yearData.weapons[t] || 20);
+  const weaponsMean = calculateMean(weaponsValues);
+  const weaponsStdDev = calculateStandardDeviation(weaponsValues, weaponsMean);
+  const weaponsZ = calculateZScore(weapons, weaponsMean, weaponsStdDev, false); // Higher is better
   
-  return weightedScore;
+  // Defense z-score
+  const defenseValues = allTeamsData.map(t => yearData.defense[t] || 12);
+  const defenseMean = calculateMean(defenseValues);
+  const defenseStdDev = calculateStandardDeviation(defenseValues, defenseMean);
+  const defenseZ = calculateZScore(defense, defenseMean, defenseStdDev, false); // Higher is better
+  
+  // Keep z-scores for hierarchical weighting
+  const supportComponentZScores = {
+    offensiveLine: oLineZ,
+    weapons: weaponsZ,
+    defense: defenseZ
+  };
+  
+  // Helper function to normalize weights
+  const normalizeWeights = (weights) => {
+    const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
+    if (total === 0) return weights;
+    const normalized = {};
+    Object.keys(weights).forEach(key => {
+      normalized[key] = weights[key] / total;
+    });
+    return normalized;
+  };
+  
+  // Apply hierarchical weighting to z-scores
+  const normalizedWeights = normalizeWeights(supportWeights);
+  let compositeZScore = 0;
+  Object.keys(supportComponentZScores).forEach(key => {
+    if (normalizedWeights[key] !== undefined) {
+      compositeZScore += supportComponentZScores[key] * normalizedWeights[key];
+    }
+  });
+  
+  return compositeZScore;
 };
 
 export const calculateSupportScore = (qbSeasonData, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, include2024Only = false, mainSupportWeight = 0) => {
   // Initialize scoring
   let totalWeightedSupport = 0;
   let totalWeight = 0;
-  let debugBreakdown = [];
-  
-  // Get all teams the QB played for across all seasons with weights
-  const seasonTeams = [];
   
   // Process each year with actual teams played for
   // In 2024-only mode, only process 2024 data with 100% weight
@@ -539,197 +541,38 @@ export const calculateSupportScore = (qbSeasonData, supportWeights = { offensive
         teamsThisYear = [seasonData.Team];
       }
       
-      // Check if QB played meaningful games this season (minimum 1 game started for 2024-only mode, 4 otherwise)
+      // Check if QB played meaningful games this season
       const gamesStarted = seasonData.GS || seasonData.gamesStarted || 0;
       
       // Calculate support for each team played for in this year
-      if (teamsThisYear.length > 0 && ((include2024Only && yearNum === 2024 && gamesStarted >= 1) || (!include2024Only && gamesStarted >= 4))) {
-        // For multi-team seasons, we could weight by games played, but for simplicity
-        // we'll average the support scores of all teams played for in that year
+      if (teamsThisYear.length > 0 && ((include2024Only && yearNum === 2024 && gamesStarted >= 9) || (!include2024Only && gamesStarted >= 10))) {
+        // For multi-team seasons, average the support scores
         const yearSupportScores = teamsThisYear.map(team => calculateWeightedSupportScore(team, yearNum, supportWeights));
         const avgYearSupport = yearSupportScores.reduce((sum, score) => sum + score, 0) / yearSupportScores.length;
         
         totalWeightedSupport += avgYearSupport * weight;
         totalWeight += weight;
-        
-        // Track for debugging
-        seasonTeams.push({
-          year: yearNum,
-          teams: teamsThisYear,
-          supportScore: avgYearSupport,
-          weight: weight,
-          gamesStarted: gamesStarted
-        });
-        
-        debugBreakdown.push(`${year}: ${teamsThisYear.join('/')} (${avgYearSupport.toFixed(1)}) x${(weight*100).toFixed(0)}% [${gamesStarted}G]`);
-      } else if (teamsThisYear.length > 0 && gamesStarted < 4) {
-        // Skip seasons with insufficient games but track for debugging
-        debugBreakdown.push(`${year}: ${teamsThisYear.join('/')} SKIPPED [${gamesStarted}G < 4 minimum]`);
       }
     }
   });
   
-  // Redistribute weights proportionally among valid seasons
-  let redistributedWeightedSupport = 0;
-  let redistributedTotalWeight = 0;
-  
-  if (totalWeight > 0 && totalWeight < 1.0) {
-    // Some seasons were excluded - redistribute weights proportionally
-    const redistributionFactor = 1.0 / totalWeight;
-    seasonTeams.forEach(season => {
-      const redistributedWeight = season.weight * redistributionFactor;
-      redistributedWeightedSupport += season.supportScore * redistributedWeight;
-      redistributedTotalWeight += redistributedWeight;
-    });
-    debugBreakdown.push(`Redistributed weights: ${redistributionFactor.toFixed(2)}x factor`);
-  } else {
-    redistributedWeightedSupport = totalWeightedSupport;
-    redistributedTotalWeight = totalWeight;
-  }
-  
   // Fallback to current team if no season data available
-  if (redistributedTotalWeight === 0 && qbSeasonData.currentTeam) {
+  if (totalWeight === 0 && qbSeasonData.currentTeam) {
     Object.entries(yearWeights).forEach(([year, weight]) => {
       const yearNum = parseInt(year);
       const yearSupport = calculateWeightedSupportScore(qbSeasonData.currentTeam, yearNum, supportWeights);
-      redistributedWeightedSupport += yearSupport * weight;
-      redistributedTotalWeight += weight;
+      totalWeightedSupport += yearSupport * weight;
+      totalWeight += weight;
     });
-    debugBreakdown.push(`FALLBACK to current team: ${qbSeasonData.currentTeam} (no season data found)`);
   }
   
   // Additional fallback if still no data
-  if (redistributedTotalWeight === 0) {
-    // Use league average (50% support quality)
-    redistributedWeightedSupport = 50;
-    redistributedTotalWeight = 1;
-    debugBreakdown.push(`EMERGENCY FALLBACK to league average (no team data found)`);
+  if (totalWeight === 0) {
+    return 0; // League average z-score
   }
   
-  const weightedSupportQuality = redistributedTotalWeight > 0 ? redistributedWeightedSupport / redistributedTotalWeight : 50;
+  const finalSupportZScore = totalWeightedSupport / totalWeight;
   
-  // DATASET-ALIGNED NORMALIZATION: Center around actual data distribution
-  // Based on comprehensive support data: Elite ~80+, Good ~60-79, Average ~40-59, Poor <40
-  const datasetAverage = 50; // Realistic average based on actual team support data
-  const supportDifference = weightedSupportQuality - datasetAverage;
-  
-  // Enhanced scaling based on actual data ranges
-  // Elite teams (PHI 86, BAL 83, DET 77) vs Poor teams (NE 20, CAR 31, TEN 33)
-  const maxAdjustment = 30; // Increased to better reflect actual data spread
-  const normalizedDifference = Math.max(-maxAdjustment, Math.min(maxAdjustment, supportDifference));
-  
-  // Calculate support score aligned with dataset distribution
-  const supportQualityScore = datasetAverage + normalizedDifference;
-  
-  // APPLY MAIN SUPPORT WEIGHT INVERSION LOGIC HERE
-  // This is the key fix: apply inversion based on main support slider weight
-  let finalSupportScore = supportQualityScore;
-  
-  // FORCE DEBUG FOR TESTING - Debug ALL QBs when main support weight > 0
-  const playerName = qbSeasonData.name || qbSeasonData.Player || 'Unknown';
-  const isKeyQB = playerName.includes('Hurts') || playerName.includes('Burrow') || playerName.includes('Jackson') || playerName.includes('Allen');
-  
-  if (mainSupportWeight > 0) {
-    console.log(`🔍 SUPPORT INVERSION TRACE ${playerName}: mainSupportWeight=${mainSupportWeight}, supportQualityScore=${supportQualityScore.toFixed(1)}`);
-    
-    // Apply the same inversion logic used in calculateSupportAdjustmentFactor
-    const adjustmentStrength = mainSupportWeight / 100; // 0.0 to 1.0
-    
-    let adjustmentFactor;
-    
-    if (supportQualityScore >= 80) {
-      // Elite support: PENALTY scales from 0% to 15% as support weight increases
-      const penaltyAmount = 0.15 * adjustmentStrength;
-      adjustmentFactor = 1.0 - penaltyAmount;
-    } else if (supportQualityScore >= 60) {
-      // Good support: PENALTY scales from 0% to 8% as support weight increases  
-      const penaltyAmount = 0.08 * adjustmentStrength;
-      adjustmentFactor = 1.0 - penaltyAmount;
-    } else if (supportQualityScore >= 40) {
-      // Average support: REWARD scales from 0% to 5% as support weight increases
-      const rewardAmount = 0.05 * adjustmentStrength;
-      adjustmentFactor = 1.0 + rewardAmount;
-    } else if (supportQualityScore >= 20) {
-      // Poor support: REWARD scales from 0% to 15% as support weight increases
-      const rewardAmount = 0.15 * adjustmentStrength;
-      adjustmentFactor = 1.0 + rewardAmount;
-    } else {
-      // Terrible support: REWARD scales from 0% to 20% as support weight increases
-      const rewardAmount = 0.20 * adjustmentStrength;
-      adjustmentFactor = 1.0 + rewardAmount;
-    }
-    
-    // Apply the inversion adjustment
-    finalSupportScore = supportQualityScore * adjustmentFactor;
-    
-    // COMPREHENSIVE DEBUG - Show all calculations
-    const adjustmentType = adjustmentFactor > 1.0 ? 'REWARD' : 'PENALTY';
-    const adjustmentPercent = ((adjustmentFactor - 1.0) * 100).toFixed(1);
-    const supportTier = supportQualityScore >= 80 ? 'ELITE' : 
-                       supportQualityScore >= 60 ? 'GOOD' : 
-                       supportQualityScore >= 40 ? 'AVERAGE' : 'POOR';
-    
-    console.log(`🎯 MAIN SUPPORT INVERSION ${playerName}: ${supportTier}(${supportQualityScore.toFixed(1)}) -> ${adjustmentType} ${adjustmentPercent}% @ ${mainSupportWeight}% weight = Final(${finalSupportScore.toFixed(1)})`);
-    console.log(`   Calculation: ${supportQualityScore.toFixed(3)} × ${adjustmentFactor.toFixed(3)} = ${finalSupportScore.toFixed(3)}`);
-  } else if (isKeyQB) {
-    console.log(`⚠️ NO MAIN SUPPORT WEIGHT ${playerName}: mainSupportWeight=${mainSupportWeight}, using raw score=${supportQualityScore.toFixed(1)}`);
-  }
-  
-  finalSupportScore = Math.max(0, finalSupportScore); // No cap, just prevent negative
-  
-  // Enhanced debug for multi-team QBs or significant cases
-  // playerName already declared above, no need to redeclare
-  const hasMultipleTeams = seasonTeams.some(s => s.teams.length > 1);
-  const isSignificantCase = ['Hurts', 'Mahomes', 'Mills', 'Lawrence', 'Young'].some(name => playerName.includes(name));
-  
-  // Debug for multi-team QBs, edge cases, and significant cases
-  const hasProblematicScore = supportQualityScore > 95 || supportQualityScore < 5; // Very high or very low scores
-  const forceDebug = hasMultipleTeams || isSignificantCase || hasProblematicScore || Math.random() < 0.02;
-  
-  if (forceDebug) {
-    const supportLevel = weightedSupportQuality >= 80 ? 'ELITE' : 
-                        weightedSupportQuality >= 60 ? 'GOOD' : 
-                        weightedSupportQuality >= 40 ? 'AVERAGE' : 'POOR';
-    
-    const weightRedistribution = totalWeight !== redistributedTotalWeight ? 
-      ` [Weights redistributed: ${totalWeight.toFixed(2)} -> ${redistributedTotalWeight.toFixed(2)}]` : '';
-    
-    const hasLimitedData = seasonTeams.length <= 1;
-    const dataQuality = hasLimitedData ? ' [LIMITED DATA]' : '';
-    
-    console.log(`🏟️ SUPPORT ${playerName}: [${debugBreakdown.join(', ')}] -> Raw(${weightedSupportQuality.toFixed(1)}) - ${supportLevel} -> Final(${finalSupportScore.toFixed(1)}) [INVERSION APPLIED IN QEI]${weightRedistribution}${dataQuality}`);
-    
-    // Show detailed breakdown for all debugged QBs with dataset context
-    if (seasonTeams.length > 0) {
-      seasonTeams.forEach(season => {
-        season.teams.forEach(team => {
-          const yearData = season.year === 2024 ? SUPPORT_DATA_2024 : 
-                          season.year === 2023 ? SUPPORT_DATA_2023 : 
-                          SUPPORT_DATA_2022;
-          const oLine = yearData.offensiveLine[team] || 15;
-          const weapons = yearData.weapons[team] || 20;  
-          const defense = yearData.defense[team] || 12;
-          const totalSupport = oLine + weapons + defense;
-          const actualWeight = redistributedTotalWeight < 1.0 ? season.weight * (1.0 / totalWeight) : season.weight;
-          
-          // Show component adjustments
-          const oLineAdj = applySupportComponentAdjustment(oLine, 35, supportWeights.offensiveLine);
-          const weaponsAdj = applySupportComponentAdjustment(weapons, 40, supportWeights.weapons);
-          const defenseAdj = applySupportComponentAdjustment(defense, 25, supportWeights.defense);
-          
-          const hasSignificantAdjustments = Math.abs(oLineAdj - 1.0) > 0.05 || Math.abs(weaponsAdj - 1.0) > 0.05 || Math.abs(defenseAdj - 1.0) > 0.05;
-          
-          if (hasSignificantAdjustments) {
-            console.log(`  ${season.year} ${team}: OL(${oLine}→${(oLineAdj*100-100).toFixed(1)}%) WEP(${weapons}→${(weaponsAdj*100-100).toFixed(1)}%) DEF(${defense}→${(defenseAdj*100-100).toFixed(1)}%) = Total(${totalSupport}) -> Weighted(${calculateWeightedSupportScore(team, season.year, supportWeights).toFixed(1)}) × ${(actualWeight*100).toFixed(0)}% [${season.gamesStarted}G]`);
-          } else {
-            console.log(`  ${season.year} ${team}: OL(${oLine}) WEP(${weapons}) DEF(${defense}) = Total(${totalSupport}) -> Weighted(${calculateWeightedSupportScore(team, season.year, supportWeights).toFixed(1)}) × ${(actualWeight*100).toFixed(0)}% [${season.gamesStarted}G]`);
-          }
-        });
-      });
-    } else {
-      console.log(`  No valid season data found for ${playerName}`);
-    }
-  }
-  
-  return finalSupportScore;
+  // Return z-score for higher-level composite calculation
+  return finalSupportZScore;
 }; 

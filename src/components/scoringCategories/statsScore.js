@@ -1,4 +1,11 @@
-import { PERFORMANCE_YEAR_WEIGHTS, PERFORMANCE_PERCENTILES, SCORING_TIERS } from './constants.js';
+import { PERFORMANCE_YEAR_WEIGHTS } from './constants.js';
+import {
+  calculateZScore,
+  calculateMean,
+  calculateStandardDeviation,
+  zScoreToPercentile,
+  calculateCompositeZScore
+} from '../../utils/zScoreCalculations.js';
 
 // Helper function to normalize weights within a group
 const normalizeWeights = (weights) => {
@@ -26,230 +33,463 @@ const calculateHierarchicalScore = (componentScores, weights) => {
   return weightedSum;
 };
 
-// Linear percentile scoring function
-const calculatePercentileScore = (value, metric, maxPoints, inverted = false) => {
-  const percentiles = PERFORMANCE_PERCENTILES[metric];
-  if (!percentiles) return 0;
-  
-  let scoreMultiplier;
-  
-  if (inverted) {
-    // Lower values are better (Sack%, Int%, Fumble%)
-    if (value <= percentiles.p95) scoreMultiplier = 1.0;       // Elite: 100%
-    else if (value <= percentiles.p90) scoreMultiplier = 0.90; // Very Good: 90%
-    else if (value <= percentiles.p75) scoreMultiplier = 0.80; // Good: 80%
-    else if (value <= percentiles.p50) scoreMultiplier = 0.65; // Average: 65%
-    else if (value <= percentiles.p25) scoreMultiplier = 0.50; // Below Average: 50%
-    else if (value <= percentiles.p10) scoreMultiplier = 0.35; // Poor: 35%
-    else scoreMultiplier = 0.20; // Very Poor: 20%
-  } else {
-    // Higher values are better (ANY/A, TD%, Comp%)
-    if (value >= percentiles.p95) scoreMultiplier = 1.0;       // Elite: 100%
-    else if (value >= percentiles.p90) scoreMultiplier = 0.90; // Very Good: 90%
-    else if (value >= percentiles.p75) scoreMultiplier = 0.80; // Good: 80%
-    else if (value >= percentiles.p50) scoreMultiplier = 0.65; // Average: 65%
-    else if (value >= percentiles.p25) scoreMultiplier = 0.50; // Below Average: 50%
-    else if (value >= percentiles.p10) scoreMultiplier = 0.35; // Poor: 35%
-    else scoreMultiplier = 0.20; // Very Poor: 20%
-  }
-  
-  return scoreMultiplier * maxPoints;
+/**
+ * Extract stat values from all QBs for a specific year and stat
+ * @param {Object} allQBsYearData - Object mapping QB names to their year data
+ * @param {Function} statExtractor - Function to extract stat from year data
+ * @returns {number[]} Array of stat values
+ */
+const extractStatValues = (allQBsYearData, statExtractor) => {
+  return Object.values(allQBsYearData)
+    .map(statExtractor)
+    .filter(val => typeof val === 'number' && !isNaN(val) && isFinite(val));
 };
 
-// Calculate efficiency subcomponent scores
-const calculateEfficiencyScores = (weightedAnyA, weightedTDPct, weightedCmpPct, efficiencyWeights) => {
-  const efficiencySubScores = {
-    anyA: calculatePercentileScore(weightedAnyA, 'anyA', 100),
-    tdPct: calculatePercentileScore(weightedTDPct, 'tdPct', 100),
-    completionPct: calculatePercentileScore(weightedCmpPct, 'completionPct', 100)
-  };
-  
-  // Apply hierarchical weighting to efficiency subcomponents
-  return calculateHierarchicalScore(efficiencySubScores, efficiencyWeights);
-};
-
-// Calculate protection subcomponent scores
-const calculateProtectionScores = (weightedSackPct, weightedTurnoverRate, protectionWeights) => {
-  const protectionSubScores = {
-    sackPct: calculatePercentileScore(weightedSackPct, 'sackPct', 100, true), // Inverted: lower is better
-    turnoverRate: calculatePercentileScore(weightedTurnoverRate, 'turnoverRate', 100) // Higher is better (attempts per turnover)
-  };
-  
-  // Apply hierarchical weighting to protection subcomponents
-  return calculateHierarchicalScore(protectionSubScores, protectionWeights);
-};
-
-// Calculate volume subcomponent scores
-const calculateVolumeScores = (totalPassYards, totalPassTDs, totalRushYards, totalRushTDs, totalAttempts, volumeWeights) => {
-  const volumeSubScores = {
-    passYards: Math.max(0, Math.min(100, (totalPassYards - 3500) / 12.5 + 50)), // Scale around 4000 yards
-    passTDs: Math.max(0, Math.min(100, (totalPassTDs - 25) / 0.5 + 50)), // Scale around 30 TDs
-    rushYards: Math.max(0, Math.min(100, (totalRushYards - 200) / 8 + 50)), // Scale around 400 yards
-    rushTDs: Math.max(0, Math.min(100, totalRushTDs * 12.5 + 25)), // Scale rushing TDs
-    totalAttempts: Math.max(0, Math.min(100, (totalAttempts - 450) / 8 + 50)) // Scale around 550 attempts
-  };
-  
-  // Apply hierarchical weighting to volume subcomponents
-  return calculateHierarchicalScore(volumeSubScores, volumeWeights);
-};
-
-// Volume scoring functions
-const calculateVolumeScore = (qbStats) => {
-  const passYardsScore = Math.max(0, Math.min(SCORING_TIERS.PASS_YARDS_POINTS, 
-    (qbStats.passYards - 3500) / 312.5 * 2 + 4));
-    
-  const passTDsScore = Math.max(0, Math.min(SCORING_TIERS.PASS_TDS_POINTS,
-    (qbStats.passTDs - 25) / 3.57 * 2 + 3.5));
-    
-  const volumeRespScore = Math.max(0, Math.min(SCORING_TIERS.VOLUME_RESP_POINTS,
-    (qbStats.attPerGame - 30) * 0.25 + 2.5));
-    
-  const rushTDsScore = Math.max(0, Math.min(SCORING_TIERS.RUSH_TDS_POINTS,
-    qbStats.rushTDsPerGame * 8));
-    
-  const rushYardsScore = Math.max(0, Math.min(SCORING_TIERS.RUSH_YARDS_POINTS,
-    (qbStats.rushYPG - 15) * 0.2));
-    
-  return passYardsScore + passTDsScore + volumeRespScore + rushTDsScore + rushYardsScore;
-};
-
-const calculateTurnoverBurden = (totalTurnovers) => {
-  if (totalTurnovers <= 8) return 2;        // Excellent
-  if (totalTurnovers <= 10) return 1;       // Good
-  if (totalTurnovers <= 12) return 0;       // Average
-  if (totalTurnovers <= 14) return -1;      // Poor
-  if (totalTurnovers <= 17) return -2;      // Very Poor
-  return -3;                                // Terrible
-};
-
-// Enhanced Statistical Performance Score with hierarchical weighting (0-100)
-export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, includePlayoffs = true, include2024Only = false, efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 }, protectionWeights = { sackPct: 60, turnoverRate: 40 }, volumeWeights = { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }) => {
-  let weightedAnyA = 0;
-  let weightedTDPct = 0;
-  let weightedCmpPct = 0;
-  let weightedSackPct = 0;
-  let weightedTurnoverRate = 0;
-  let totalPassYards = 0;
-  let totalPassTDs = 0;
-  let totalRushYards = 0;
-  let totalRushTDs = 0;
-  let totalVolume = 0;
-  let totalAttempts = 0;
-  let totalWeight = 0;
-  let playoffAdjustmentFactor = 1.0; // Default: no playoff adjustment
-  
-  // Debug logging for playoff inclusion
-  const debugMode = includePlayoffs;
-  const playerName = qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player;
-  
-  if (debugMode && playerName && (playerName.includes('Mahomes') || playerName.includes('Hurts') || playerName.includes('Allen'))) {
-    console.log(`📊 STATS DEBUG - ${playerName} (Playoffs ${includePlayoffs ? 'ADJUSTMENT MODE' : 'EXCLUDED'})`);
-  }
-  
-  // First Pass: Calculate strong regular season base scores
-  // In 2024-only mode, only process 2024 data with 100% weight
+/**
+ * Calculate z-score based efficiency scores
+ * Uses z-scores for ANY/A, TD%, and Completion%
+ */
+const calculateEfficiencyZScores = (qbSeasonData, allQBData, efficiencyWeights, includePlayoffs, include2024Only) => {
   const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
   
-  // Check if player has meaningful current season data before including any historical data
+  // Collect z-scores for each efficiency stat across years
+  const yearlyZScores = {
+    anyA: [],
+    tdPct: [],
+    completionPct: []
+  };
+  
+  Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
+    const weight = yearWeights[year] || 0;
+    if (weight === 0) return;
+    
+    const regSeasonAtts = parseInt(data.Att) || 0;
+    
+    // Apply attempt thresholds
+    if (year === '2024' && include2024Only && regSeasonAtts < 150) return;
+    if (year === '2024' && !include2024Only && regSeasonAtts < 150) return;
+    if (year !== '2024' && regSeasonAtts < 200) return;
+    
+    // Build population data for this year across all QBs
+    const yearDataForAllQBs = {};
+    allQBData.forEach(qb => {
+      // Handle both seasonData array and years object format
+      let qbYearData = null;
+      if (qb.years && qb.years[year]) {
+        qbYearData = qb.years[year];
+      } else if (qb.seasonData) {
+        const season = qb.seasonData.find(s => s.year === parseInt(year));
+        if (season) {
+          // Convert season format to years format
+          qbYearData = {
+            Att: season.attempts,
+            Cmp: season.completions,
+            Yds: season.passingYards,
+            TD: season.passingTDs,
+            Int: season.interceptions,
+            Sk: season.sacks || 0,
+            'ANY/A': season.anyPerAttempt || 0,
+            RushingYds: season.rushingYards || 0,
+            RushingTDs: season.rushingTDs || 0,
+            RushingAtt: season.rushingAttempts || 0,
+            Fumbles: season.fumbles || 0,
+            Player: qb.name
+          };
+        }
+      }
+      
+      if (qbYearData) {
+        const qbAtts = parseInt(qbYearData.Att) || 0;
+        
+        // Apply same thresholds
+        let meetsThreshold = false;
+        if (year === '2024' && include2024Only && qbAtts >= 150) meetsThreshold = true;
+        if (year === '2024' && !include2024Only && qbAtts >= 150) meetsThreshold = true;
+        if (year !== '2024' && qbAtts >= 200) meetsThreshold = true;
+        
+        if (meetsThreshold) {
+          yearDataForAllQBs[qb.name || qbYearData.Player] = qbYearData;
+        }
+      }
+    });
+    
+    if (Object.keys(yearDataForAllQBs).length === 0) return;
+    
+    // Calculate population statistics for ANY/A
+    const anyAValues = extractStatValues(yearDataForAllQBs, d => d['ANY/A'] || 0);
+    const anyAMean = calculateMean(anyAValues);
+    const anyAStdDev = calculateStandardDeviation(anyAValues, anyAMean);
+    const anyAValue = data['ANY/A'] || 0;
+    const anyAZ = calculateZScore(anyAValue, anyAMean, anyAStdDev, false);
+    yearlyZScores.anyA.push({ zScore: anyAZ, weight });
+    
+    // Calculate population statistics for TD%
+    const tdPctValues = extractStatValues(yearDataForAllQBs, d => {
+      const atts = parseInt(d.Att) || 0;
+      const tds = parseInt(d.TD) || 0;
+      return atts > 0 ? (tds / atts) * 100 : 0;
+    });
+    const tdPctMean = calculateMean(tdPctValues);
+    const tdPctStdDev = calculateStandardDeviation(tdPctValues, tdPctMean);
+    const tdPctValue = regSeasonAtts > 0 ? ((parseInt(data.TD) || 0) / regSeasonAtts) * 100 : 0;
+    const tdPctZ = calculateZScore(tdPctValue, tdPctMean, tdPctStdDev, false);
+    yearlyZScores.tdPct.push({ zScore: tdPctZ, weight });
+    
+    // Calculate population statistics for Completion%
+    const cmpPctValues = extractStatValues(yearDataForAllQBs, d => {
+      const atts = parseInt(d.Att) || 0;
+      const cmps = parseInt(d.Cmp) || 0;
+      return atts > 0 ? (cmps / atts) * 100 : 0;
+    });
+    const cmpPctMean = calculateMean(cmpPctValues);
+    const cmpPctStdDev = calculateStandardDeviation(cmpPctValues, cmpPctMean);
+    const cmpPctValue = regSeasonAtts > 0 ? ((parseInt(data.Cmp) || 0) / regSeasonAtts) * 100 : 0;
+    const cmpPctZ = calculateZScore(cmpPctValue, cmpPctMean, cmpPctStdDev, false);
+    yearlyZScores.completionPct.push({ zScore: cmpPctZ, weight });
+  });
+  
+  // Calculate weighted average z-scores across years
+  const avgZScores = {};
+  Object.keys(yearlyZScores).forEach(stat => {
+    let weightedSum = 0;
+    let totalWeight = 0;
+    yearlyZScores[stat].forEach(({ zScore, weight }) => {
+      weightedSum += zScore * weight;
+      totalWeight += weight;
+    });
+    avgZScores[stat] = totalWeight > 0 ? weightedSum / totalWeight : 0;
+  });
+  
+  // Keep as z-scores for hierarchical weighting
+  const efficiencyZScores = {
+    anyA: avgZScores.anyA,
+    tdPct: avgZScores.tdPct,
+    completionPct: avgZScores.completionPct
+  };
+  
+  // Apply hierarchical weighting to z-scores (returns composite z-score)
+  return calculateHierarchicalScore(efficiencyZScores, efficiencyWeights);
+};
+
+/**
+ * Calculate z-score based protection scores
+ * Uses z-scores for Sack% and Turnover Rate
+ */
+const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, includePlayoffs, include2024Only) => {
+  const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+  
+  const yearlyZScores = {
+    sackPct: [],
+    turnoverRate: []
+  };
+  
+  Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
+    const weight = yearWeights[year] || 0;
+    if (weight === 0) return;
+    
+    const regSeasonAtts = parseInt(data.Att) || 0;
+    const regSeasonSacks = parseInt(data.Sk) || 0;
+    const regSeasonRushAtts = parseInt(data.RushingAtt) || 0;
+    const regSeasonInts = parseInt(data.Int) || 0;
+    const regSeasonFumbles = parseInt(data.Fumbles) || 0;
+    
+    // Apply attempt thresholds
+    if (year === '2024' && include2024Only && regSeasonAtts < 150) return;
+    if (year === '2024' && !include2024Only && regSeasonAtts < 150) return;
+    if (year !== '2024' && regSeasonAtts < 200) return;
+    
+    // Build population data for this year
+    const yearDataForAllQBs = {};
+    allQBData.forEach(qb => {
+      // Handle both seasonData array and years object format
+      let qbYearData = null;
+      if (qb.years && qb.years[year]) {
+        qbYearData = qb.years[year];
+      } else if (qb.seasonData) {
+        const season = qb.seasonData.find(s => s.year === parseInt(year));
+        if (season) {
+          // Convert season format to years format
+          qbYearData = {
+            Att: season.attempts,
+            Cmp: season.completions,
+            Yds: season.passingYards,
+            TD: season.passingTDs,
+            Int: season.interceptions,
+            Sk: season.sacks || 0,
+            'ANY/A': season.anyPerAttempt || 0,
+            RushingYds: season.rushingYards || 0,
+            RushingTDs: season.rushingTDs || 0,
+            RushingAtt: season.rushingAttempts || 0,
+            Fumbles: season.fumbles || 0,
+            Player: qb.name
+          };
+        }
+      }
+      
+      if (qbYearData) {
+        const qbAtts = parseInt(qbYearData.Att) || 0;
+        
+        let meetsThreshold = false;
+        if (year === '2024' && include2024Only && qbAtts >= 150) meetsThreshold = true;
+        if (year === '2024' && !include2024Only && qbAtts >= 150) meetsThreshold = true;
+        if (year !== '2024' && qbAtts >= 200) meetsThreshold = true;
+        
+        if (meetsThreshold) {
+          yearDataForAllQBs[qb.name || qbYearData.Player] = qbYearData;
+        }
+      }
+    });
+    
+    if (Object.keys(yearDataForAllQBs).length === 0) return;
+    
+    // Calculate Sack% z-score (lower is better, so invert)
+    const sackPctValues = extractStatValues(yearDataForAllQBs, d => {
+      const atts = parseInt(d.Att) || 0;
+      const sacks = parseInt(d.Sk) || 0;
+      return (atts + sacks) > 0 ? (sacks / (atts + sacks)) * 100 : 0;
+    });
+    const sackPctMean = calculateMean(sackPctValues);
+    const sackPctStdDev = calculateStandardDeviation(sackPctValues, sackPctMean);
+    const sackPctValue = (regSeasonAtts + regSeasonSacks) > 0 ? 
+      (regSeasonSacks / (regSeasonAtts + regSeasonSacks)) * 100 : 0;
+    const sackPctZ = calculateZScore(sackPctValue, sackPctMean, sackPctStdDev, true); // Inverted
+    yearlyZScores.sackPct.push({ zScore: sackPctZ, weight });
+    
+    // Calculate Turnover Rate z-score (attempts per turnover - higher is better)
+    const turnoverRateValues = extractStatValues(yearDataForAllQBs, d => {
+      const atts = parseInt(d.Att) || 0;
+      const rushAtts = parseInt(d.RushingAtt) || 0;
+      const ints = parseInt(d.Int) || 0;
+      const fumbles = parseInt(d.Fumbles) || 0;
+      const totalTurnovers = ints + fumbles;
+      const seasonAttempts = atts + rushAtts;
+      return totalTurnovers > 0 && seasonAttempts > 0 ? seasonAttempts / totalTurnovers : 999;
+    });
+    const turnoverRateMean = calculateMean(turnoverRateValues);
+    const turnoverRateStdDev = calculateStandardDeviation(turnoverRateValues, turnoverRateMean);
+    const seasonAttempts = regSeasonAtts + regSeasonRushAtts;
+    const totalTurnovers = regSeasonInts + regSeasonFumbles;
+    const turnoverRateValue = totalTurnovers > 0 && seasonAttempts > 0 ? 
+      seasonAttempts / totalTurnovers : 999;
+    const turnoverRateZ = calculateZScore(turnoverRateValue, turnoverRateMean, turnoverRateStdDev, false);
+    yearlyZScores.turnoverRate.push({ zScore: turnoverRateZ, weight });
+  });
+  
+  // Calculate weighted average z-scores
+  const avgZScores = {};
+  Object.keys(yearlyZScores).forEach(stat => {
+    let weightedSum = 0;
+    let totalWeight = 0;
+    yearlyZScores[stat].forEach(({ zScore, weight }) => {
+      weightedSum += zScore * weight;
+      totalWeight += weight;
+    });
+    avgZScores[stat] = totalWeight > 0 ? weightedSum / totalWeight : 0;
+  });
+  
+  // Keep as z-scores for hierarchical weighting
+  const protectionZScores = {
+    sackPct: avgZScores.sackPct,
+    turnoverRate: avgZScores.turnoverRate
+  };
+  
+  return calculateHierarchicalScore(protectionZScores, protectionWeights);
+};
+
+/**
+ * Calculate z-score based volume scores
+ * Uses z-scores for Pass Yards, Pass TDs, Rush Yards, Rush TDs, Total Attempts
+ */
+const calculateVolumeZScores = (qbSeasonData, allQBData, volumeWeights, includePlayoffs, include2024Only) => {
+  const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+  
+  const yearlyZScores = {
+    passYards: [],
+    passTDs: [],
+    rushYards: [],
+    rushTDs: [],
+    totalAttempts: []
+  };
+  
+  Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
+    const weight = yearWeights[year] || 0;
+    if (weight === 0) return;
+    
+    const regSeasonAtts = parseInt(data.Att) || 0;
+    
+    // Apply attempt thresholds
+    if (year === '2024' && include2024Only && regSeasonAtts < 150) return;
+    if (year === '2024' && !include2024Only && regSeasonAtts < 150) return;
+    if (year !== '2024' && regSeasonAtts < 200) return;
+    
+    // Build population data
+    const yearDataForAllQBs = {};
+    allQBData.forEach(qb => {
+      // Handle both seasonData array and years object format
+      let qbYearData = null;
+      if (qb.years && qb.years[year]) {
+        qbYearData = qb.years[year];
+      } else if (qb.seasonData) {
+        const season = qb.seasonData.find(s => s.year === parseInt(year));
+        if (season) {
+          // Convert season format to years format
+          qbYearData = {
+            Att: season.attempts,
+            Cmp: season.completions,
+            Yds: season.passingYards,
+            TD: season.passingTDs,
+            Int: season.interceptions,
+            Sk: season.sacks || 0,
+            'ANY/A': season.anyPerAttempt || 0,
+            RushingYds: season.rushingYards || 0,
+            RushingTDs: season.rushingTDs || 0,
+            RushingAtt: season.rushingAttempts || 0,
+            Fumbles: season.fumbles || 0,
+            Player: qb.name
+          };
+        }
+      }
+      
+      if (qbYearData) {
+        const qbAtts = parseInt(qbYearData.Att) || 0;
+        
+        let meetsThreshold = false;
+        if (year === '2024' && include2024Only && qbAtts >= 150) meetsThreshold = true;
+        if (year === '2024' && !include2024Only && qbAtts >= 150) meetsThreshold = true;
+        if (year !== '2024' && qbAtts >= 200) meetsThreshold = true;
+        
+        if (meetsThreshold) {
+          yearDataForAllQBs[qb.name || qbYearData.Player] = qbYearData;
+        }
+      }
+    });
+    
+    if (Object.keys(yearDataForAllQBs).length === 0) return;
+    
+    // Pass Yards z-score
+    const passYardsValues = extractStatValues(yearDataForAllQBs, d => parseInt(d.Yds) || 0);
+    const passYardsMean = calculateMean(passYardsValues);
+    const passYardsStdDev = calculateStandardDeviation(passYardsValues, passYardsMean);
+    const passYardsValue = parseInt(data.Yds) || 0;
+    const passYardsZ = calculateZScore(passYardsValue, passYardsMean, passYardsStdDev, false);
+    yearlyZScores.passYards.push({ zScore: passYardsZ, weight });
+    
+    // Pass TDs z-score
+    const passTDsValues = extractStatValues(yearDataForAllQBs, d => parseInt(d.TD) || 0);
+    const passTDsMean = calculateMean(passTDsValues);
+    const passTDsStdDev = calculateStandardDeviation(passTDsValues, passTDsMean);
+    const passTDsValue = parseInt(data.TD) || 0;
+    const passTDsZ = calculateZScore(passTDsValue, passTDsMean, passTDsStdDev, false);
+    yearlyZScores.passTDs.push({ zScore: passTDsZ, weight });
+    
+    // Rush Yards z-score
+    const rushYardsValues = extractStatValues(yearDataForAllQBs, d => parseInt(d.RushingYds) || 0);
+    const rushYardsMean = calculateMean(rushYardsValues);
+    const rushYardsStdDev = calculateStandardDeviation(rushYardsValues, rushYardsMean);
+    const rushYardsValue = parseInt(data.RushingYds) || 0;
+    const rushYardsZ = calculateZScore(rushYardsValue, rushYardsMean, rushYardsStdDev, false);
+    yearlyZScores.rushYards.push({ zScore: rushYardsZ, weight });
+    
+    // Rush TDs z-score
+    const rushTDsValues = extractStatValues(yearDataForAllQBs, d => parseInt(d.RushingTDs) || 0);
+    const rushTDsMean = calculateMean(rushTDsValues);
+    const rushTDsStdDev = calculateStandardDeviation(rushTDsValues, rushTDsMean);
+    const rushTDsValue = parseInt(data.RushingTDs) || 0;
+    const rushTDsZ = calculateZScore(rushTDsValue, rushTDsMean, rushTDsStdDev, false);
+    yearlyZScores.rushTDs.push({ zScore: rushTDsZ, weight });
+    
+    // Total Attempts z-score
+    const totalAttemptsValues = extractStatValues(yearDataForAllQBs, d => {
+      const atts = parseInt(d.Att) || 0;
+      const rushAtts = parseInt(d.RushingAtt) || 0;
+      return atts + rushAtts;
+    });
+    const totalAttemptsMean = calculateMean(totalAttemptsValues);
+    const totalAttemptsStdDev = calculateStandardDeviation(totalAttemptsValues, totalAttemptsMean);
+    const totalAttemptsValue = regSeasonAtts + (parseInt(data.RushingAtt) || 0);
+    const totalAttemptsZ = calculateZScore(totalAttemptsValue, totalAttemptsMean, totalAttemptsStdDev, false);
+    yearlyZScores.totalAttempts.push({ zScore: totalAttemptsZ, weight });
+  });
+  
+  // Calculate weighted average z-scores
+  const avgZScores = {};
+  Object.keys(yearlyZScores).forEach(stat => {
+    let weightedSum = 0;
+    let totalWeight = 0;
+    yearlyZScores[stat].forEach(({ zScore, weight }) => {
+      weightedSum += zScore * weight;
+      totalWeight += weight;
+    });
+    avgZScores[stat] = totalWeight > 0 ? weightedSum / totalWeight : 0;
+  });
+  
+  // Keep as z-scores for hierarchical weighting
+  const volumeZScores = {
+    passYards: avgZScores.passYards,
+    passTDs: avgZScores.passTDs,
+    rushYards: avgZScores.rushYards,
+    rushTDs: avgZScores.rushTDs,
+    totalAttempts: avgZScores.totalAttempts
+  };
+  
+  return calculateHierarchicalScore(volumeZScores, volumeWeights);
+};
+
+/**
+ * Enhanced Statistical Performance Score with Z-Score calculations (0-100)
+ */
+export const calculateStatsScore = (
+  qbSeasonData, 
+  statsWeights = { efficiency: 45, protection: 25, volume: 30 }, 
+  includePlayoffs = true, 
+  include2024Only = false, 
+  efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 }, 
+  protectionWeights = { sackPct: 60, turnoverRate: 40 }, 
+  volumeWeights = { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 },
+  allQBData = []
+) => {
+  // Ensure we have all QB data for population statistics
+  if (!allQBData || allQBData.length === 0) {
+    console.warn('⚠️ No allQBData provided to calculateStatsScore - cannot calculate z-scores');
+    return 0;
+  }
+  
+  // Check if player has meaningful data
   let hasCurrentSeasonData = false;
   if (qbSeasonData.years && qbSeasonData.years['2024']) {
     const currentSeasonAtts = parseInt(qbSeasonData.years['2024'].Att) || 0;
-    hasCurrentSeasonData = currentSeasonAtts >= 50; // Must have meaningful current season participation
+    hasCurrentSeasonData = currentSeasonAtts >= 50;
   }
   
-  // If no meaningful current season data, only use data if include2024Only is false and player has historical significance
   if (!hasCurrentSeasonData && !include2024Only) {
-    // For players without current season data, require higher historical thresholds
     let hasSignificantHistoricalData = false;
     Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
       if (year !== '2024') {
         const historicalAtts = parseInt(data.Att) || 0;
-        if (historicalAtts >= 200) { // Require substantial historical data (200+ attempts = ~12+ games)
+        if (historicalAtts >= 200) {
           hasSignificantHistoricalData = true;
         }
       }
     });
     
     if (!hasSignificantHistoricalData) {
-      return 0; // Filter out players without either current relevance or historical significance
+      return 0;
     }
   }
   
-  Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
-    const weight = yearWeights[year] || 0;
-    if (weight === 0) return;
-    
-    // Regular season stats only for base calculation
-    const regSeasonAtts = parseInt(data.Att) || 0;
-    const regSeasonCmps = parseInt(data.Cmp) || 0;
-    const regSeasonYds = parseInt(data.Yds) || 0;
-    const regSeasonTDs = parseInt(data.TD) || 0;
-    const regSeasonInts = parseInt(data.Int) || 0;
-    const regSeasonSacks = parseInt(data.Sk) || 0;
-    const regSeasonRushYds = parseInt(data.RushingYds) || 0;
-    const regSeasonRushTDs = parseInt(data.RushingTDs) || 0;
-    const regSeasonRushAtts = parseInt(data.RushingAtt) || 0;
-    const regSeasonFumbles = parseInt(data.Fumbles) || 0;
-    
-    // Skip seasons with insufficient data - use different thresholds for 2024 vs previous years
-    if (year === '2024' && include2024Only) {
-      // For 2024-only mode: allow any QB with at least 1 attempt
-      if (regSeasonAtts < 1) return;
-    } else if (year === '2024') {
-      // For 2024 in multi-year mode: keep the 50 attempt threshold
-      if (regSeasonAtts < 50) return;
-    } else {
-      // For 2022/2023: Use more lenient threshold to account for historical data
-      if (regSeasonAtts < 100) return;
-    }
-    
-    // Calculate regular season statistical rates
-    const anyA = data['ANY/A'] || 0;
-    const tdPct = regSeasonAtts > 0 ? (regSeasonTDs / regSeasonAtts) * 100 : 0;
-    const cmpPct = regSeasonAtts > 0 ? (regSeasonCmps / regSeasonAtts) * 100 : 0;
-    const sackPct = (regSeasonAtts + regSeasonSacks) > 0 ? (regSeasonSacks / (regSeasonAtts + regSeasonSacks)) * 100 : 0;
-    
-    // Calculate turnover rate: (pass attempts + rush attempts) / total turnovers
-    const seasonAttempts = regSeasonAtts + regSeasonRushAtts;
-    const totalTurnovers = regSeasonInts + regSeasonFumbles;
-    const turnoverRate = (totalTurnovers > 0 && seasonAttempts > 0) ? seasonAttempts / totalTurnovers : 999; // High number = good (fewer turnovers per attempt)
-    
-    // Weight and accumulate regular season stats
-    weightedAnyA += anyA * weight;
-    weightedTDPct += tdPct * weight;
-    weightedCmpPct += cmpPct * weight;
-    weightedSackPct += sackPct * weight;
-    weightedTurnoverRate += turnoverRate * weight;
-    
-    totalPassYards += regSeasonYds * weight;
-    totalPassTDs += regSeasonTDs * weight;
-    totalRushYards += regSeasonRushYds * weight;
-    totalRushTDs += regSeasonRushTDs * weight;
-    totalVolume += (regSeasonYds + regSeasonRushYds) * weight;
-    totalAttempts += (regSeasonAtts + regSeasonRushAtts) * weight;
-    totalWeight += weight;
-  });
+  // Calculate z-score based component scores
+  const efficiencyScore = calculateEfficiencyZScores(qbSeasonData, allQBData, efficiencyWeights, includePlayoffs, include2024Only);
+  const protectionScore = calculateProtectionZScores(qbSeasonData, allQBData, protectionWeights, includePlayoffs, include2024Only);
+  const volumeScore = calculateVolumeZScores(qbSeasonData, allQBData, volumeWeights, includePlayoffs, include2024Only);
   
-  if (totalWeight === 0) return 0;
-  
-  // Normalize regular season weighted stats
-  weightedAnyA = weightedAnyA / totalWeight;
-  weightedTDPct = weightedTDPct / totalWeight;
-  weightedCmpPct = weightedCmpPct / totalWeight;
-  weightedSackPct = weightedSackPct / totalWeight;
-  weightedTurnoverRate = weightedTurnoverRate / totalWeight;
-  
-  totalPassYards = totalPassYards / totalWeight;
-  totalPassTDs = totalPassTDs / totalWeight;
-  totalRushYards = totalRushYards / totalWeight;
-  totalRushTDs = totalRushTDs / totalWeight;
-  totalVolume = totalVolume / totalWeight;
-  totalAttempts = totalAttempts / totalWeight;
-  
-  // Calculate hierarchical component scores
-  const efficiencyScore = calculateEfficiencyScores(weightedAnyA, weightedTDPct, weightedCmpPct, efficiencyWeights);
-  const protectionScore = calculateProtectionScores(weightedSackPct, weightedTurnoverRate, protectionWeights);
-  const volumeScore = calculateVolumeScores(totalPassYards, totalPassTDs, totalRushYards, totalRushTDs, totalAttempts, volumeWeights);
+  // Debug logging for key QBs
+  const playerName = qbSeasonData.name || (qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player);
+  if (playerName && (playerName.includes('Mahomes') || playerName.includes('Allen') || playerName.includes('Jackson'))) {
+    console.log(`📊 STATS Z-SCORES ${playerName}:`);
+    console.log(`   Efficiency Z: ${efficiencyScore.toFixed(3)} (weight: ${statsWeights.efficiency})`);
+    console.log(`   Protection Z: ${protectionScore.toFixed(3)} (weight: ${statsWeights.protection})`);
+    console.log(`   Volume Z: ${volumeScore.toFixed(3)} (weight: ${statsWeights.volume})`);
+  }
   
   // Combine component scores using stats-level weights
   const statsComponentScores = {
@@ -258,10 +498,17 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
     volume: volumeScore
   };
   
-  let baseStatsScore = calculateHierarchicalScore(statsComponentScores, statsWeights);
+  const baseStatsScore = calculateHierarchicalScore(statsComponentScores, statsWeights);
   
-  // Apply playoff adjustment if enabled (existing playoff logic)
+  if (playerName && (playerName.includes('Mahomes') || playerName.includes('Allen') || playerName.includes('Jackson'))) {
+    console.log(`   → Stats Composite Z: ${baseStatsScore.toFixed(3)}`);
+  }
+  
+  // Apply playoff adjustment if enabled (maintain existing playoff logic)
+  let playoffAdjustmentFactor = 1.0;
+  
   if (includePlayoffs) {
+    const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
     let totalPlayoffWeight = 0;
     let playoffPerformanceMultiplier = 1.0;
     
@@ -271,19 +518,15 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
       
       const playoff = data.playoffData;
       const playoffAtts = parseInt(playoff.attempts) || 0;
+      if (playoffAtts < 10) return;
+      
       const playoffCmps = parseInt(playoff.completions) || 0;
-      const playoffYds = parseInt(playoff.passingYards) || 0;
       const playoffTDs = parseInt(playoff.passingTDs) || 0;
       const playoffInts = parseInt(playoff.interceptions) || 0;
       const playoffSacks = parseInt(playoff.sacks) || 0;
-      const playoffRushYds = parseInt(playoff.rushingYards) || 0;
-      const playoffRushTDs = parseInt(playoff.rushingTDs) || 0;
       const playoffRushAtts = parseInt(playoff.rushingAttempts) || 0;
       const playoffFumbles = parseInt(playoff.fumbles) || 0;
       
-      if (playoffAtts < 10) return; // Skip minimal playoff appearances
-      
-      // Calculate playoff rates
       const playoffAnyA = playoff.anyPerAttempt || 0;
       const playoffTDPct = playoffAtts > 0 ? (playoffTDs / playoffAtts) * 100 : 0;
       const playoffCmpPct = playoffAtts > 0 ? (playoffCmps / playoffAtts) * 100 : 0;
@@ -291,9 +534,9 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
       
       const playoffSeasonAttempts = playoffAtts + playoffRushAtts;
       const playoffTotalTurnovers = playoffInts + playoffFumbles;
-      const playoffTurnoverRate = (playoffTotalTurnovers > 0 && playoffSeasonAttempts > 0) ? playoffSeasonAttempts / playoffTotalTurnovers : 999;
+      const playoffTurnoverRate = (playoffTotalTurnovers > 0 && playoffSeasonAttempts > 0) ? 
+        playoffSeasonAttempts / playoffTotalTurnovers : 999;
       
-      // Calculate regular season rates for comparison
       const regSeasonAtts = parseInt(data.Att) || 0;
       const regSeasonCmps = parseInt(data.Cmp) || 0;
       const regSeasonTDs = parseInt(data.TD) || 0;
@@ -309,16 +552,15 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
       
       const regSeasonAttempts = regSeasonAtts + regSeasonRushAtts;
       const regTotalTurnovers = regSeasonInts + regSeasonFumbles;
-      const regTurnoverRate = (regTotalTurnovers > 0 && regSeasonAttempts > 0) ? regSeasonAttempts / regTotalTurnovers : 999;
+      const regTurnoverRate = (regTotalTurnovers > 0 && regSeasonAttempts > 0) ? 
+        regSeasonAttempts / regTotalTurnovers : 999;
       
-      // Calculate performance ratios (playoff vs regular season)
       const anyARatio = regAnyA > 0 ? playoffAnyA / regAnyA : 1.0;
       const tdPctRatio = regTDPct > 0 ? playoffTDPct / regTDPct : 1.0;
       const cmpPctRatio = regCmpPct > 0 ? playoffCmpPct / regCmpPct : 1.0;
-      const sackPctRatio = regSackPct > 0 ? regSackPct / playoffSackPct : 1.0; // Inverted: lower playoff sack% is better
+      const sackPctRatio = regSackPct > 0 ? regSackPct / playoffSackPct : 1.0;
       const turnoverRatio = regTurnoverRate > 0 ? playoffTurnoverRate / regTurnoverRate : 1.0;
       
-      // Calculate weighted performance multiplier
       const performanceMultiplier = (
         (anyARatio * 0.3) +
         (tdPctRatio * 0.25) +
@@ -327,36 +569,20 @@ export const calculateStatsScore = (qbSeasonData, statsWeights = { efficiency: 4
         (turnoverRatio * 0.1)
       );
       
-      // Weight by playoff sample size and year importance
-      const sampleWeight = Math.min(1.0, playoffAtts / 75); // Full weight at 75+ attempts
+      const sampleWeight = Math.min(1.0, playoffAtts / 75);
       playoffPerformanceMultiplier += (performanceMultiplier - 1.0) * sampleWeight * weight;
       totalPlayoffWeight += weight;
-      
-      if (debugMode && playerName && (playerName.includes('Mahomes') || playerName.includes('Hurts') || playerName.includes('Allen'))) {
-        console.log(`   ${year} Playoff Performance: ANY/A(${anyARatio.toFixed(2)}x) TD%(${tdPctRatio.toFixed(2)}x) Comp%(${cmpPctRatio.toFixed(2)}x) → Multiplier(${performanceMultiplier.toFixed(3)})`);
-      }
     });
     
-    // Apply playoff adjustment
     if (totalPlayoffWeight > 0) {
-      const adjustmentStrength = Math.min(0.25, totalPlayoffWeight * 0.15); // Cap at 25% adjustment, scale by playoff experience
+      const adjustmentStrength = Math.min(0.25, totalPlayoffWeight * 0.15);
       playoffAdjustmentFactor = 1.0 + ((playoffPerformanceMultiplier - 1.0) * adjustmentStrength);
-      
-      if (debugMode && playerName && (playerName.includes('Mahomes') || playerName.includes('Hurts') || playerName.includes('Allen'))) {
-        console.log(`   Final Playoff Adjustment: ${playoffAdjustmentFactor.toFixed(3)}x (Strength: ${adjustmentStrength.toFixed(3)})`);
-      }
     }
   }
   
-  // Apply playoff adjustment to base stats score
-  const adjustedStatsScore = baseStatsScore * playoffAdjustmentFactor;
+  // Apply playoff adjustment to z-score
+  const adjustedStatsZScore = baseStatsScore * playoffAdjustmentFactor;
   
-  // ELITE PERFORMANCE SCALING: Apply flat 1.5x multiplier to push elite performers to 100+ range
-  // This addresses the psychological impact of reaching the 100 threshold
-  const scaledStatsScore = adjustedStatsScore * 1.5;
-  
-  // Ensure score stays within reasonable range (increased cap to 150 to allow elite scores)
-  const finalStatsScore = Math.max(0, Math.min(150, scaledStatsScore));
-  
-  return finalStatsScore;
-}; 
+  // Return z-score (not percentile) for composite calculation
+  return adjustedStatsZScore;
+};

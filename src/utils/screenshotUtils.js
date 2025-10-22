@@ -166,45 +166,15 @@ function getRowBackgroundStyle(index) {
 }
 
 function getQEIColorStyle(qb, allQBsWithBaseScores = null) {
-  // Import the dynamic tier function from uiHelpers
-  const { calculateDynamicTiers } = require('./uiHelpers');
-  const tiers = allQBsWithBaseScores ? calculateDynamicTiers(allQBsWithBaseScores) : null;
+  const qei = qb.qei || 0;
   
-  if (tiers && qb.baseScores) {
-    // Calculate this QB's composite score using the same fixed weights as tier calculation
-    const FIXED_WEIGHTS = {
-      team: 30,
-      stats: 40,
-      clutch: 0,
-      durability: 15,
-      support: 15
-    };
-    const totalFixedWeight = FIXED_WEIGHTS.team + FIXED_WEIGHTS.stats + FIXED_WEIGHTS.durability + FIXED_WEIGHTS.support;
-    
-    const compositeScore = (
-      (qb.baseScores.team * FIXED_WEIGHTS.team) +
-      (qb.baseScores.stats * FIXED_WEIGHTS.stats) +
-      (qb.baseScores.durability * FIXED_WEIGHTS.durability) +
-      ((100 - qb.baseScores.support) * FIXED_WEIGHTS.support)
-    ) / totalFixedWeight;
-    
-    // Use composite score for tier comparison
-    if (compositeScore >= tiers.elite) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.3), rgba(251, 146, 60, 0.3)); color: #fef3c7;';
-    if (compositeScore >= tiers.excellent) return 'background: linear-gradient(to right, rgba(209, 213, 219, 0.3), rgba(156, 163, 175, 0.3)); color: #e5e7eb;';
-    if (compositeScore >= tiers.veryGood) return 'background: linear-gradient(to right, rgba(217, 119, 6, 0.3), rgba(180, 83, 9, 0.3)); color: #fed7aa;';
-    if (compositeScore >= tiers.good) return 'background: linear-gradient(to right, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3)); color: #bbf7d0;';
-    if (compositeScore >= tiers.average) return 'background: linear-gradient(to right, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.3)); color: #dbeafe;';
-    return 'background: rgba(255, 255, 255, 0.1); color: white;';
-  } else {
-    // Fallback to static thresholds using QEI score
-    const qei = qb.qei || 0;
-    if (qei >= 85) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.3), rgba(251, 146, 60, 0.3)); color: #fef3c7;';
-    if (qei >= 75) return 'background: linear-gradient(to right, rgba(209, 213, 219, 0.3), rgba(156, 163, 175, 0.3)); color: #e5e7eb;';
-    if (qei >= 65) return 'background: linear-gradient(to right, rgba(217, 119, 6, 0.3), rgba(180, 83, 9, 0.3)); color: #fed7aa;';
-    if (qei >= 55) return 'background: linear-gradient(to right, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3)); color: #bbf7d0;';
-    if (qei >= 45) return 'background: linear-gradient(to right, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.3)); color: #dbeafe;';
-    return 'background: rgba(255, 255, 255, 0.1); color: white;';
-  }
+  // Use fixed z-score thresholds (6-tier system)
+  if (qei >= 91.1) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.3), rgba(251, 146, 60, 0.3)); color: #fef3c7;'; // Elite
+  if (qei >= 77.3) return 'background: linear-gradient(to right, rgba(209, 213, 219, 0.3), rgba(156, 163, 175, 0.3)); color: #e5e7eb;'; // Excellent
+  if (qei >= 59.9) return 'background: linear-gradient(to right, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3)); color: #bbf7d0;'; // Good
+  if (qei >= 40.1) return 'background: linear-gradient(to right, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.3)); color: #dbeafe;'; // Average
+  if (qei >= 22.7) return 'background: rgba(255, 255, 255, 0.15); color: #d1d5db;'; // Below Average
+  return 'background: rgba(255, 255, 255, 0.1); color: #9ca3af;'; // Poor
 }
 
 function getQEILabel(qb, allQBsWithBaseScores = null) {

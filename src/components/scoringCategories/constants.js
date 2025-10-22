@@ -1,28 +1,10 @@
 // Shared constants used across multiple scoring categories
 
-// Performance Percentiles (2022-2024 Starting QBs: 10+ games, 200+ attempts)
-export const PERFORMANCE_PERCENTILES = {
-  'ANY/A': {
-    p95: 8.8, p90: 7.8, p75: 7.2, p50: 6.4, p25: 5.8, p10: 5.1, p5: 4.7
-  },
-  'TD%': {
-    p95: 7.5, p90: 6.5, p75: 5.4, p50: 4.6, p25: 4.0, p10: 3.2, p5: 2.8
-  },
-  'Sk%': {
-    p95: 3.2, p90: 4.1, p75: 5.2, p50: 6.4, p25: 7.8, p10: 9.2, p5: 10.5
-  },
-  'Int%': {
-    p95: 1.0, p90: 1.4, p75: 1.8, p50: 2.1, p25: 2.6, p10: 3.2, p5: 3.8
-  },
-  'Cmp%': {
-    p95: 71.5, p90: 69.8, p75: 67.2, p50: 65.1, p25: 62.8, p10: 59.5, p5: 56.2
-  },
-  'Fumble%': {
-    p95: 0.3, p90: 0.5, p75: 0.7, p50: 0.9, p25: 1.2, p10: 1.6, p5: 2.0
-  }
-};
+// NOTE: Performance percentiles are now calculated dynamically using z-scores
+// This provides more accurate statistical standardization compared to hardcoded thresholds
 
-// Scoring tier point allocations (45/25/30 distribution)
+// Legacy scoring tiers - kept for reference but no longer actively used
+// Z-score based calculations replace these hardcoded values
 export const SCORING_TIERS = {
   // Tier 1: Core Efficiency (45 points)
   ANY_A_POINTS: 25,

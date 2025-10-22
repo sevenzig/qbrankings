@@ -110,7 +110,8 @@ const WeightControls = memo(({
   durabilityWeights,
   onUpdateDurabilityWeight,
   onNormalizeDurabilityWeights,
-  includePlayoffs
+  includePlayoffs,
+  include2024Only
 }) => {
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
 
@@ -401,16 +402,25 @@ const WeightControls = memo(({
               <div className="mt-3 bg-white/5 rounded-lg p-3 border border-orange-500/30" onClick={(e) => e.stopPropagation()}>
                 <h5 className="text-orange-200 font-medium mb-2 text-sm">⚡ Durability Components</h5>
                 <div className="space-y-2">
-                  {Object.entries(durabilityWeights).map(([component, value]) => (
-                    <CompactWeightComponent
-                      key={component}
-                      component={component}
-                      value={value}
-                      onChange={onUpdateDurabilityWeight}
-                      className="bg-orange-500/30 text-orange-100"
-                      includePlayoffs={includePlayoffs}
-                    />
-                  ))}
+                  {Object.entries(durabilityWeights).map(([component, value]) => {
+                    // In single-season mode: availability locked at 100%, consistency disabled at 0%
+                    const isConsistencyDisabled = component === 'consistency' && include2024Only;
+                    const isAvailabilityLocked = component === 'availability' && include2024Only;
+                    const displayValue = isConsistencyDisabled ? 0 : (isAvailabilityLocked ? 100 : value);
+                    const isDisabled = isConsistencyDisabled || isAvailabilityLocked;
+                    
+                    return (
+                      <CompactWeightComponent
+                        key={component}
+                        component={component}
+                        value={displayValue}
+                        onChange={onUpdateDurabilityWeight}
+                        className="bg-orange-500/30 text-orange-100"
+                        includePlayoffs={includePlayoffs}
+                        disabled={isDisabled}
+                      />
+                    );
+                  })}
                   <div className="text-center pt-1">
                     <span className={`text-xs ${Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
                       Total: {Object.values(durabilityWeights).reduce((sum, val) => sum + val, 0)}%
@@ -984,41 +994,61 @@ const WeightControls = memo(({
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Object.entries(durabilityWeights).map(([component, value]) => (
-              <div key={component} className="bg-white/5 rounded-lg p-3">
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-white font-medium text-sm capitalize">
-                    {component === 'availability' ? 'Season Availability' : 'Multi-Year Consistency'}
-                  </label>
-                  <span className="bg-orange-500/30 text-orange-100 px-2 py-1 rounded text-xs">
-                    {value}%
-                  </span>
+            {Object.entries(durabilityWeights).map(([component, value]) => {
+              // In single-season mode: availability locked at 100%, consistency disabled at 0%
+              const isConsistencyDisabled = component === 'consistency' && include2024Only;
+              const isAvailabilityLocked = component === 'availability' && include2024Only;
+              const isDisabled = isConsistencyDisabled || isAvailabilityLocked;
+              const displayValue = isConsistencyDisabled ? 0 : (isAvailabilityLocked ? 100 : value);
+              
+              return (
+                <div key={component} className={`bg-white/5 rounded-lg p-3 ${isDisabled ? 'opacity-50' : ''}`}>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className={`text-white font-medium text-sm capitalize ${isDisabled ? 'text-gray-400' : ''}`}>
+                      {component === 'availability' ? 'Season Availability' : 'Multi-Year Consistency'}
+                      {isConsistencyDisabled && <span className="ml-2 text-xs text-gray-400">(N/A in single season)</span>}
+                      {isAvailabilityLocked && <span className="ml-2 text-xs text-gray-400">(Locked at 100%)</span>}
+                    </label>
+                    <span className={`${isDisabled ? 'bg-gray-500/30 text-gray-400' : 'bg-orange-500/30 text-orange-100'} px-2 py-1 rounded text-xs`}>
+                      {displayValue}%
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={displayValue}
+                      onChange={(e) => !isDisabled && onUpdateDurabilityWeight(component, e.target.value)}
+                      disabled={isDisabled}
+                      className={`w-full h-2 rounded-lg appearance-none ${isDisabled ? 'bg-gray-500/30 cursor-not-allowed' : 'bg-orange-200 cursor-pointer'}`}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={displayValue}
+                      onChange={(e) => !isDisabled && onUpdateDurabilityWeight(component, e.target.value)}
+                      disabled={isDisabled}
+                      className={`w-full px-2 py-1 border rounded text-sm text-center ${
+                        isDisabled 
+                          ? 'bg-gray-500/20 border-gray-500/30 text-gray-400 cursor-not-allowed' 
+                          : 'bg-white/10 border-white/20 text-white'
+                      }`}
+                      placeholder="0-100"
+                    />
+                  </div>
+                  <div className={`text-xs mt-1 ${isDisabled ? 'text-gray-400' : 'text-orange-200'}`}>
+                    {component === 'availability' && (isAvailabilityLocked 
+                      ? 'Fixed at 100% in single-season mode' 
+                      : 'Weighted average games started across all seasons')}
+                    {component === 'consistency' && (isConsistencyDisabled 
+                      ? 'Only applies in multi-year mode' 
+                      : 'Bonus points for sustained availability and longevity')}
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={value}
-                    onChange={(e) => onUpdateDurabilityWeight(component, e.target.value)}
-                    className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={value}
-                    onChange={(e) => onUpdateDurabilityWeight(component, e.target.value)}
-                    className="w-full px-2 py-1 bg-white/10 border border-white/20 rounded text-white text-sm text-center"
-                    placeholder="0-100"
-                  />
-                </div>
-                <div className="text-xs text-orange-200 mt-1">
-                  {component === 'availability' && 'Weighted average games started across all seasons'}
-                  {component === 'consistency' && 'Bonus points for sustained availability and longevity'}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           
           <div className="mt-3 text-center space-y-2">

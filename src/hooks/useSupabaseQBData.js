@@ -34,24 +34,32 @@ export const useSupabaseQBData = () => {
       // Fetch data from Supabase
       const rawData = await qbDataService.fetchAllQBData(include2024Only);
       
+      console.log(`📊 Supabase returned ${rawData ? rawData.length : 0} records`);
+      
+      // Check if we got any data
+      if (!rawData || rawData.length === 0) {
+        throw new Error('No data returned from Supabase - database may be empty or query failed');
+      }
+      
+      console.log('🔍 DEBUG - First raw record:', rawData[0]);
+      console.log('🔍 DEBUG - Available fields:', Object.keys(rawData[0] || {}));
+      
       // Validate data structure
       if (!validateDataStructure(rawData)) {
         throw new Error('Invalid data structure received from Supabase');
       }
       
-      // Transform data to CSV format for compatibility
-      const transformedData = transformSeasonSummaryToCSV(rawData);
-      logTransformationStats(rawData, transformedData);
-      
-      // Convert to season data format for processing
-      const seasonData = getSeasonDataForCalculations(rawData);
-      
-      // Group data by player name to create combined player data
+      // Group data by player name to create combined player data structure
       const playerData = {};
-      seasonData.forEach(season => {
-        // Extract player name from the raw data
-        const rawRecord = rawData.find(r => r.season === season.year && r.team === season.team);
-        const playerName = rawRecord?.player_name || 'Unknown Player';
+      
+      rawData.forEach(record => {
+        const playerName = record.player_name || record.players?.player_name || 'Unknown Player';
+        const seasonYear = parseInt(record.season) || 2024;
+        const gamesStarted = parseInt(record.gs) || 0;
+        
+        console.log(`🔍 DEBUG - Processing ${playerName} for season ${seasonYear}: ${gamesStarted} games started`);
+        
+        // Initialize player data if first time seeing this player
         if (!playerData[playerName]) {
           playerData[playerName] = {
             seasons: [],
@@ -75,34 +83,75 @@ export const useSupabaseQBData = () => {
           };
         }
         
-        // Add season data
-        playerData[playerName].seasons.push(season);
+        // Parse QB record (e.g., "15-2-0" or "15-2")
+        let wins = 0, losses = 0;
+        if (record.qb_rec) {
+          const recordParts = record.qb_rec.split('-');
+          wins = parseInt(recordParts[0]) || 0;
+          losses = parseInt(recordParts[1]) || 0;
+        }
+        
+        // Create season data object with flexible field mapping
+        const seasonData = {
+          year: seasonYear, // CRITICAL: Map 'season' to 'year'
+          team: record.team || 'UNK',
+          age: parseInt(record.age) || 25,
+          gamesStarted: gamesStarted, // CRITICAL: Map 'gs' to 'gamesStarted'
+          wins: wins,
+          losses: losses,
+          winPercentage: (wins + losses) > 0 ? wins / (wins + losses) : 0,
+          passingYards: parseInt(record.yds) || 0,
+          passingTDs: parseInt(record.td) || 0,
+          interceptions: parseInt(record.int) || 0,
+          completions: parseInt(record.cmp) || 0,
+          attempts: parseInt(record.att) || 0,
+          passerRating: parseFloat(record.rate) || 0,
+          // Try multiple possible field names for success rate
+          successRate: parseFloat(record.succ_pct || record['Succ%'] || record.success_pct) || 0,
+          // Try multiple possible field names for sack percentage
+          sackPercentage: parseFloat(record.sk_pct || record['Sk%'] || record.sack_pct) || 0,
+          // Try multiple possible field names for ANY/A
+          anyPerAttempt: parseFloat(record.any_a || record['ANY/A'] || record.adjusted_net_yards_per_attempt) || 0,
+          // Clutch stats
+          gameWinningDrives: parseInt(record.gwd || record.GWD || record.game_winning_drives) || 0,
+          fourthQuarterComebacks: parseInt(record.four_qc || record['4QC'] || record.fourth_quarter_comebacks) || 0,
+          // Rushing stats (may not exist in all tables)
+          rushingYards: parseInt(record.rush_yds || record.RushingYds || 0) || 0,
+          rushingTDs: parseInt(record.rush_td || record.RushingTDs || 0) || 0,
+          fumbles: parseInt(record.fmb || record.Fumbles || 0) || 0
+        };
+        
+        // Add season to player's seasons array
+        playerData[playerName].seasons.push(seasonData);
         
         // Update career totals
         const career = playerData[playerName].career;
-        career.seasons++;
-        career.gamesStarted += season.gamesStarted || 0;
-        career.wins += season.wins || 0;
-        career.losses += season.losses || 0;
-        career.passingYards += season.passingYards || 0;
-        career.passingTDs += season.passingTDs || 0;
-        career.interceptions += season.interceptions || 0;
-        career.completions += season.completions || 0;
-        career.attempts += season.attempts || 0;
-        career.rushingYards += season.rushingYards || 0;
-        career.rushingTDs += season.rushingTDs || 0;
-        career.fumbles += season.fumbles || 0;
+        career.gamesStarted += gamesStarted;
+        career.wins += wins;
+        career.losses += losses;
+        career.passingYards += seasonData.passingYards;
+        career.passingTDs += seasonData.passingTDs;
+        career.interceptions += seasonData.interceptions;
+        career.completions += seasonData.completions;
+        career.attempts += seasonData.attempts;
+        career.rushingYards += seasonData.rushingYards;
+        career.rushingTDs += seasonData.rushingTDs;
+        career.fumbles += seasonData.fumbles;
         
-        // Track passer rating for averaging
-        if (season.passerRating > 0) {
-          career.totalPasserRatingPoints += season.passerRating * (season.gamesStarted || 0);
+        // Track passer rating for weighted averaging
+        if (seasonData.passerRating > 0 && gamesStarted > 0) {
+          career.totalPasserRatingPoints += seasonData.passerRating * gamesStarted;
         }
       });
       
-      // Calculate final career averages
+      // Calculate final career averages and count unique seasons
       Object.values(playerData).forEach(player => {
         const career = player.career;
         const totalGames = career.gamesStarted;
+        
+        // Count unique seasons
+        const uniqueSeasons = new Set(player.seasons.map(s => s.year));
+        career.seasons = uniqueSeasons.size;
         
         // Calculate win percentage
         const totalDecisionGames = career.wins + career.losses;
@@ -115,12 +164,44 @@ export const useSupabaseQBData = () => {
         player.seasons.sort((a, b) => b.year - a.year);
       });
       
+      console.log(`✅ Built player data structure for ${Object.keys(playerData).length} unique players`);
+      
+      // Log sample player data for debugging
+      const samplePlayerName = Object.keys(playerData)[0];
+      if (samplePlayerName) {
+        const samplePlayer = playerData[samplePlayerName];
+        console.log('🔍 DEBUG - Sample player:', samplePlayerName);
+        console.log('  Seasons:', samplePlayer.seasons.map(s => `${s.year}: ${s.gamesStarted} games`).join(', '));
+        console.log('  Career:', {
+          seasons: samplePlayer.career.seasons,
+          gamesStarted: samplePlayer.career.gamesStarted,
+          wins: samplePlayer.career.wins,
+          losses: samplePlayer.career.losses
+        });
+      }
+      
       // Process QB data to create the final structure with stats property
       const processedQBs = processQBData(playerData, include2024Only);
       
-      // Calculate QEI metrics for each QB
+      console.log(`📊 After filtering: ${processedQBs.length} QBs passed threshold requirements`);
+      
+      // Calculate QEI metrics for each QB - pass processedQBs as allQBData for z-score calculations
       const qbsWithMetrics = processedQBs.map(qb => {
-        const baseScores = calculateQBMetrics(qb);
+        const baseScores = calculateQBMetrics(
+          qb,
+          { offensiveLine: 55, weapons: 30, defense: 15 }, // supportWeights
+          { efficiency: 45, protection: 25, volume: 30 }, // statsWeights
+          { regularSeason: 65, playoff: 35 }, // teamWeights
+          { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, // clutchWeights
+          true, // includePlayoffs
+          include2024Only,
+          { anyA: 45, tdPct: 30, completionPct: 25 }, // efficiencyWeights
+          { sackPct: 60, turnoverRate: 40 }, // protectionWeights
+          { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, // volumeWeights
+          { availability: 75, consistency: 25 }, // durabilityWeights
+          processedQBs, // allQBData for z-score calculations
+          0 // mainSupportWeight
+        );
         return {
           ...qb,
           baseScores
@@ -232,9 +313,23 @@ export const useSupabaseQBData = () => {
       // Process QB data to create the final structure with stats property
       const processedQBs = processQBData(playerData, false); // Don't filter for 2024 only when fetching by year
       
-      // Calculate QEI metrics for each QB
+      // Calculate QEI metrics for each QB - pass processedQBs as allQBData for z-score calculations
       const qbsWithMetrics = processedQBs.map(qb => {
-        const baseScores = calculateQBMetrics(qb);
+        const baseScores = calculateQBMetrics(
+          qb,
+          { offensiveLine: 55, weapons: 30, defense: 15 }, // supportWeights
+          { efficiency: 45, protection: 25, volume: 30 }, // statsWeights
+          { regularSeason: 65, playoff: 35 }, // teamWeights
+          { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, // clutchWeights
+          true, // includePlayoffs
+          false, // include2024Only
+          { anyA: 45, tdPct: 30, completionPct: 25 }, // efficiencyWeights
+          { sackPct: 60, turnoverRate: 40 }, // protectionWeights
+          { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, // volumeWeights
+          { availability: 75, consistency: 25 }, // durabilityWeights
+          processedQBs, // allQBData for z-score calculations
+          0 // mainSupportWeight
+        );
         return {
           ...qb,
           baseScores
@@ -346,9 +441,23 @@ export const useSupabaseQBData = () => {
       // Process QB data to create the final structure with stats property
       const processedQBs = processQBData(playerData, false); // Don't filter for 2024 only when fetching by name
       
-      // Calculate QEI metrics for each QB
+      // Calculate QEI metrics for each QB - pass processedQBs as allQBData for z-score calculations
       const qbsWithMetrics = processedQBs.map(qb => {
-        const baseScores = calculateQBMetrics(qb);
+        const baseScores = calculateQBMetrics(
+          qb,
+          { offensiveLine: 55, weapons: 30, defense: 15 }, // supportWeights
+          { efficiency: 45, protection: 25, volume: 30 }, // statsWeights
+          { regularSeason: 65, playoff: 35 }, // teamWeights
+          { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, // clutchWeights
+          true, // includePlayoffs
+          false, // include2024Only
+          { anyA: 45, tdPct: 30, completionPct: 25 }, // efficiencyWeights
+          { sackPct: 60, turnoverRate: 40 }, // protectionWeights
+          { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, // volumeWeights
+          { availability: 75, consistency: 25 }, // durabilityWeights
+          processedQBs, // allQBData for z-score calculations
+          0 // mainSupportWeight
+        );
         return {
           ...qb,
           baseScores
@@ -460,9 +569,23 @@ export const useSupabaseQBData = () => {
       // Process QB data to create the final structure with stats property
       const processedQBs = processQBData(playerData, false); // Don't filter for 2024 only when fetching with filters
       
-      // Calculate QEI metrics for each QB
+      // Calculate QEI metrics for each QB - pass processedQBs as allQBData for z-score calculations
       const qbsWithMetrics = processedQBs.map(qb => {
-        const baseScores = calculateQBMetrics(qb);
+        const baseScores = calculateQBMetrics(
+          qb,
+          { offensiveLine: 55, weapons: 30, defense: 15 }, // supportWeights
+          { efficiency: 45, protection: 25, volume: 30 }, // statsWeights
+          { regularSeason: 65, playoff: 35 }, // teamWeights
+          { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, // clutchWeights
+          true, // includePlayoffs
+          false, // include2024Only
+          { anyA: 45, tdPct: 30, completionPct: 25 }, // efficiencyWeights
+          { sackPct: 60, turnoverRate: 40 }, // protectionWeights
+          { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, // volumeWeights
+          { availability: 75, consistency: 25 }, // durabilityWeights
+          processedQBs, // allQBData for z-score calculations
+          0 // mainSupportWeight
+        );
         return {
           ...qb,
           baseScores

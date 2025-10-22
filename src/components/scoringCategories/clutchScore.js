@@ -1,4 +1,36 @@
 import { PERFORMANCE_YEAR_WEIGHTS } from './constants.js';
+import {
+  calculateZScore,
+  calculateMean,
+  calculateStandardDeviation,
+  zScoreToPercentile
+} from '../../utils/zScoreCalculations.js';
+
+// Helper function to normalize weights within a group
+const normalizeWeights = (weights) => {
+  const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
+  if (total === 0) return weights;
+  
+  const normalized = {};
+  Object.keys(weights).forEach(key => {
+    normalized[key] = weights[key] / total;
+  });
+  return normalized;
+};
+
+// Hierarchical weight calculation
+const calculateHierarchicalScore = (componentScores, weights) => {
+  const normalizedWeights = normalizeWeights(weights);
+  let weightedSum = 0;
+  
+  Object.keys(componentScores).forEach(key => {
+    if (normalizedWeights[key] !== undefined) {
+      weightedSum += componentScores[key] * normalizedWeights[key];
+    }
+  });
+  
+  return weightedSum;
+};
 
 // Helper function to calculate average clutch multiplier based on playoff progression
 const calculatePlayoffClutchMultiplier = (playoffData, team, year) => {
@@ -40,17 +72,21 @@ const calculatePlayoffClutchMultiplier = (playoffData, team, year) => {
   return gameCount > 0 ? totalMultiplier / gameCount : 1.06;
 };
 
-// Helper function for percentile-based scoring
-const calculatePercentileScore = (value, allValues, inverted = false) => {
-  if (!allValues || allValues.length === 0) return 50; // Default to league average
+/**
+ * Calculate z-score (not percentile)
+ * Uses statistical standardization for more accurate scoring
+ */
+const calculateZScoreValue = (value, allValues, inverted = false) => {
+  if (!allValues || allValues.length === 0) return 0; // Default to league average (z=0)
   
   const validValues = allValues.filter(v => v !== null && !isNaN(v) && isFinite(v));
-  if (validValues.length < 2) return 50;
+  if (validValues.length < 2) return 0;
   
-  const sorted = [...validValues].sort((a, b) => inverted ? b - a : a - b);
-  const rank = sorted.findIndex(v => inverted ? v <= value : v >= value) + 1;
-  const percentile = (rank / sorted.length) * 100;
-  return Math.max(0, Math.min(100, percentile));
+  const mean = calculateMean(validValues);
+  const stdDev = calculateStandardDeviation(validValues, mean);
+  const zScore = calculateZScore(value, mean, stdDev, inverted);
+  
+  return zScore;
 };
 
 // Enhanced Clutch Performance Score with playoff integration (0-100)
@@ -77,7 +113,7 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
     const weight = yearWeights[year] || 0;
     const gamesPlayed = parseInt(data.G) || 0;
     if (weight === 0 || (!data.GWD && !data['4QC'])) return;
-    if (include2024Only && year === '2024' && gamesPlayed < 1) return;
+    if (include2024Only && year === '2024' && gamesPlayed < 9) return;
     
     // Regular season clutch stats only for base calculation
     const seasonGWD = parseInt(data.GWD) || 0;
@@ -251,36 +287,31 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
     return weightSum > 0 ? 1.0 + (adjustmentSum * 0.1) : 1.0; // Small playoff bonus
   }).filter(v => !isNaN(v) && isFinite(v));
 
-  // Step 2: Score current QB relative to all others using percentiles
-  const gwdNormalized = calculatePercentileScore(gwdPerGame, allGWDRates);
-  const comebackNormalized = calculatePercentileScore(comebacksPerGame, allFourthQCRates);
-  const clutchRateNormalized = calculatePercentileScore(totalClutchPerGame, allClutchRates);
-  const playoffBonusNormalized = calculatePercentileScore(playoffAdjustmentFactor, allPlayoffAdjustments);
+  // Step 2: Score current QB relative to all others using z-scores (not percentiles)
+  const gwdZ = calculateZScoreValue(gwdPerGame, allGWDRates);
+  const comebackZ = calculateZScoreValue(comebacksPerGame, allFourthQCRates);
+  const clutchRateZ = calculateZScoreValue(totalClutchPerGame, allClutchRates);
+  const playoffBonusZ = calculateZScoreValue(playoffAdjustmentFactor, allPlayoffAdjustments);
   
-  // Calculate weighted average of normalized scores using sub-component weights
-  // This ensures that regardless of weight distribution, elite performance can reach ~100 points
-  const totalClutchSubWeights = clutchWeights.gameWinningDrives + clutchWeights.fourthQuarterComebacks + 
-                               clutchWeights.clutchRate + clutchWeights.playoffBonus;
+  // Calculate weighted average of z-scores using sub-component weights
+  const clutchComponentZScores = {
+    gameWinningDrives: gwdZ,
+    fourthQuarterComebacks: comebackZ,
+    clutchRate: clutchRateZ,
+    playoffBonus: playoffBonusZ
+  };
   
-  let clutchCompositeScore = 0;
-  if (totalClutchSubWeights > 0) {
-    clutchCompositeScore = ((gwdNormalized * clutchWeights.gameWinningDrives) +
-                           (comebackNormalized * clutchWeights.fourthQuarterComebacks) +
-                           (clutchRateNormalized * clutchWeights.clutchRate) +
-                           (playoffBonusNormalized * clutchWeights.playoffBonus)) / totalClutchSubWeights;
-  }
-  
-  // ELITE PERFORMANCE SCALING: Apply 1.2x multiplier to push elite performers to 100+ range
-  // This addresses the psychological impact of reaching the 100 threshold
-  const scaledScore = clutchCompositeScore * 1.2;
-  const finalScore = Math.max(0, Math.min(150, scaledScore)); // Increased cap to 150 to allow elite scores
+  // Use hierarchical scoring on z-scores
+  const clutchCompositeZScore = calculateHierarchicalScore(clutchComponentZScores, clutchWeights);
 
   if (debugMode && playerName) {
-    console.log(`💎 RELATIVE CLUTCH FINAL: ${finalScore.toFixed(1)}/100`);
-    console.log(`💎 Percentile Scores: GWD(${gwdNormalized.toFixed(1)}) + 4QC(${comebackNormalized.toFixed(1)}) + Rate(${clutchRateNormalized.toFixed(1)}) + PlayoffBonus(${playoffBonusNormalized.toFixed(1)})`);
+    console.log(`💎 CLUTCH Z-SCORE CALCULATION:`);
+    console.log(`💎 Z-Scores: GWD(${gwdZ.toFixed(3)}) + 4QC(${comebackZ.toFixed(3)}) + Rate(${clutchRateZ.toFixed(3)}) + PlayoffBonus(${playoffBonusZ.toFixed(3)})`);
     console.log(`💎 Weights: GWD(${clutchWeights.gameWinningDrives}%) + 4QC(${clutchWeights.fourthQuarterComebacks}%) + Rate(${clutchWeights.clutchRate}%) + Playoff(${clutchWeights.playoffBonus}%)`);
+    console.log(`💎 Composite Z-Score: ${clutchCompositeZScore.toFixed(3)}`);
     console.log(`💎 Raw Rates: ${gwdPerGame.toFixed(3)} GWD/game, ${comebacksPerGame.toFixed(3)} 4QC/game (relative to ${allGWDRates.length} QBs)`);
   }
 
-  return finalScore;
+  // Return z-score for higher-level composite calculation
+  return clutchCompositeZScore;
 }; 

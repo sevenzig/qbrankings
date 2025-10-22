@@ -41,7 +41,7 @@ const DynamicQBRankings = () => {
     lastFetch, 
     shouldRefreshData, 
     fetchAllQBData
-  } = useUnifiedQBData('csv'); // Default to CSV for main rankings
+  } = useUnifiedQBData('csv'); // TEMPORARY: Use CSV until Supabase data is fixed (gs column is NULL)
   
   const [weights, setWeights] = useState({
     team: 35,
@@ -850,38 +850,6 @@ const DynamicQBRankings = () => {
     return result;
   }, [weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only, currentPreset]);
 
-  // Helper: Normalize QEI scores so median = 65, with mode-specific scaling
-  const normalizeQeiScores = useCallback((qeiScores) => {
-    if (!qeiScores || qeiScores.length === 0) return [];
-    const sorted = [...qeiScores].sort((a, b) => a - b);
-    const min = sorted[0];
-    const median = sorted[Math.floor(sorted.length / 2)];
-    
-    // Avoid divide by zero
-    if (sorted.every(score => score === median)) return qeiScores.map(() => 65);
-    
-    // Calculate scaling factors
-    const medianToMinRange = median - min;
-    
-    return qeiScores.map(score => {
-      if (score <= median) {
-        // Scale [min, median] to [0, 65]
-        return medianToMinRange > 0 ? ((score - min) / medianToMinRange) * 65 : 65;
-      } else {
-        // Mode-specific scaling for above-median scores
-        if (include2024Only) {
-          // 2024-only mode: More generous scaling to account for limited data
-          // Each point above median = 1.5 points above 65 (vs 1.0 in 3-year mode)
-          return 65 + ((score - median) * 1.5);
-        } else {
-          // 3-year mode: Standard scaling
-          // Each point above median = 1 point above 65
-          return 65 + (score - median);
-        }
-      }
-    });
-  }, [include2024Only]);
-
   // Calculate QEI with current weights and dynamic component calculations
   const rankedQBs = useMemo(() => {
     if (!qbData || qbData.length === 0) return [];
@@ -893,35 +861,29 @@ const DynamicQBRankings = () => {
               const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights, qbData, weights.support);
       return {
         ...qb,
-        baseScores
+        baseScores,
+        // Store the ORIGINAL support z-score for display purposes
+        // Positive = good cast, Negative = bad cast
+        // This is NOT inverted, so users see the actual cast quality
+        supportCastQuality: baseScores.support
       };
     });
     
     // Extract all base scores for support rebalancing
     const allQBBaseScores = qbsWithBaseScores.map(qb => qb.baseScores);
     
-    // Second pass: Calculate raw QEI scores
-    const qbsWithRawQei = qbsWithBaseScores.map(qb => ({
-      ...qb,
-      rawQei: calculateQEI(qb.baseScores, qb, weights, includePlayoffs, allQBBaseScores, include2024Only)
-    }));
-    
-    // Third pass: Normalize QEI scores so top = 100, median = 65, min = 0
-    const rawScores = qbsWithRawQei.map(qb => qb.rawQei);
-    const normalizedScores = normalizeQeiScores(rawScores);
-    
-    // Final pass: Apply normalized scores and sort
-    const finalRankings = qbsWithRawQei
-      .map((qb, index) => ({
+    // Second pass: Calculate QEI scores (already percentiles 0-100) and sort
+    const finalRankings = qbsWithBaseScores
+      .map(qb => ({
         ...qb,
-        qei: normalizedScores[index]
+        qei: calculateQEI(qb.baseScores, qb, weights, includePlayoffs, allQBBaseScores, include2024Only)
       }))
       .sort((a, b) => b.qei - a.qei);
       
     console.log(`✅ Rankings calculated: Top QB is ${finalRankings[0]?.name} with ${finalRankings[0]?.qei?.toFixed(1)} QEI`);
     
     return finalRankings;
-  }, [qbData, weights, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights, normalizeQeiScores]);
+  }, [qbData, weights, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights]);
 
   const totalWeight = useMemo(() => 
     Object.values(weights).reduce((a, b) => a + b, 0), 
@@ -1377,6 +1339,7 @@ const DynamicQBRankings = () => {
                   onUpdateDurabilityWeight={updateDurabilityWeight}
                   onNormalizeDurabilityWeights={normalizeDurabilityWeights}
                   includePlayoffs={includePlayoffs}
+                  include2024Only={include2024Only}
                 />
               </div>
             </div>

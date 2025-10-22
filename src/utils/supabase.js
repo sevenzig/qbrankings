@@ -57,11 +57,18 @@ export const qbDataService = {
           *,
           players!inner(pfr_id, player_name)
         `)
+        .not('gs', 'is', null)  // CRITICAL: Only fetch records with games started data
+        .gte('gs', 1)            // Only QBs who actually started games
         .order('rate', { ascending: false });
       
       // Filter by year if 2024-only mode is enabled
       if (include2024Only) {
         query = query.eq('season', 2024);
+      }
+      
+      console.log('🔍 Query filters: gs IS NOT NULL AND gs >= 1');
+      if (include2024Only) {
+        console.log('🔍 Query filters: season = 2024');
       }
       
       const { data, error } = await query;
@@ -71,12 +78,81 @@ export const qbDataService = {
         throw new Error(`Failed to fetch QB data: ${error.message}`);
       }
       
+      console.log(`📊 Raw Supabase data count: ${data?.length || 0}`);
+      
+      // If no data with valid gs, try again WITHOUT the gs filter to diagnose the issue
+      if (!data || data.length === 0) {
+        console.warn('⚠️ No records found with gs >= 1. Checking if ANY data exists...');
+        
+        const { data: allData, error: allError } = await supabase
+          .from('qb_passing_stats')
+          .select(`
+            *,
+            players!inner(pfr_id, player_name)
+          `)
+          .order('season', { ascending: false })
+          .limit(5);
+        
+        if (!allError && allData && allData.length > 0) {
+          console.error('❌ CRITICAL DATABASE ISSUE:');
+          console.error('   Database HAS records but NONE have valid gs (games started) values!');
+          console.error('   Sample records:', allData.map(r => ({
+            player: r.players?.player_name,
+            season: r.season,
+            gs: r.gs,
+            rate: r.rate,
+            qb_rec: r.qb_rec
+          })));
+          console.error('');
+          console.error('🔧 FIX REQUIRED: Your Supabase database needs to be re-imported with proper data.');
+          console.error('   The gs (games started) column is NULL for all records.');
+          console.error('');
+          console.error('💡 TEMPORARY WORKAROUND: Switch to CSV data source');
+          console.error('   In DynamicQBRankings.jsx line 44, change:');
+          console.error('   useUnifiedQBData(\'supabase\') → useUnifiedQBData(\'csv\')');
+          
+          throw new Error('Database has records but gs (games started) is NULL. Please re-import your data or use CSV data source.');
+        }
+        
+        throw new Error('No data returned from Supabase - database may be empty or query failed');
+      }
+      
+      if (data && data.length > 0) {
+        console.log('🔍 First record fields:', Object.keys(data[0]));
+        console.log('🔍 First record sample:', {
+          player_name: data[0].players?.player_name,
+          season: data[0].season,
+          team: data[0].team,
+          gs: data[0].gs,
+          rate: data[0].rate,
+          qb_rec: data[0].qb_rec
+        });
+        
+        // Check for records with non-null gs values
+        const recordsWithGames = data.filter(r => r.gs != null && r.gs > 0);
+        console.log(`🔍 Records with games started > 0: ${recordsWithGames.length}/${data.length}`);
+        if (recordsWithGames.length > 0) {
+          console.log('🔍 Sample record with games:', {
+            player_name: recordsWithGames[0].players?.player_name,
+            season: recordsWithGames[0].season,
+            gs: recordsWithGames[0].gs,
+            rate: recordsWithGames[0].rate
+          });
+        } else {
+          console.error('❌ CRITICAL: No records have gs (games started) values! Database may be incomplete.');
+          console.log('🔍 Checking what fields have data...');
+          const sampleRecord = data[0];
+          const fieldsWithData = Object.keys(sampleRecord).filter(key => sampleRecord[key] != null);
+          console.log('🔍 Fields with non-null values:', fieldsWithData);
+        }
+      }
+      
       // Transform the data to match expected format
       const transformedData = data.map(record => ({
         ...record,
         player_name: record.players?.player_name || record.player_name,
-        team: record.teams?.team_abbr || record.team,
-        team_name: record.teams?.team_name,
+        team: record.team, // Use team directly from qb_passing_stats
+        team_name: record.team, // Use team code as team name for now
         // Map field names to match expected format
         passer_rating: record.rate,
         games_started: record.gs,
@@ -92,7 +168,7 @@ export const qbDataService = {
         game_winning_drives: record.gwd
       }));
       
-      console.log(`✅ Successfully fetched ${transformedData.length} QB records from Supabase`);
+      console.log(`✅ Successfully fetched and transformed ${transformedData.length} QB records from Supabase`);
       return transformedData;
       
     } catch (error) {
