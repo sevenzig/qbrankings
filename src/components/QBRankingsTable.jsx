@@ -108,7 +108,6 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
               <th className="px-4 py-3 text-left text-white font-bold">Rank</th>
               <th className="px-4 py-3 text-left text-white font-bold">QB</th>
               <th className="px-4 py-3 text-center text-white font-bold">Team</th>
-              <th className="px-4 py-3 text-center text-white font-bold">Supporting Cast</th>
               <th className="px-4 py-3 text-center text-white font-bold">QEI</th>
               <th className="px-4 py-3 text-center text-white font-bold">Team Record</th>
               <th className="px-4 py-3 text-center text-white font-bold">Per-Game Averages</th>
@@ -150,32 +149,6 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
                         </div>
                       ))}
                     </div>
-                  </td>
-                  {/* Supporting Cast Quality Column - uses ORIGINAL (non-inverted) z-score */}
-                  <td className="px-4 py-3 text-center">
-                    {qb.supportCastQuality !== undefined ? (
-                      <div 
-                        className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                          qb.supportCastQuality > 1.0 ? 'bg-green-500/30 text-green-200' :  // Elite cast (gets penalized in rankings)
-                          qb.supportCastQuality > 0.3 ? 'bg-blue-500/30 text-blue-200' :    // Good cast (minor penalty)
-                          qb.supportCastQuality > -0.3 ? 'bg-gray-500/30 text-gray-200' :   // Average cast (neutral)
-                          qb.supportCastQuality > -1.0 ? 'bg-orange-500/30 text-orange-200' : // Poor cast (gets bonus)
-                          'bg-red-500/30 text-red-200'  // Terrible cast (big bonus)
-                        }`}
-                        title={`Supporting cast z-score: ${qb.supportCastQuality.toFixed(2)} | ${
-                          qb.supportCastQuality > 0 
-                            ? 'Good cast = QB ranking penalized when support weight is high' 
-                            : 'Poor cast = QB ranking boosted when support weight is high'
-                        }`}
-                      >
-                        {qb.supportCastQuality > 1.0 ? '⭐ Elite' : 
-                         qb.supportCastQuality > 0.3 ? '✓ Good' : 
-                         qb.supportCastQuality > -0.3 ? '≈ Average' : 
-                         qb.supportCastQuality > -1.0 ? '↓ Poor' : '⚠️ Terrible'}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400 text-xs">-</span>
-                    )}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <div className={`inline-block px-3 py-1 rounded-lg ${getQEIColor(qb, allQBsWithQEI)}`}>
