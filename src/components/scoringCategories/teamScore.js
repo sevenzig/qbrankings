@@ -267,7 +267,7 @@ const calculateOffensiveDVOAScore = (team, year, allTeams = null, teamsPlayed = 
 };
 
 // Helper function to calculate weighted playoff wins based on round progression
-const calculatePlayoffWeightedWins = (playoffData, team, year, include2024Only = false) => {
+const calculatePlayoffWeightedWins = (playoffData, team, year, filterYear = null) => {
   const wins = playoffData.wins || 0;
   const losses = playoffData.losses || 0;
   const totalGames = wins + losses;
@@ -331,7 +331,7 @@ const calculatePlayoffWeightedWins = (playoffData, team, year, include2024Only =
 };
 
 // Helper function to calculate bye week bonus for QBs who earned their team a first-round bye
-const calculateByeWeekBonus = (playoffData, team, year, include2024Only = false) => {
+const calculateByeWeekBonus = (playoffData, team, year, filterYear = null) => {
   const totalGames = (playoffData.wins || 0) + (playoffData.losses || 0);
   
   // Teams that earned bye weeks typically play 3 games instead of 4 to reach same level
@@ -339,9 +339,10 @@ const calculateByeWeekBonus = (playoffData, team, year, include2024Only = false)
   if (totalGames <= 3 && (playoffData.wins || 0) >= 1) {
     // Known bye week teams by year (this could be expanded with more data)
     const byeWeekTeams = {
+      2025: ['KC', 'DET'], // Update with actual 2025 teams
+      2024: ['KC', 'DET'],  // Top 2 seeds per conference
       2023: ['KC', 'PHI'], // Top 2 seeds per conference
-      2022: ['SF', 'BAL'], // Top 2 seeds per conference
-      2024: ['KC', 'DET']  // Top 2 seeds per conference
+      2022: ['SF', 'BAL'] // Top 2 seeds per conference
     };
     
     if (byeWeekTeams[year] && byeWeekTeams[year].includes(team)) {
@@ -357,7 +358,7 @@ export const calculateTeamScore = (
   qbData,
   teamWeights = { regularSeason: 50, offenseDVOA: 35, playoff: 15 },
   includePlayoffs,
-  include2024Only = false,
+  filterYear = null, // CHANGED: from include2024Only boolean to filterYear number
   supportScore = 50, // Default to average support if not provided
   allQBData = [] // Population data for z-score calculations
 ) => {
@@ -375,7 +376,7 @@ export const calculateTeamScore = (
   if (isDebugQB) {
     console.log(`\n🔍 ========== TEAM SCORE DEBUG: ${playerName} ==========`);
     console.log(`🔍 Team Weights: RegSeason=${teamWeights.regularSeason}, DVOA=${teamWeights.offenseDVOA}, Playoff=${teamWeights.playoff}`);
-    console.log(`🔍 Include Playoffs: ${includePlayoffs}, 2024 Only: ${include2024Only}`);
+    console.log(`🔍 Include Playoffs: ${includePlayoffs}, Filter Year: ${filterYear || 'all'}`);
   }
   
   let weightedWinPct = 0;
@@ -388,8 +389,10 @@ export const calculateTeamScore = (
   let debugOffenseDVOAData = [];
   
   // First Pass: Calculate strong regular season base scores
-  // In 2024-only mode, only process 2024 data with 100% weight
-  const regularSeasonYearWeights = include2024Only ? { '2024': 1.0 } : REGULAR_SEASON_YEAR_WEIGHTS;
+  // In single-year mode, only process that specific year with 100% weight
+  const regularSeasonYearWeights = (filterYear && typeof filterYear === 'number')
+    ? { [filterYear.toString()]: 1.0 }
+    : REGULAR_SEASON_YEAR_WEIGHTS;
   
   Object.entries(qbData.years || {}).forEach(([year, data]) => {
     const weight = regularSeasonYearWeights[year] || 0;
@@ -400,9 +403,10 @@ export const calculateTeamScore = (
     const totalGames = wins + losses + ties;
     const regularSeasonWinPct = totalGames > 0 ? wins / totalGames : 0;
     
-    // MINIMUM GAMES THRESHOLD: For 2024-only mode, require at least 9 starts; for multi-year, require 10 starts
+    // MINIMUM GAMES THRESHOLD: For single-year mode, require at least 9 starts; for multi-year, require 10 starts
     const gamesStarted = parseInt(data.GS) || 0;
-    if ((include2024Only && year === '2024' && gamesStarted < 9) || (!include2024Only && gamesStarted < 10)) {
+    const gamesThreshold = (filterYear && typeof filterYear === 'number') ? 9 : 10;
+    if (gamesStarted < gamesThreshold) {
       if (debugMode && playerName) {
         console.log(`🔍 ${year}: SKIPPED - Only ${gamesStarted} games started (minimum required)`);
       }
@@ -452,7 +456,9 @@ export const calculateTeamScore = (
   if (includePlayoffs && teamWeights.playoff > 0) {
     let totalPlayoffWeight = 0;
     let playoffPerformanceMultiplier = 1.0;
-    const playoffYearWeights = include2024Only ? { '2024': 1.0 } : PLAYOFF_YEAR_WEIGHTS;
+    const playoffYearWeights = (filterYear && typeof filterYear === 'number')
+      ? { [filterYear.toString()]: 1.0 }
+      : PLAYOFF_YEAR_WEIGHTS;
     
     Object.entries(qbData.years || {}).forEach(([year, data]) => {
       const weight = playoffYearWeights[year] || 0;
@@ -527,7 +533,9 @@ export const calculateTeamScore = (
   let careerPlayoffScore = 0;
   
   if (includePlayoffs) {
-    const achievementYearWeights = include2024Only ? { '2024': 1.0 } : REGULAR_SEASON_YEAR_WEIGHTS;
+    const achievementYearWeights = (filterYear && typeof filterYear === 'number')
+      ? { [filterYear.toString()]: 1.0 }
+      : REGULAR_SEASON_YEAR_WEIGHTS;
 
     Object.entries(qbData.years || {}).forEach(([year, data]) => {
     const weight = achievementYearWeights[year] || 0;
@@ -593,7 +601,9 @@ export const calculateTeamScore = (
   
   if (allQBData && allQBData.length > 0) {
     // Calculate actual population statistics from all QBs
-    const regularSeasonYearWeights = include2024Only ? { '2024': 1.0 } : REGULAR_SEASON_YEAR_WEIGHTS;
+    const regularSeasonYearWeights = (filterYear && typeof filterYear === 'number')
+      ? { [filterYear.toString()]: 1.0 }
+      : REGULAR_SEASON_YEAR_WEIGHTS;
     const winPctValues = [];
     
     if (isDebugQB) {
@@ -609,7 +619,8 @@ export const calculateTeamScore = (
           if (weight === 0 || !data.QBrec) return;
           
           const gamesStarted = parseInt(data.GS) || 0;
-          if ((include2024Only && year === '2024' && gamesStarted < 9) || (!include2024Only && gamesStarted < 10)) {
+          const gamesThreshold = (filterYear && typeof filterYear === 'number') ? 9 : 10;
+          if (gamesStarted < gamesThreshold) {
             return;
           }
           
@@ -623,8 +634,8 @@ export const calculateTeamScore = (
         });
       } else if (qb.seasonData) {
         // Raw seasonData format
-        const seasonsToUse = include2024Only 
-          ? qb.seasonData.filter(s => s.year === 2024)
+        const seasonsToUse = (filterYear && typeof filterYear === 'number')
+          ? qb.seasonData.filter(s => s.year === filterYear)
           : qb.seasonData;
           
         seasonsToUse.forEach(season => {
@@ -633,7 +644,8 @@ export const calculateTeamScore = (
           if (weight === 0) return;
           
           const gamesStarted = season.gamesStarted || 0;
-          if ((include2024Only && season.year === 2024 && gamesStarted < 9) || (!include2024Only && gamesStarted < 10)) {
+          const gamesThreshold = (filterYear && typeof filterYear === 'number') ? 9 : 10;
+          if (gamesStarted < gamesThreshold) {
             return;
           }
           
@@ -719,7 +731,7 @@ export const calculateTeamScore = (
   // Debug for Mahomes and other elite playoff QBs
   if (qbData.years && Object.values(qbData.years)[0]?.Player?.includes('Mahomes')) {
     console.log(`🏆 MAHOMES TEAM Z-SCORE: RegSeason(${winPctZ.toFixed(2)}) + DVOA(${offenseDVOAZ.toFixed(2)}) + Career(${careerPlayoffZ.toFixed(2)}) × Playoff(${playoffAdjustmentFactor.toFixed(3)}) = ${adjustedTeamCompositeZScore.toFixed(2)}`);
-    console.log(`🏆 PLAYOFF DATA ${includePlayoffs ? 'ADJUSTMENT APPLIED' : 'EXCLUDED'} - 2024 Only: ${include2024Only}`);
+    console.log(`🏆 PLAYOFF DATA ${includePlayoffs ? 'ADJUSTMENT APPLIED' : 'EXCLUDED'} - Filter Year: ${filterYear || 'all'}`);
   }
 
   // Debug for Hurts and other Super Bowl winners

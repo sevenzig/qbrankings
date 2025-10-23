@@ -41,7 +41,7 @@ const DynamicQBRankings = () => {
     lastFetch, 
     shouldRefreshData, 
     fetchAllQBData
-  } = useUnifiedQBData('csv'); // TEMPORARY: Use CSV until Supabase data is fixed (gs column is NULL)
+  } = useUnifiedQBData('supabase'); // Use Supabase as primary data source
   
   const [weights, setWeights] = useState({
     team: 35,
@@ -108,8 +108,8 @@ const DynamicQBRankings = () => {
   // Global playoff inclusion toggle - affects ALL calculations
   const [includePlayoffs, setIncludePlayoffs] = useState(false);
 
-  // Global 2024-only toggle - affects ALL data loading and disables year-based sliders
-  const [include2024Only, setInclude2024Only] = useState(false);
+  // Global year mode - '2024' | '2025' | 'all' - affects ALL data loading and category availability
+  const [yearMode, setYearMode] = useState('2025');
 
   // Scroll to top functionality
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -156,16 +156,36 @@ const DynamicQBRankings = () => {
     }
   }, [includePlayoffs]);
 
+  // Handle 2025 mode changes - disable support and durability, set stats to 75% and team to 25%
+  useEffect(() => {
+    if (yearMode === '2025') {
+      console.log('🔄 2025 Mode: Setting weights to Stats 75%, Team 25%, disabling Support and Durability');
+      setWeights({
+        team: 25,
+        stats: 75,
+        clutch: 0,
+        durability: 0,
+        support: 0
+      });
+    }
+  }, [yearMode]);
+
 
 
   const updateWeight = useCallback((category, value) => {
+    // In 2025 mode, prevent changes to support and durability (they don't have data)
+    if (yearMode === '2025' && (category === 'support' || category === 'durability')) {
+      console.warn(`⚠️ Cannot modify ${category} in 2025 mode - no data available for this category`);
+      return;
+    }
+    
     const validatedValue = validateNumberInput(value, 0, 100);
     setWeights(prev => ({
       ...prev,
       [category]: validatedValue
     }));
     setCurrentPreset('custom'); // Reset to custom when manually adjusting
-  }, [validateNumberInput]);
+  }, [validateNumberInput, yearMode]);
 
   const updateSupportWeight = useCallback((component, value) => {
     const validatedValue = validateNumberInput(value, 0, 100);
@@ -581,7 +601,10 @@ const DynamicQBRankings = () => {
   }, [currentPreset]);
 
   // URL sharing functions - COMPACT: Much shorter URLs focusing on essentials
-  const encodeSettings = (weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only, fullDetail = false) => {
+  const encodeSettings = (weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, yearMode, fullDetail = false) => {
+    // Convert yearMode to numeric: 0='2022', 1='2023', 2='2024', 3='2025'
+    const yearModeValue = yearMode === '2022' ? 0 : yearMode === '2023' ? 1 : yearMode === '2024' ? 2 : 3;
+    
     if (fullDetail) {
       // Full detail mode - includes all sub-component weights (longer URLs)
       const settingsObj = {
@@ -592,7 +615,7 @@ const DynamicQBRankings = () => {
         cl: [clutchWeights.gameWinningDrives, clutchWeights.fourthQuarterComebacks, clutchWeights.clutchRate, clutchWeights.playoffBonus],
         dr: [durabilityWeights.availability, durabilityWeights.consistency],
         pf: includePlayoffs ? 1 : 0,
-        y24: include2024Only ? 1 : 0
+        ym: yearModeValue
       };
       
       const jsonString = JSON.stringify(settingsObj);
@@ -602,10 +625,10 @@ const DynamicQBRankings = () => {
       const compactArray = [
         weights.team, weights.stats, weights.clutch, weights.durability, weights.support,
         includePlayoffs ? 1 : 0,
-        include2024Only ? 1 : 0
+        yearModeValue
       ];
       
-      // Convert to compact string format: "35.35.5.10.15.0.0"
+      // Convert to compact string format: "35.35.5.10.15.0.1"
       return compactArray.join('.');
     }
   };
@@ -632,7 +655,9 @@ const DynamicQBRankings = () => {
             result.includePlayoffs = values[5] === 1;
           }
           if (values.length >= 7) {
-            result.include2024Only = values[6] === 1;
+            // Convert numeric yearMode to string: 0='2022', 1='2023', 2='2024', 3='2025'
+            const yearModeValue = values[6];
+            result.yearMode = yearModeValue === 0 ? '2022' : yearModeValue === 1 ? '2023' : yearModeValue === 2 ? '2024' : '2025';
           }
           
           return result;
@@ -749,7 +774,9 @@ const DynamicQBRankings = () => {
             result.includePlayoffs = settingValues[0] === 1;
           }
           if (settingValues.length >= 2 && !isNaN(settingValues[1])) {
-            result.include2024Only = settingValues[1] === 1;
+            // Convert old format to yearMode for backward compatibility
+            // Old: 0='all', 1='2024' -> New: default to 2024 for old links
+            result.yearMode = settingValues[1] === 1 ? '2024' : '2024';
           }
         }
 
@@ -823,8 +850,13 @@ const DynamicQBRankings = () => {
           result.includePlayoffs = settingsObj.pf === 1;
         }
         
-        if (settingsObj.y24 !== undefined) {
-          result.include2024Only = settingsObj.y24 === 1;
+        // Handle both old (y24) and new (ym) year mode formats
+        if (settingsObj.ym !== undefined) {
+          // New format: 0='2022', 1='2023', 2='2024', 3='2025'
+          result.yearMode = settingsObj.ym === 0 ? '2022' : settingsObj.ym === 1 ? '2023' : settingsObj.ym === 2 ? '2024' : '2025';
+        } else if (settingsObj.y24 !== undefined) {
+          // Old format: convert boolean to yearMode for backward compatibility
+          result.yearMode = settingsObj.y24 === 1 ? '2024' : '2024';
         }
         
         return result;
@@ -837,7 +869,7 @@ const DynamicQBRankings = () => {
 
   const generateShareLink = useCallback(async (fullDetail = false, useShortening = true) => {
     const baseUrl = window.location.origin + window.location.pathname;
-    const encodedSettings = encodeSettings(weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only, fullDetail);
+    const encodedSettings = encodeSettings(weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, yearMode, fullDetail);
     
     // Use URL shortener utility
     const result = await URLShortener.generateShareLink(
@@ -848,17 +880,31 @@ const DynamicQBRankings = () => {
     );
 
     return result;
-  }, [weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, include2024Only, currentPreset]);
+  }, [weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, yearMode, currentPreset]);
 
   // Calculate QEI with current weights and dynamic component calculations
   const rankedQBs = useMemo(() => {
     if (!qbData || qbData.length === 0) return [];
     
-    console.log(`🔄 Recalculating rankings with ${qbData.length} QBs in ${include2024Only ? '2024-only' : '3-year'} mode`);
+    const isSingleYear = true; // All modes are now single-year
+    const yearLabel = `${yearMode}`;
+    console.log(`🔄 Recalculating rankings with ${qbData.length} QBs for ${yearLabel} season`);
     
     // First pass: Calculate all base scores
     const qbsWithBaseScores = qbData.map(qb => {
-              const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights, qbData, weights.support);
+      const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, parseInt(yearMode), efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights, qbData, weights.support);
+      
+      // DEBUG: Log if we're getting zero/invalid base scores for 2025
+      if (yearMode === '2025' && (!baseScores.team || !baseScores.stats)) {
+        console.warn(`⚠️ ${qb.name} has invalid base scores:`, {
+          team: baseScores.team,
+          stats: baseScores.stats,
+          clutch: baseScores.clutch,
+          durability: baseScores.durability,
+          support: baseScores.support
+        });
+      }
+      
       return {
         ...qb,
         baseScores,
@@ -874,16 +920,25 @@ const DynamicQBRankings = () => {
     
     // Second pass: Calculate QEI scores (already percentiles 0-100) and sort
     const finalRankings = qbsWithBaseScores
-      .map(qb => ({
-        ...qb,
-        qei: calculateQEI(qb.baseScores, qb, weights, includePlayoffs, allQBBaseScores, include2024Only)
-      }))
+      .map(qb => {
+        const qei = calculateQEI(qb.baseScores, qb, weights, includePlayoffs, allQBBaseScores, parseInt(yearMode));
+        
+        // DEBUG: Log QEI calculations for 2025
+        if (yearMode === '2025') {
+          console.log(`📊 ${qb.name} QEI: ${qei.toFixed(2)} (Team: ${qb.baseScores.team?.toFixed(3)}, Stats: ${qb.baseScores.stats?.toFixed(3)})`);
+        }
+        
+        return {
+          ...qb,
+          qei
+        };
+      })
       .sort((a, b) => b.qei - a.qei);
       
     console.log(`✅ Rankings calculated: Top QB is ${finalRankings[0]?.name} with ${finalRankings[0]?.qei?.toFixed(1)} QEI`);
     
     return finalRankings;
-  }, [qbData, weights, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights]);
+  }, [qbData, weights, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, yearMode, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights]);
 
   const totalWeight = useMemo(() => 
     Object.values(weights).reduce((a, b) => a + b, 0), 
@@ -935,7 +990,8 @@ const DynamicQBRankings = () => {
       }
 
       // Take screenshot
-      const { blobUrl } = await captureTop10QBsScreenshot(rankedQBs, { includePlayoffs, include2024Only });
+      const isSingleYear = true; // All modes are now single-year
+      const { blobUrl } = await captureTop10QBsScreenshot(rankedQBs, { includePlayoffs, include2024Only: isSingleYear });
       
       setShareModalScreenshotUrl(blobUrl);
       setShareModalLink(linkResult.url);
@@ -961,7 +1017,7 @@ const DynamicQBRankings = () => {
     } finally {
       setIsScreenshotLoading(false);
     }
-  }, [generateShareLink, rankedQBs, includePlayoffs, include2024Only]);
+  }, [generateShareLink, rankedQBs, includePlayoffs, yearMode]);
 
   const scrollToTop = useCallback(() => {
     window.scrollTo({
@@ -1027,9 +1083,9 @@ const DynamicQBRankings = () => {
           setIncludePlayoffs(decodedSettings.includePlayoffs);
         }
         
-        // Apply 2024-only setting if present
-        if (decodedSettings.include2024Only !== undefined) {
-          setInclude2024Only(decodedSettings.include2024Only);
+        // Apply year mode setting if present (with default to 2024)
+        if (decodedSettings.yearMode !== undefined) {
+          setYearMode(decodedSettings.yearMode);
         }
         
         setCurrentPreset(preset && PHILOSOPHY_PRESETS[preset] ? preset : 'custom');
@@ -1090,13 +1146,13 @@ const DynamicQBRankings = () => {
     setPrevIncludePlayoffs(includePlayoffs);
   }, [includePlayoffs]);
 
-  // Refetch data when 2024-only toggle changes
+  // Refetch data when year mode changes
   useEffect(() => {
     if (fetchAllQBData) {
-      console.log('🔄 Mode switched, refetching data for:', include2024Only ? '2024 only' : '3-year mode');
-      fetchAllQBData(include2024Only);
+      console.log(`🔄 Mode switched, refetching data for: ${yearMode}`);
+      fetchAllQBData(yearMode);
     }
-  }, [include2024Only]); // Only depend on the toggle, not the function
+  }, [yearMode]); // Only depend on the year mode, not the function
 
   if (loading) {
     return (
@@ -1105,13 +1161,13 @@ const DynamicQBRankings = () => {
           <div className="text-6xl mb-6">🏈</div>
           <h2 className="text-3xl font-bold mb-4">Loading NFL Quarterbacks...</h2>
           <div className="space-y-2 text-blue-200">
-            <p>📊 Loading quarterback data from CSV files</p>
-            <p>📈 Parsing 2024 season statistics</p>
+            <p>📊 Loading quarterback data</p>
+            <p>📈 Parsing {yearMode} season statistics</p>
             <p>🔢 Calculating QEI performance metrics</p>
             <p>🏆 Ranking elite quarterbacks</p>
           </div>
           <div className="mt-6 text-yellow-300">
-            ⏳ Processing CSV data...
+            ⏳ Processing data...
           </div>
         </div>
       </div>
@@ -1143,7 +1199,7 @@ const DynamicQBRankings = () => {
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">🏈 NFL QB Rankings</h1>
           <p className="text-blue-200">
-            {include2024Only ? '2024 NFL season analysis • Single-year quarterback rankings • Dynamic QEI' : '3-Year NFL analysis (2022-2024) • Career quarterback rankings • Dynamic QEI'}
+            {yearMode} NFL season analysis • Single-season quarterback rankings • Dynamic QEI
           </p>
         </div>
 
@@ -1181,80 +1237,82 @@ const DynamicQBRankings = () => {
 
 
 
-        {/* Quick Philosophy Presets - Collapsible */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl mb-6">
-          {/* Presets Accordion Header */}
-          <div 
-            className="p-6 cursor-pointer hover:bg-white/5 transition-colors select-none"
-            onClick={() => setIsPresetsAccordionOpen(!isPresetsAccordionOpen)}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h3 className="text-xl font-bold text-white">⚡ Quick Philosophy Presets</h3>
-                <p className="text-blue-200 text-sm mt-1">
-                  💡 Current: {getCurrentPresetDescription}
-                </p>
-              </div>
-              <div className="ml-6 flex items-center justify-center">
-                <div className={`
-                  w-8 h-8 rounded-full bg-white/10 border border-white/20 
-                  flex items-center justify-center
-                  transition-all duration-300 ease-in-out
-                  hover:bg-white/20 hover:border-white/30
-                  ${isPresetsAccordionOpen ? 'rotate-180 bg-blue-500/30 border-blue-400/50' : 'rotate-0'}
-                `}>
-                  <svg 
-                    className="w-4 h-4 text-white transition-colors duration-300" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={2} 
-                      d="M19 9l-7 7-7-7" 
-                    />
-                  </svg>
+        {/* Quick Philosophy Presets - Collapsible (Hidden in 2025 mode) */}
+        {yearMode !== '2025' && (
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl mb-6">
+            {/* Presets Accordion Header */}
+            <div 
+              className="p-6 cursor-pointer hover:bg-white/5 transition-colors select-none"
+              onClick={() => setIsPresetsAccordionOpen(!isPresetsAccordionOpen)}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-white">⚡ Quick Philosophy Presets</h3>
+                  <p className="text-blue-200 text-sm mt-1">
+                    💡 Current: {getCurrentPresetDescription}
+                  </p>
+                </div>
+                <div className="ml-6 flex items-center justify-center">
+                  <div className={`
+                    w-8 h-8 rounded-full bg-white/10 border border-white/20 
+                    flex items-center justify-center
+                    transition-all duration-300 ease-in-out
+                    hover:bg-white/20 hover:border-white/30
+                    ${isPresetsAccordionOpen ? 'rotate-180 bg-blue-500/30 border-blue-400/50' : 'rotate-0'}
+                  `}>
+                    <svg 
+                      className="w-4 h-4 text-white transition-colors duration-300" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth={2} 
+                        d="M19 9l-7 7-7-7" 
+                      />
+                    </svg>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Presets Accordion Content */}
-          {isPresetsAccordionOpen && (
-            <div className="border-t border-white/10">
-              <div className="p-6">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => applyPreset('default')}
-                    className="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-600/20 hover:bg-gray-600/30 text-gray-200"
-                  >
-                    ⚙️ Default
-                  </button>
-                  <button
-                    onClick={() => applyPreset('winner')}
-                    className="px-4 py-2 rounded-lg font-medium transition-colors bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-200"
-                  >
-                    🏆 Winner
-                  </button>
-                  <button
-                    onClick={() => applyPreset('analyst')}
-                    className="px-4 py-2 rounded-lg font-medium transition-colors bg-green-600/20 hover:bg-green-600/30 text-green-200"
-                  >
-                    📊 Analyst
-                  </button>
-                  <button
-                    onClick={() => applyPreset('context')}
-                    className="px-4 py-2 rounded-lg font-medium transition-colors bg-purple-600/20 hover:bg-purple-600/30 text-purple-200"
-                  >
-                    🏢 Context
-                  </button>
+            {/* Presets Accordion Content */}
+            {isPresetsAccordionOpen && (
+              <div className="border-t border-white/10">
+                <div className="p-6">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => applyPreset('default')}
+                      className="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-600/20 hover:bg-gray-600/30 text-gray-200"
+                    >
+                      ⚙️ Default
+                    </button>
+                    <button
+                      onClick={() => applyPreset('winner')}
+                      className="px-4 py-2 rounded-lg font-medium transition-colors bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-200"
+                    >
+                      🏆 Winner
+                    </button>
+                    <button
+                      onClick={() => applyPreset('analyst')}
+                      className="px-4 py-2 rounded-lg font-medium transition-colors bg-green-600/20 hover:bg-green-600/30 text-green-200"
+                    >
+                      📊 Analyst
+                    </button>
+                    <button
+                      onClick={() => applyPreset('context')}
+                      className="px-4 py-2 rounded-lg font-medium transition-colors bg-purple-600/20 hover:bg-purple-600/30 text-purple-200"
+                    >
+                      🏢 Context
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Customize Your QB Philosophy - Accordion */}
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl mb-8">
@@ -1303,8 +1361,8 @@ const DynamicQBRankings = () => {
                 <GlobalSettings
                   includePlayoffs={includePlayoffs}
                   onIncludePlayoffsChange={setIncludePlayoffs}
-                  include2024Only={include2024Only}
-                  onInclude2024OnlyChange={setInclude2024Only}
+                  yearMode={yearMode}
+                  onYearModeChange={setYearMode}
                 />
           
                 <WeightControls
@@ -1339,7 +1397,7 @@ const DynamicQBRankings = () => {
                   onUpdateDurabilityWeight={updateDurabilityWeight}
                   onNormalizeDurabilityWeights={normalizeDurabilityWeights}
                   includePlayoffs={includePlayoffs}
-                  include2024Only={include2024Only}
+                  yearMode={yearMode}
                 />
               </div>
             </div>
@@ -1375,12 +1433,12 @@ const DynamicQBRankings = () => {
         <QBRankingsTable 
           rankedQBs={rankedQBs} 
           includePlayoffs={includePlayoffs}
-          include2024Only={include2024Only}
+          include2024Only={true}
         />
 
         {/* Footer */}
         <div className="text-center mt-8 text-blue-300">
-          <p>🚀 Dynamic Rankings • 📈 3-Year Career Analysis • 🎛️ Customizable Weights</p>
+          <p>🚀 Dynamic Rankings • 📈 Per-Season Analysis • 🎛️ Customizable Weights</p>
           {lastFetch && (
             <p className="text-sm mt-2">
               Last updated: {new Date(lastFetch).toLocaleTimeString()} 

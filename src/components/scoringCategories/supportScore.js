@@ -515,14 +515,16 @@ const calculateWeightedSupportScore = (team, year, supportWeights = { offensiveL
   return compositeZScore;
 };
 
-export const calculateSupportScore = (qbSeasonData, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, include2024Only = false, mainSupportWeight = 0) => {
+export const calculateSupportScore = (qbSeasonData, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, filterYear = null, mainSupportWeight = 0) => {
   // Initialize scoring
   let totalWeightedSupport = 0;
   let totalWeight = 0;
   
   // Process each year with actual teams played for
-  // In 2024-only mode, only process 2024 data with 100% weight
-  const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+  // In single-year mode, only process that specific year with 100% weight
+  const yearWeights = (filterYear && typeof filterYear === 'number')
+    ? { [filterYear.toString()]: 1.0 }
+    : PERFORMANCE_YEAR_WEIGHTS;
   
   Object.entries(yearWeights).forEach(([year, weight]) => {
     const yearNum = parseInt(year);
@@ -545,7 +547,9 @@ export const calculateSupportScore = (qbSeasonData, supportWeights = { offensive
       const gamesStarted = seasonData.GS || seasonData.gamesStarted || 0;
       
       // Calculate support for each team played for in this year
-      if (teamsThisYear.length > 0 && ((include2024Only && yearNum === 2024 && gamesStarted >= 9) || (!include2024Only && gamesStarted >= 10))) {
+      // Use lower threshold for single-year mode (9 games) vs multi-year mode (10 games)
+      const gamesThreshold = (filterYear && typeof filterYear === 'number') ? 9 : 10;
+      if (teamsThisYear.length > 0 && gamesStarted >= gamesThreshold) {
         // For multi-team seasons, average the support scores
         const yearSupportScores = teamsThisYear.map(team => calculateWeightedSupportScore(team, yearNum, supportWeights));
         const avgYearSupport = yearSupportScores.reduce((sum, score) => sum + score, 0) / yearSupportScores.length;

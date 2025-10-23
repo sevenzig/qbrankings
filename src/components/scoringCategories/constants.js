@@ -37,28 +37,32 @@ export const SCALING_RANGES = {
 
 // Performance-based metrics (stats, clutch, support) - emphasize recent performance
 export const PERFORMANCE_YEAR_WEIGHTS = {
-  2024: 0.75,
-  2023: 0.20,
-  2022: 0.05
+  2025: 0.70,
+  2024: 0.20,
+  2023: 0.08,
+  2022: 0.02
 };
 
-// Playoff-specific metrics - emphasize recent success (60:30:10 rule with granularity)
+// Playoff-specific metrics - emphasize recent success
 export const PLAYOFF_YEAR_WEIGHTS = {
-  2024: 0.75,
-  2023: 0.20,
-  2022: 0.05
+  2025: 0.70,
+  2024: 0.20,
+  2023: 0.08,
+  2022: 0.02
 };
 
 // Regular season metrics - balanced weighting with enhanced granularity
 export const REGULAR_SEASON_YEAR_WEIGHTS = {
-  2024: 0.75,
-  2023: 0.20,
-  2022: 0.05
+  2025: 0.70,
+  2024: 0.20,
+  2023: 0.08,
+  2022: 0.02
 };
 
 // Stability-based metrics (durability) - equal weighting with micro-adjustments for uniqueness
 export const STABILITY_YEAR_WEIGHTS = {
-  2024: 0.75,
-  2023: 0.20,
-  2022: 0.05
+  2025: 0.70,
+  2024: 0.20,
+  2023: 0.08,
+  2022: 0.02
 }; 

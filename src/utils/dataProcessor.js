@@ -2,11 +2,12 @@
 import { parseQBRecord } from './csvParser.js';
 import { getTeamInfo } from '../constants/teamData.js';
 
-export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQbs2024, playoffQbs2023, playoffQbs2022, rushingQbs2024, rushingQbs2023, rushingQbs2022, rushingPlayoffQbs2024, rushingPlayoffQbs2023, rushingPlayoffQbs2022) => {
+export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQbs2024, playoffQbs2023, playoffQbs2022, rushingQbs2024, rushingQbs2023, rushingQbs2022, rushingPlayoffQbs2024, rushingPlayoffQbs2023, rushingPlayoffQbs2022, qbs2025 = [], playoffQbs2025 = [], rushingQbs2025 = [], rushingPlayoffQbs2025 = []) => {
   const playerData = {};
   
   // Process each year of data
   const yearsData = [
+    { year: 2025, data: qbs2025 },
     { year: 2024, data: qbs2024 },
     { year: 2023, data: qbs2023 },
     { year: 2022, data: qbs2022 }
@@ -161,6 +162,7 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
 
   // Process playoff data separately with higher clutch weighting
   const playoffYearsData = [
+    { year: 2025, data: playoffQbs2025 },
     { year: 2024, data: playoffQbs2024 },
     { year: 2023, data: playoffQbs2023 },
     { year: 2022, data: playoffQbs2022 }
@@ -227,6 +229,7 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
   
   // Process rushing data for regular season
   const rushingYearsData = [
+    { year: 2025, data: rushingQbs2025 },
     { year: 2024, data: rushingQbs2024 },
     { year: 2023, data: rushingQbs2023 },
     { year: 2022, data: rushingQbs2022 }
@@ -275,6 +278,7 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
 
   // Process rushing playoff data
   const rushingPlayoffYearsData = [
+    { year: 2025, data: rushingPlayoffQbs2025 },
     { year: 2024, data: rushingPlayoffQbs2024 },
     { year: 2023, data: rushingPlayoffQbs2023 },
     { year: 2022, data: rushingPlayoffQbs2022 }
@@ -341,28 +345,33 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
   return playerData;
 };
 
-export const processQBData = (combinedQBData, include2024Only = false) => {
-  console.log(`🔍 DEBUG processQBData - Processing ${Object.keys(combinedQBData).length} players in ${include2024Only ? '2024-only' : '3-year'} mode`);
+export const processQBData = (combinedQBData, filterYear = null) => {
+  const modeLabel = filterYear ? `${filterYear}` : 'all-years';
+  console.log(`🔍 DEBUG processQBData - Processing ${Object.keys(combinedQBData).length} players in ${modeLabel} mode`);
   
   return Object.entries(combinedQBData)
     .filter(([playerName, data]) => {
-      if (include2024Only) {
-        // For 2024-only mode: Require meaningful playing time in 2024
-        const has2024Activity = data.seasons.some(season => season.year === 2024);
-        const total2024Games = data.seasons
-          .filter(season => season.year === 2024)
+      if (filterYear) {
+        // For single-year mode: Require meaningful playing time in that specific year
+        const hasYearActivity = data.seasons.some(season => season.year === filterYear);
+        const totalYearGames = data.seasons
+          .filter(season => season.year === filterYear)
           .reduce((sum, season) => sum + (season.gamesStarted || 0), 0);
-        const passes = has2024Activity && total2024Games >= 9;
+        
+        // Adjust threshold based on year (2025 has fewer games)
+        // For 2025 mid-season: use 1 game minimum since season is in progress
+        const minGames = filterYear === 2025 ? 1 : 9; // Very low threshold for in-progress 2025 season
+        const passes = hasYearActivity && totalYearGames >= minGames;
         
         if (!passes) {
-          console.log(`🚫 FILTERED OUT ${playerName}: 2024 games=${total2024Games}, has2024Activity=${has2024Activity}`);
+          console.log(`🚫 FILTERED OUT ${playerName}: ${filterYear} games=${totalYearGames}, hasActivity=${hasYearActivity}, minRequired=${minGames}`);
         } else {
-          console.log(`✅ PASSED ${playerName}: 2024 games=${total2024Games}`);
+          console.log(`✅ PASSED ${playerName}: ${filterYear} games=${totalYearGames} (min: ${minGames})`);
         }
         
-        return passes; // Require 9+ games in 2024 (~half season)
+        return passes;
       } else {
-        // For multi-year mode: Original career-based filtering
+        // For multi-year mode: Original career-based filtering (legacy support)
         const totalGames = data.career.gamesStarted;
         const hasRecentActivity = data.seasons.some(season => season.year >= 2023);
         const passes = totalGames >= 15 && hasRecentActivity;

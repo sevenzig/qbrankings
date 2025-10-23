@@ -3,11 +3,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQBData } from './useQBData.js';
 import { useSupabaseQBData } from './useSupabaseQBData.js';
 
-export const useUnifiedQBData = (initialDataSource = 'csv') => {
+export const useUnifiedQBData = (initialDataSource = 'supabase') => {
   const [dataSource, setDataSource] = useState(initialDataSource);
   const [isSwitching, setIsSwitching] = useState(false);
 
-  // Initialize both data hooks
+  // Initialize both data hooks (React hooks must be called unconditionally)
+  // Only the active one will be used based on dataSource
   const csvData = useQBData();
   const supabaseData = useSupabaseQBData();
 
@@ -49,11 +50,11 @@ export const useUnifiedQBData = (initialDataSource = 'csv') => {
     }
   }, []);
 
-  // Auto-switch to CSV if Supabase is not available
+  // Warn if Supabase is not available (CSV fallback can be used if needed)
   useEffect(() => {
     if (dataSource === 'supabase' && !isSupabaseAvailable) {
-      console.warn('⚠️ Supabase not available, switching to CSV data source');
-      setDataSource('csv');
+      console.error('❌ Supabase not available - data cannot be loaded. Please check environment variables.');
+      console.error('   Required: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
     }
   }, [dataSource, isSupabaseAvailable]);
 

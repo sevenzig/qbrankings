@@ -111,8 +111,10 @@ const WeightControls = memo(({
   onUpdateDurabilityWeight,
   onNormalizeDurabilityWeights,
   includePlayoffs,
-  include2024Only
+  yearMode = '2024'
 }) => {
+  const include2024Only = yearMode === '2024' || yearMode === '2025';
+  const is2025Mode = yearMode === '2025';
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
 
   const weightDescriptions = {
@@ -167,9 +169,9 @@ const WeightControls = memo(({
                   max="100"
                   value={value}
                   onChange={(e) => onUpdateWeight(category, e.target.value)}
-                  disabled={category === 'clutch'}
+                  disabled={category === 'clutch' || (is2025Mode && (category === 'support' || category === 'durability'))}
                   className={`flex-1 h-2 rounded-lg cursor-pointer ${
-                    category === 'clutch' 
+                    (category === 'clutch' || (is2025Mode && (category === 'support' || category === 'durability')))
                       ? 'bg-gray-400 cursor-not-allowed opacity-50' 
                       : 'bg-gray-200'
                   }`}
@@ -180,9 +182,9 @@ const WeightControls = memo(({
                   max="100"
                   value={value}
                   onChange={(e) => onUpdateWeight(category, e.target.value)}
-                  disabled={category === 'clutch'}
+                  disabled={category === 'clutch' || (is2025Mode && (category === 'support' || category === 'durability'))}
                   className={`w-12 px-1 py-1 border border-white/20 rounded text-sm text-center ${
-                    category === 'clutch' 
+                    (category === 'clutch' || (is2025Mode && (category === 'support' || category === 'durability')))
                       ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
                       : 'bg-white/10 text-white'
                   }`}
@@ -191,6 +193,16 @@ const WeightControls = memo(({
               {category === 'clutch' && (
                 <div className="text-xs text-gray-400 mt-1 text-center">
                   Coming soon: 3rd & 4th down splits, GWD, & 4QC
+                </div>
+              )}
+              {is2025Mode && category === 'support' && (
+                <div className="text-xs text-orange-300 mt-1 text-center">
+                  ⚠️ Disabled (No DVOA data for 2025)
+                </div>
+              )}
+              {is2025Mode && category === 'durability' && (
+                <div className="text-xs text-orange-300 mt-1 text-center">
+                  ⚠️ Disabled (Single season mode)
                 </div>
               )}
             </div>
@@ -465,8 +477,13 @@ const WeightControls = memo(({
             category={category}
             value={value}
             onUpdateWeight={onUpdateWeight}
-            disabled={category === 'clutch'}
-            description={category === 'clutch' ? 'Coming soon: 3rd & 4th down splits, GWD, & 4QC' : undefined}
+            disabled={category === 'clutch' || (is2025Mode && (category === 'support' || category === 'durability'))}
+            description={
+              category === 'clutch' ? 'Coming soon: 3rd & 4th down splits, GWD, & 4QC' : 
+              (is2025Mode && category === 'support') ? '⚠️ Disabled (No DVOA data for 2025)' :
+              (is2025Mode && category === 'durability') ? '⚠️ Disabled (Single season mode)' :
+              weightDescriptions[category]
+            }
             onShowDetails={category === 'team' ? () => onShowDetails.team() :
                           category === 'stats' ? () => onShowDetails.stats() :
                           category === 'clutch' ? () => onShowDetails.clutch() :
@@ -474,7 +491,6 @@ const WeightControls = memo(({
                           category === 'support' ? () => onShowDetails.support() :
                           null}
             showDetails={showDetails[category]}
-            description={weightDescriptions[category]}
           />
         ))}
         

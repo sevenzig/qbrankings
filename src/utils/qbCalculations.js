@@ -138,17 +138,17 @@ export const calculateHierarchicalScore = (componentScores, weights) => {
   return weightedSum / totalWeight;
 };
 
-export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 65, playoff: 35 }, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, includePlayoffs = true, include2024Only = false, efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 }, protectionWeights = { sackPct: 60, turnoverRate: 40 }, volumeWeights = { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, durabilityWeights = { availability: 75, consistency: 25 }, allQBData = [], mainSupportWeight = 0) => {
+export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 65, playoff: 35 }, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, includePlayoffs = true, filterYear = null, efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 }, protectionWeights = { sackPct: 60, turnoverRate: 40 }, volumeWeights = { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, durabilityWeights = { availability: 75, consistency: 25 }, allQBData = [], mainSupportWeight = 0) => {
   // Create season data structure for enhanced calculations
   const qbSeasonData = {
     years: {}
   };
   
   // Convert season data to expected format (including playoff data)
-  // Filter season data for 2024-only mode if enabled
+  // Filter season data for specific year if provided
   let seasonsToProcess = qb.seasonData || [];
-  if (include2024Only) {
-    seasonsToProcess = seasonsToProcess.filter(season => season.year === 2024);
+  if (filterYear && typeof filterYear === 'number') {
+    seasonsToProcess = seasonsToProcess.filter(season => season.year === filterYear);
   }
   
   if (seasonsToProcess.length > 0) {
@@ -195,11 +195,12 @@ export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, wea
   qbSeasonData.name = qb.name;
 
   // Calculate scores using hierarchical weight system with z-score based calculations
-  const supportScore = calculateSupportScore(qbSeasonData, supportWeights, include2024Only, mainSupportWeight);
-  const teamScore = calculateTeamScore(qbSeasonData, teamWeights, includePlayoffs, include2024Only, supportScore, allQBData);
-  const statsScore = calculateStatsScore(qbSeasonData, statsWeights, includePlayoffs, include2024Only, efficiencyWeights, protectionWeights, volumeWeights, allQBData);
-  const clutchScore = calculateClutchScore(qbSeasonData, includePlayoffs, clutchWeights, include2024Only, allQBData);
-  const durabilityScore = calculateDurabilityScore(qbSeasonData, includePlayoffs, include2024Only, durabilityWeights, allQBData);
+  // Pass filterYear directly to all scoring functions
+  const supportScore = calculateSupportScore(qbSeasonData, supportWeights, filterYear, mainSupportWeight);
+  const teamScore = calculateTeamScore(qbSeasonData, teamWeights, includePlayoffs, filterYear, supportScore, allQBData);
+  const statsScore = calculateStatsScore(qbSeasonData, statsWeights, includePlayoffs, filterYear, efficiencyWeights, protectionWeights, volumeWeights, allQBData);
+  const clutchScore = calculateClutchScore(qbSeasonData, includePlayoffs, clutchWeights, filterYear, allQBData);
+  const durabilityScore = calculateDurabilityScore(qbSeasonData, includePlayoffs, filterYear, durabilityWeights, allQBData);
   
   return {
     team: teamScore,
@@ -213,6 +214,7 @@ export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, wea
 // Season-specific game start penalty system - Applied per season before weighting
 function applyGameStartPenalties(qb, include2024Only = false) {
   let penalties = {
+    2025: 1.0,
     2024: 1.0,
     2023: 1.0,
     2022: 1.0
@@ -220,6 +222,7 @@ function applyGameStartPenalties(qb, include2024Only = false) {
 
   // Get game starts by season
   const gameStarts = {
+    2025: 0,
     2024: 0,
     2023: 0,
     2022: 0
@@ -234,10 +237,22 @@ function applyGameStartPenalties(qb, include2024Only = false) {
   }
 
   if (include2024Only) {
-    // 2024-only mode: Only penalize for insufficient 2024 starts
+    // Single-year mode: Only penalize for insufficient starts in the active year
+    // For 2025 (partial season): Very low threshold (1 game minimum)
+    // For other years: 8 games minimum
+    penalties[2025] = gameStarts[2025] >= 1 ? 1.0 : 0; // Binary for 2025: played = 1.0, didn't = 0
     penalties[2024] = gameStarts[2024] >= 8 ? 1.0 : slidingLogPenalty(gameStarts[2024], 8, 1.2);
+    penalties[2023] = gameStarts[2023] >= 8 ? 1.0 : slidingLogPenalty(gameStarts[2023], 8, 1.15);
+    penalties[2022] = gameStarts[2022] >= 8 ? 1.0 : slidingLogPenalty(gameStarts[2022], 8, 1.15);
   } else {
     // Multi-year mode: Apply penalties to each season individually
+    
+    // 2025: 1+ game = normal (partial season)
+    if (gameStarts[2025] > 0) {
+      penalties[2025] = 1.0; // No penalty for 2025 partial season
+    } else {
+      penalties[2025] = 0; // No games = no contribution from this season
+    }
     
     // 2024: 8+ games = normal, <8 games = punishment
     if (gameStarts[2024] > 0) {
@@ -283,9 +298,10 @@ function slidingLogPenalty(gamesStarted, threshold, maxPenalty = 1.2) {
 }
 
 // Main QEI calculation with FLATTENED weighting to preserve variance
-export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, allQBBaseScores = [], include2024Only = false, allQBsRawQei = null) => {
+export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, allQBBaseScores = [], filterYear = null, allQBsRawQei = null) => {
   // Apply season-specific game start penalties
-  const penalties = applyGameStartPenalties(qb, include2024Only);
+  const isSingleYear = filterYear !== null && typeof filterYear === 'number';
+  const penalties = applyGameStartPenalties(qb, isSingleYear);
   
   // baseScores now contain composite z-scores from each category
   // We need to flatten the hierarchy to preserve variance
@@ -331,7 +347,7 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
   // In multi-year mode, apply per-season penalties to scores
   // Note: This is a simplified approach - ideally we'd apply penalties to each season's 
   // component scores before combining, but that would require restructuring all scoring functions
-  if (!include2024Only) {
+  if (!isSingleYear) {
     // Calculate effective weight reduction based on season penalties
     // Year weights: 2024: 75%, 2023: 20%, 2022: 5%
     const yearWeights = { 2024: 0.75, 2023: 0.20, 2022: 0.05 };
@@ -347,12 +363,13 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
       contextualScores[component] *= effectiveWeight;
     });
   } else {
-    // In 2024-only mode, apply 2024 penalty directly
+    // In single-year mode, apply the year's penalty directly
+    const yearPenalty = penalties[filterYear] || 1.0;
     Object.keys(contextualScores).forEach(component => {
       if (isNaN(contextualScores[component]) || !isFinite(contextualScores[component])) {
         contextualScores[component] = 0;
       }
-      contextualScores[component] *= penalties[2024];
+      contextualScores[component] *= yearPenalty;
     });
   }
 
@@ -376,12 +393,12 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
     console.log(`   Composite Z-Score: ${compositeZScore.toFixed(3)}`);
   }
   
-  // Apply experience penalty for rookies and near-rookies in 2024-only mode only
+  // Apply experience penalty for rookies and near-rookies in single-year mode only
   const experience = qb?.experience || qb?.seasonData?.length || 1;
   let experienceModifier = 1.0;
-  if (include2024Only) {
+  if (isSingleYear) {
     if (experience === 1) {
-      experienceModifier = 0.85; // 15% penalty for 2024 rookies
+      experienceModifier = 0.85; // 15% penalty for rookies
     } else if (experience === 2) {
       experienceModifier = 0.97; // 3% penalty for second-year QBs
     }

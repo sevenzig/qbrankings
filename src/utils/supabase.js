@@ -50,13 +50,12 @@ export const qbDataService = {
 
       console.log(`🔄 Fetching QB data from Supabase (5-table schema, no views)... (2024 Only: ${include2024Only})`);
       
-      // Build query to join qb_passing_stats with players
+      // Build query - Query qb_passing_stats directly without JOIN
+      // This avoids pfr_id case sensitivity issues between old (presda01) and new (PresDa01) data
+      // The qb_passing_stats table already has player_name, so we don't need the players table
       let query = supabase
         .from('qb_passing_stats')
-        .select(`
-          *,
-          players!inner(pfr_id, player_name)
-        `)
+        .select('*')
         .not('gs', 'is', null)  // CRITICAL: Only fetch records with games started data
         .gte('gs', 1)            // Only QBs who actually started games
         .order('rate', { ascending: false });
@@ -86,10 +85,7 @@ export const qbDataService = {
         
         const { data: allData, error: allError } = await supabase
           .from('qb_passing_stats')
-          .select(`
-            *,
-            players!inner(pfr_id, player_name)
-          `)
+          .select('*')
           .order('season', { ascending: false })
           .limit(5);
         
@@ -97,7 +93,7 @@ export const qbDataService = {
           console.error('❌ CRITICAL DATABASE ISSUE:');
           console.error('   Database HAS records but NONE have valid gs (games started) values!');
           console.error('   Sample records:', allData.map(r => ({
-            player: r.players?.player_name,
+            player: r.player_name,
             season: r.season,
             gs: r.gs,
             rate: r.rate,
@@ -133,7 +129,7 @@ export const qbDataService = {
         console.log(`🔍 Records with games started > 0: ${recordsWithGames.length}/${data.length}`);
         if (recordsWithGames.length > 0) {
           console.log('🔍 Sample record with games:', {
-            player_name: recordsWithGames[0].players?.player_name,
+            player_name: recordsWithGames[0].player_name,
             season: recordsWithGames[0].season,
             gs: recordsWithGames[0].gs,
             rate: recordsWithGames[0].rate
@@ -194,11 +190,10 @@ export const qbDataService = {
       
       const { data, error } = await supabase
         .from('qb_passing_stats')
-        .select(`
-          *,
-          players!inner(pfr_id, player_name)
-        `)
+        .select('*')
         .eq('season', year)
+        .not('gs', 'is', null)  // Only fetch records with games started data
+        .gte('gs', 1)            // Only QBs who actually started games
         .order('rate', { ascending: false });
       
       if (error) {
@@ -252,11 +247,8 @@ export const qbDataService = {
       
       const { data, error } = await supabase
         .from('qb_passing_stats')
-        .select(`
-          *,
-          players!inner(pfr_id, player_name)
-        `)
-        .ilike('players.player_name', `%${playerName}%`)
+        .select('*')
+        .ilike('player_name', `%${playerName}%`)
         .order('season', { ascending: false });
       
       if (error) {
@@ -314,10 +306,7 @@ export const qbDataService = {
       
       let query = supabase
         .from('qb_passing_stats')
-        .select(`
-          *,
-          players!inner(pfr_id, player_name)
-        `);
+        .select('*');
       
       // Apply filters
       if (filters.year) {
@@ -565,13 +554,10 @@ export const qbDataService = {
       
       let query = supabase
         .from('qb_passing_stats')
-        .select(`
-          *,
-          players!inner(pfr_id, player_name)
-        `);
+        .select('*');
       
       if (searchParams.name) {
-        query = query.ilike('players.player_name', `%${searchParams.name}%`);
+        query = query.ilike('player_name', `%${searchParams.name}%`);
       }
       
       if (searchParams.team) {

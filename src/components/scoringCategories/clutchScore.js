@@ -90,7 +90,7 @@ const calculateZScoreValue = (value, allValues, inverted = false) => {
 };
 
 // Enhanced Clutch Performance Score with playoff integration (0-100)
-export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, include2024Only = false, allQBData = []) => {
+export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, filterYear = null, allQBData = []) => {
   let totalGWD = 0;
   let totalFourthQC = 0;
   let totalGames = 0;
@@ -106,14 +106,20 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
   }
   
   // First Pass: Calculate strong regular season base scores
-  // In 2024-only mode, only process 2024 data with 100% weight
-  const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+  // In single-year mode, only process that specific year with 100% weight
+  const yearWeights = (filterYear && typeof filterYear === 'number')
+    ? { [filterYear.toString()]: 1.0 }
+    : PERFORMANCE_YEAR_WEIGHTS;
   
   Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
     const weight = yearWeights[year] || 0;
     const gamesPlayed = parseInt(data.G) || 0;
     if (weight === 0 || (!data.GWD && !data['4QC'])) return;
-    if (include2024Only && year === '2024' && gamesPlayed < 9) return;
+    
+    // Apply games threshold - lower for single-year mode (9 games) vs multi-year (10 games)
+    const isSingleYear = filterYear && typeof filterYear === 'number';
+    const gamesThreshold = isSingleYear ? 9 : 10;
+    if (gamesPlayed < gamesThreshold) return;
     
     // Regular season clutch stats only for base calculation
     const seasonGWD = parseInt(data.GWD) || 0;
@@ -218,7 +224,9 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
   // Step 1: Calculate metrics for all QBs to establish distributions
   const allGWDRates = allQBData.map(qb => {
     if (!qb.years) return 0;
-    const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+    const yearWeights = (filterYear && typeof filterYear === 'number')
+      ? { [filterYear.toString()]: 1.0 }
+      : PERFORMANCE_YEAR_WEIGHTS;
     let gwdSum = 0, gamesSum = 0, weightSum = 0;
     
     Object.entries(qb.years).forEach(([year, data]) => {
@@ -236,7 +244,9 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
 
   const allFourthQCRates = allQBData.map(qb => {
     if (!qb.years) return 0;
-    const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+    const yearWeights = (filterYear && typeof filterYear === 'number')
+      ? { [filterYear.toString()]: 1.0 }
+      : PERFORMANCE_YEAR_WEIGHTS;
     let qcSum = 0, gamesSum = 0, weightSum = 0;
     
     Object.entries(qb.years).forEach(([year, data]) => {
@@ -254,7 +264,9 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
 
   const allClutchRates = allQBData.map(qb => {
     if (!qb.years) return 0;
-    const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+    const yearWeights = (filterYear && typeof filterYear === 'number')
+      ? { [filterYear.toString()]: 1.0 }
+      : PERFORMANCE_YEAR_WEIGHTS;
     let totalClutch = 0, gamesSum = 0, weightSum = 0;
     
     Object.entries(qb.years).forEach(([year, data]) => {
@@ -275,7 +287,9 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
     if (!qb.years || !includePlayoffs) return 1.0;
     // Calculate playoff adjustment factor for each QB (simplified)
     let adjustmentSum = 0, weightSum = 0;
-    const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+    const yearWeights = (filterYear && typeof filterYear === 'number')
+      ? { [filterYear.toString()]: 1.0 }
+      : PERFORMANCE_YEAR_WEIGHTS;
     
     Object.entries(qb.years).forEach(([year, data]) => {
       const weight = yearWeights[year] || 0;

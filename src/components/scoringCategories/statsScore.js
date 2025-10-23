@@ -49,8 +49,10 @@ const extractStatValues = (allQBsYearData, statExtractor) => {
  * Calculate z-score based efficiency scores
  * Uses z-scores for ANY/A, TD%, and Completion%
  */
-const calculateEfficiencyZScores = (qbSeasonData, allQBData, efficiencyWeights, includePlayoffs, include2024Only) => {
-  const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+const calculateEfficiencyZScores = (qbSeasonData, allQBData, efficiencyWeights, includePlayoffs, filterYear) => {
+  const yearWeights = (filterYear && typeof filterYear === 'number')
+    ? { [filterYear.toString()]: 1.0 }
+    : PERFORMANCE_YEAR_WEIGHTS;
   
   // Collect z-scores for each efficiency stat across years
   const yearlyZScores = {
@@ -65,10 +67,10 @@ const calculateEfficiencyZScores = (qbSeasonData, allQBData, efficiencyWeights, 
     
     const regSeasonAtts = parseInt(data.Att) || 0;
     
-    // Apply attempt thresholds
-    if (year === '2024' && include2024Only && regSeasonAtts < 150) return;
-    if (year === '2024' && !include2024Only && regSeasonAtts < 150) return;
-    if (year !== '2024' && regSeasonAtts < 200) return;
+    // Apply attempt thresholds - 150 for recent years (2024+), 200 for older years
+    const yearNum = parseInt(year);
+    const threshold = (yearNum >= 2024) ? 150 : 200;
+    if (regSeasonAtts < threshold) return;
     
     // Build population data for this year across all QBs
     const yearDataForAllQBs = {};
@@ -101,11 +103,10 @@ const calculateEfficiencyZScores = (qbSeasonData, allQBData, efficiencyWeights, 
       if (qbYearData) {
         const qbAtts = parseInt(qbYearData.Att) || 0;
         
-        // Apply same thresholds
-        let meetsThreshold = false;
-        if (year === '2024' && include2024Only && qbAtts >= 150) meetsThreshold = true;
-        if (year === '2024' && !include2024Only && qbAtts >= 150) meetsThreshold = true;
-        if (year !== '2024' && qbAtts >= 200) meetsThreshold = true;
+        // Apply same thresholds - 150 for recent years (2024+), 200 for older years
+        const yearNum = parseInt(year);
+        const threshold = (yearNum >= 2024) ? 150 : 200;
+        const meetsThreshold = qbAtts >= threshold;
         
         if (meetsThreshold) {
           yearDataForAllQBs[qb.name || qbYearData.Player] = qbYearData;
@@ -175,8 +176,10 @@ const calculateEfficiencyZScores = (qbSeasonData, allQBData, efficiencyWeights, 
  * Calculate z-score based protection scores
  * Uses z-scores for Sack% and Turnover Rate
  */
-const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, includePlayoffs, include2024Only) => {
-  const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, includePlayoffs, filterYear) => {
+  const yearWeights = (filterYear && typeof filterYear === 'number')
+    ? { [filterYear.toString()]: 1.0 }
+    : PERFORMANCE_YEAR_WEIGHTS;
   
   const yearlyZScores = {
     sackPct: [],
@@ -193,10 +196,10 @@ const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, 
     const regSeasonInts = parseInt(data.Int) || 0;
     const regSeasonFumbles = parseInt(data.Fumbles) || 0;
     
-    // Apply attempt thresholds
-    if (year === '2024' && include2024Only && regSeasonAtts < 150) return;
-    if (year === '2024' && !include2024Only && regSeasonAtts < 150) return;
-    if (year !== '2024' && regSeasonAtts < 200) return;
+    // Apply attempt thresholds - 150 for recent years (2024+), 200 for older years
+    const yearNum = parseInt(year);
+    const threshold = (yearNum >= 2024) ? 150 : 200;
+    if (regSeasonAtts < threshold) return;
     
     // Build population data for this year
     const yearDataForAllQBs = {};
@@ -229,10 +232,10 @@ const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, 
       if (qbYearData) {
         const qbAtts = parseInt(qbYearData.Att) || 0;
         
-        let meetsThreshold = false;
-        if (year === '2024' && include2024Only && qbAtts >= 150) meetsThreshold = true;
-        if (year === '2024' && !include2024Only && qbAtts >= 150) meetsThreshold = true;
-        if (year !== '2024' && qbAtts >= 200) meetsThreshold = true;
+        // Apply same thresholds - 150 for recent years (2024+), 200 for older years
+        const yearNum = parseInt(year);
+        const threshold = (yearNum >= 2024) ? 150 : 200;
+        const meetsThreshold = qbAtts >= threshold;
         
         if (meetsThreshold) {
           yearDataForAllQBs[qb.name || qbYearData.Player] = qbYearData;
@@ -300,8 +303,10 @@ const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, 
  * Calculate z-score based volume scores
  * Uses z-scores for Pass Yards, Pass TDs, Rush Yards, Rush TDs, Total Attempts
  */
-const calculateVolumeZScores = (qbSeasonData, allQBData, volumeWeights, includePlayoffs, include2024Only) => {
-  const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+const calculateVolumeZScores = (qbSeasonData, allQBData, volumeWeights, includePlayoffs, filterYear) => {
+  const yearWeights = (filterYear && typeof filterYear === 'number')
+    ? { [filterYear.toString()]: 1.0 }
+    : PERFORMANCE_YEAR_WEIGHTS;
   
   const yearlyZScores = {
     passYards: [],
@@ -317,10 +322,10 @@ const calculateVolumeZScores = (qbSeasonData, allQBData, volumeWeights, includeP
     
     const regSeasonAtts = parseInt(data.Att) || 0;
     
-    // Apply attempt thresholds
-    if (year === '2024' && include2024Only && regSeasonAtts < 150) return;
-    if (year === '2024' && !include2024Only && regSeasonAtts < 150) return;
-    if (year !== '2024' && regSeasonAtts < 200) return;
+    // Apply attempt thresholds - 150 for recent years (2024+), 200 for older years
+    const yearNum = parseInt(year);
+    const threshold = (yearNum >= 2024) ? 150 : 200;
+    if (regSeasonAtts < threshold) return;
     
     // Build population data
     const yearDataForAllQBs = {};
@@ -353,10 +358,10 @@ const calculateVolumeZScores = (qbSeasonData, allQBData, volumeWeights, includeP
       if (qbYearData) {
         const qbAtts = parseInt(qbYearData.Att) || 0;
         
-        let meetsThreshold = false;
-        if (year === '2024' && include2024Only && qbAtts >= 150) meetsThreshold = true;
-        if (year === '2024' && !include2024Only && qbAtts >= 150) meetsThreshold = true;
-        if (year !== '2024' && qbAtts >= 200) meetsThreshold = true;
+        // Apply same thresholds - 150 for recent years (2024+), 200 for older years
+        const yearNum = parseInt(year);
+        const threshold = (yearNum >= 2024) ? 150 : 200;
+        const meetsThreshold = qbAtts >= threshold;
         
         if (meetsThreshold) {
           yearDataForAllQBs[qb.name || qbYearData.Player] = qbYearData;
@@ -439,12 +444,12 @@ const calculateVolumeZScores = (qbSeasonData, allQBData, volumeWeights, includeP
  * Enhanced Statistical Performance Score with Z-Score calculations (0-100)
  */
 export const calculateStatsScore = (
-  qbSeasonData, 
-  statsWeights = { efficiency: 45, protection: 25, volume: 30 }, 
-  includePlayoffs = true, 
-  include2024Only = false, 
-  efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 }, 
-  protectionWeights = { sackPct: 60, turnoverRate: 40 }, 
+  qbSeasonData,
+  statsWeights = { efficiency: 45, protection: 25, volume: 30 },
+  includePlayoffs = true,
+  filterYear = null, // CHANGED: from include2024Only boolean to filterYear number
+  efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 },
+  protectionWeights = { sackPct: 60, turnoverRate: 40 },
   volumeWeights = { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 },
   allQBData = []
 ) => {
@@ -461,7 +466,9 @@ export const calculateStatsScore = (
     hasCurrentSeasonData = currentSeasonAtts >= 50;
   }
   
-  if (!hasCurrentSeasonData && !include2024Only) {
+  // In multi-year mode, check for historical data significance
+  const isSingleYear = filterYear && typeof filterYear === 'number';
+  if (!hasCurrentSeasonData && !isSingleYear) {
     let hasSignificantHistoricalData = false;
     Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
       if (year !== '2024') {
@@ -478,9 +485,9 @@ export const calculateStatsScore = (
   }
   
   // Calculate z-score based component scores
-  const efficiencyScore = calculateEfficiencyZScores(qbSeasonData, allQBData, efficiencyWeights, includePlayoffs, include2024Only);
-  const protectionScore = calculateProtectionZScores(qbSeasonData, allQBData, protectionWeights, includePlayoffs, include2024Only);
-  const volumeScore = calculateVolumeZScores(qbSeasonData, allQBData, volumeWeights, includePlayoffs, include2024Only);
+  const efficiencyScore = calculateEfficiencyZScores(qbSeasonData, allQBData, efficiencyWeights, includePlayoffs, filterYear);
+  const protectionScore = calculateProtectionZScores(qbSeasonData, allQBData, protectionWeights, includePlayoffs, filterYear);
+  const volumeScore = calculateVolumeZScores(qbSeasonData, allQBData, volumeWeights, includePlayoffs, filterYear);
   
   // Debug logging for key QBs
   const playerName = qbSeasonData.name || (qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player);
@@ -508,7 +515,9 @@ export const calculateStatsScore = (
   let playoffAdjustmentFactor = 1.0;
   
   if (includePlayoffs) {
-    const yearWeights = include2024Only ? { '2024': 1.0 } : PERFORMANCE_YEAR_WEIGHTS;
+    const yearWeights = (filterYear && typeof filterYear === 'number')
+      ? { [filterYear.toString()]: 1.0 }
+      : PERFORMANCE_YEAR_WEIGHTS;
     let totalPlayoffWeight = 0;
     let playoffPerformanceMultiplier = 1.0;
     

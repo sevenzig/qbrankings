@@ -6,10 +6,12 @@ import { STABILITY_YEAR_WEIGHTS } from './constants.js';
  * - Availability: 17 starts per season = 100, scales linearly down
  * - Consistency: Number of valid seasons with 8+ starts
  */
-export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, include2024Only = false, durabilityWeights = { availability: 75, consistency: 25 }, allQBData = []) => {
+export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, filterYear = null, durabilityWeights = { availability: 75, consistency: 25 }, allQBData = []) => {
   
-  // In 2024-only mode, only process 2024 data with 100% weight
-  const yearWeights = include2024Only ? { '2024': 1.0 } : STABILITY_YEAR_WEIGHTS;
+  // In single-year mode, only process that specific year with 100% weight
+  const yearWeights = (filterYear && typeof filterYear === 'number')
+    ? { [filterYear.toString()]: 1.0 }
+    : STABILITY_YEAR_WEIGHTS;
   
   // AVAILABILITY SCORING: Linear scale based on games started
   // Target: 17 regular season games (18 including playoffs for deep runs)
@@ -34,8 +36,8 @@ export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, i
       const playoffGamesStarted = parseInt(data.playoffData.gamesStarted) || 0;
       totalGames += playoffGamesStarted;
       
-      // In 2024-only mode, give extra credit for deep playoff runs
-      if (include2024Only && year === '2024') {
+      // In single-year mode, give extra credit for deep playoff runs
+      if (filterYear && year === filterYear.toString()) {
         const playoffWins = parseInt(data.playoffData.wins) || 0;
         // Conference Championship teams get moderate boost  
         if (playoffWins >= 2) {
@@ -75,7 +77,7 @@ export const calculateDurabilityScore = (qbSeasonData, includePlayoffs = true, i
   const normalizedWeights = normalizeWeights(durabilityWeights);
   let compositeDurabilityScore;
   
-  if (include2024Only) {
+  if (filterYear && typeof filterYear === 'number') {
     // Single season mode: ignore consistency component entirely
     compositeDurabilityScore = availabilityScore;
   } else {

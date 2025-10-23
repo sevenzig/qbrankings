@@ -24,17 +24,30 @@ export const useSupabaseQBData = () => {
     return Date.now() - lastFetch > CACHE_DURATION;
   }, [lastFetch]);
 
-  const fetchAllQBData = useCallback(async (include2024Only = false) => {
+  const fetchAllQBData = useCallback(async (yearMode = '2025') => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log(`🔄 Loading QB data from Supabase... (2024 Only: ${include2024Only})`);
+      const yearModeLabel = `${yearMode}`;
+      console.log(`🔄 Loading QB data from Supabase... (Mode: ${yearModeLabel})`);
       
-      // Fetch data from Supabase
-      const rawData = await qbDataService.fetchAllQBData(include2024Only);
+      // Parse year mode to numeric value
+      const year = parseInt(yearMode);
+      
+      // Fetch data from Supabase for specific year
+      const rawData = await qbDataService.fetchQBDataByYear(year);
       
       console.log(`📊 Supabase returned ${rawData ? rawData.length : 0} records`);
+      
+      // Debug: Check what years are in the data
+      if (rawData && rawData.length > 0) {
+        const uniqueYears = [...new Set(rawData.map(r => r.season))];
+        console.log(`📅 Years in data: ${uniqueYears.join(', ')}`);
+        if (uniqueYears.some(y => y !== year)) {
+          console.error(`❌ ERROR: ${year} mode but got data from years: ${uniqueYears.join(', ')}`);
+        }
+      }
       
       // Check if we got any data
       if (!rawData || rawData.length === 0) {
@@ -53,9 +66,15 @@ export const useSupabaseQBData = () => {
       const playerData = {};
       
       rawData.forEach(record => {
-        const playerName = record.player_name || record.players?.player_name || 'Unknown Player';
-        const seasonYear = parseInt(record.season) || 2024;
+        const playerName = record.player_name || 'Unknown Player';
+        const seasonYear = parseInt(record.season) || year;
         const gamesStarted = parseInt(record.gs) || 0;
+        
+        // Extra safety: Skip records that don't match our year mode
+        if (seasonYear !== year) {
+          console.warn(`⚠️ Skipping ${playerName} ${seasonYear} - not ${year}`);
+          return;
+        }
         
         console.log(`🔍 DEBUG - Processing ${playerName} for season ${seasonYear}: ${gamesStarted} games started`);
         
@@ -181,7 +200,26 @@ export const useSupabaseQBData = () => {
       }
       
       // Process QB data to create the final structure with stats property
-      const processedQBs = processQBData(playerData, include2024Only);
+      // Pass the specific year for filtering
+      let processedQBs = processQBData(playerData, year);
+      
+      // Additional filtering: only include QBs who have started games in this year
+      processedQBs = processedQBs.filter(qb => {
+        // Check if QB has any season data for this year with games started > 0
+        const hasYearGames = qb.seasonData?.some(season => 
+          season.year === year && season.gamesStarted > 0
+        );
+        return hasYearGames;
+      });
+      console.log(`📊 ${year} Filter: ${processedQBs.length} QBs have played in ${year} season`);
+      
+      if (processedQBs.length === 0) {
+        console.warn(`⚠️ WARNING: 0 QBs found for ${year} after filtering!`);
+        console.warn(`   This could mean:`);
+        console.warn(`   1. No data exists in database for ${year}`);
+        console.warn(`   2. All QBs were filtered out due to games started threshold`);
+        console.warn(`   3. Data structure mismatch (check rawData)`);
+      }
       
       console.log(`📊 After filtering: ${processedQBs.length} QBs passed threshold requirements`);
       
@@ -194,7 +232,7 @@ export const useSupabaseQBData = () => {
           { regularSeason: 65, playoff: 35 }, // teamWeights
           { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, // clutchWeights
           true, // includePlayoffs
-          include2024Only,
+          year, // filterYear - pass the specific year being viewed
           { anyA: 45, tdPct: 30, completionPct: 25 }, // efficiencyWeights
           { sackPct: 60, turnoverRate: 40 }, // protectionWeights
           { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, // volumeWeights
@@ -212,7 +250,7 @@ export const useSupabaseQBData = () => {
       setLastFetch(Date.now());
       setLoading(false);
       
-      console.log(`✅ Successfully processed ${qbsWithMetrics.length} quarterbacks from Supabase${include2024Only ? ' (2024 only mode)' : ''}`);
+      console.log(`✅ Successfully processed ${qbsWithMetrics.length} quarterbacks from Supabase (${yearModeLabel})`);
       
     } catch (error) {
       console.error('❌ Error loading QB data from Supabase:', error);
