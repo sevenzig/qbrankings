@@ -15,6 +15,7 @@
 import React, { useState, useEffect, useMemo, useCallback, startTransition } from 'react';
 import { Link } from 'react-router-dom';
 import { useUnifiedQBData } from '../hooks/useUnifiedQBData.js';
+import { useNavigation } from '../contexts/NavigationContext.jsx';
 import { calculateQEI, calculateQBMetrics } from '../utils/qbCalculations.js';
 
 import { PHILOSOPHY_PRESETS, getTeamInfo } from '../constants/teamData.js';
@@ -43,16 +44,17 @@ const DynamicQBRankings = () => {
     fetchAllQBData
   } = useUnifiedQBData('supabase'); // Use Supabase as primary data source
   
-  const [weights, setWeights] = useState({
-    team: 35,
-    stats: 35,
-    clutch: 0,
-    durability: 10,
-    support: 15
-  });
-  const [currentPreset, setCurrentPreset] = useState('default');
-  const [isCustomizeAccordionOpen, setIsCustomizeAccordionOpen] = useState(false);
-  const [isPresetsAccordionOpen, setIsPresetsAccordionOpen] = useState(false);
+  // Get navigation state from context
+  const {
+    weights,
+    currentPreset,
+    includePlayoffs,
+    yearMode,
+    onWeightsChange,
+    onPresetChange,
+    onIncludePlayoffsChange,
+    onYearModeChange
+  } = useNavigation();
   const [supportWeights, setSupportWeights] = useState({
     offensiveLine: 34,
     weapons: 33,
@@ -60,31 +62,31 @@ const DynamicQBRankings = () => {
   });
   const [showSupportDetails, setShowSupportDetails] = useState(false);
   const [statsWeights, setStatsWeights] = useState({
-    efficiency: 34,      // ANY/A, TD%, Completion%
-    protection: 33,      // Sack%, Int%, Fumble%
-    volume: 33          // Volume and production metrics
+    efficiency: 55,     // ANY/A, TD%, Completion% - Core of QB evaluation
+    protection: 15,      // Sack%, Turnover Rate - Decision-making focus
+    volume: 30          // Volume and production metrics - Secondary to efficiency
   });
   const [showStatsDetails, setShowStatsDetails] = useState(false);
   const [showEfficiencyDetails, setShowEfficiencyDetails] = useState(false);
   const [showProtectionDetails, setShowProtectionDetails] = useState(false);
   const [showVolumeDetails, setShowVolumeDetails] = useState(false);
   
-  // Sub-component weights for stats categories
+  // Sub-component weights for stats categories - NFL Scout Optimized
   const [efficiencyWeights, setEfficiencyWeights] = useState({
-    anyA: 45,           // Adjusted Net Yards per Attempt
-    tdPct: 30,          // Touchdown percentage
-    completionPct: 25   // Completion percentage
+    anyA: 50,           // Adjusted Net Yards per Attempt - Gold standard QB metric
+    tdPct: 35,          // Touchdown percentage - Ultimate production measure
+    completionPct: 15    // Completion percentage - Reduced due to modern NFL limitations
   });
   const [protectionWeights, setProtectionWeights] = useState({
-    sackPct: 40,        // Sack percentage (more O-line dependent)
-    turnoverRate: 60    // Combined turnover rate (more QB dependent)
+    sackPct: 25,        // Sack percentage - Reduced (heavily O-line dependent)
+    turnoverRate: 75    // Turnover rate - Increased (pure QB decision-making)
   });
   const [volumeWeights, setVolumeWeights] = useState({
-    passYards: 25,      // Passing yards
-    passTDs: 25,        // Passing touchdowns
-    rushYards: 20,      // Rushing yards
-    rushTDs: 15,        // Rushing touchdowns
-    totalAttempts: 15   // Total attempts (pass + rush)
+    passYards: 30,      // Passing yards - Increased (shows arm talent and accuracy)
+    passTDs: 35,         // Passing touchdowns - Increased (ultimate success measure)
+    rushYards: 15,       // Rushing yards - Reduced (secondary for QB evaluation)
+    rushTDs: 15,         // Rushing touchdowns - Maintained (goal line value)
+    totalAttempts: 5     // Total attempts - Reduced (attempts don't measure quality)
   });
   const [teamWeights, setTeamWeights] = useState({
     regularSeason: 65,   // Regular season win percentage
@@ -105,11 +107,8 @@ const DynamicQBRankings = () => {
   });
   const [showDurabilityDetails, setShowDurabilityDetails] = useState(false);
 
-  // Global playoff inclusion toggle - affects ALL calculations
-  const [includePlayoffs, setIncludePlayoffs] = useState(false);
-
-  // Global year mode - '2024' | '2025' | 'all' - affects ALL data loading and category availability
-  const [yearMode, setYearMode] = useState('2025');
+  // Accordion state
+  const [isCustomizeAccordionOpen, setIsCustomizeAccordionOpen] = useState(false);
 
   // Scroll to top functionality
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -156,19 +155,19 @@ const DynamicQBRankings = () => {
     }
   }, [includePlayoffs]);
 
-  // Handle 2025 mode changes - disable support and durability, set stats to 75% and team to 25%
+  // Handle 2025 mode changes - disable support and durability, keep pure QB quality focus
   useEffect(() => {
     if (yearMode === '2025') {
-      console.log('🔄 2025 Mode: Setting weights to Stats 75%, Team 25%, disabling Support and Durability');
-      setWeights({
-        team: 25,
-        stats: 75,
+      console.log('🔄 2025 Mode: Maintaining pure QB quality focus (Stats 100%, Team 0%)');
+      onWeightsChange({
+        team: 0,      // Pure QB evaluation - no team bias
+        stats: 100,   // 100% statistical evaluation
         clutch: 0,
         durability: 0,
         support: 0
       });
     }
-  }, [yearMode]);
+  }, [yearMode, onWeightsChange]);
 
 
 
@@ -180,12 +179,12 @@ const DynamicQBRankings = () => {
     }
     
     const validatedValue = validateNumberInput(value, 0, 100);
-    setWeights(prev => ({
+    onWeightsChange(prev => ({
       ...prev,
       [category]: validatedValue
     }));
-    setCurrentPreset('custom'); // Reset to custom when manually adjusting
-  }, [validateNumberInput, yearMode]);
+    onPresetChange('custom'); // Reset to custom when manually adjusting
+  }, [validateNumberInput, yearMode, onWeightsChange, onPresetChange]);
 
   const updateSupportWeight = useCallback((component, value) => {
     const validatedValue = validateNumberInput(value, 0, 100);
@@ -272,8 +271,8 @@ const DynamicQBRankings = () => {
     
     // Use startTransition to batch all state updates for better performance
     startTransition(() => {
-      setWeights(weightCategories);
-      setCurrentPreset(presetName);
+      onWeightsChange(weightCategories);
+      onPresetChange(presetName);
       
       // Apply sub-component weights if they exist in the preset
       if (supportWeights) {
@@ -308,7 +307,7 @@ const DynamicQBRankings = () => {
         setVolumeWeights(volumeWeights);
       }
     });
-  }, []);
+  }, [onWeightsChange, onPresetChange]);
 
   const normalizeWeights = useCallback(() => {
     const currentTotal = Object.values(weights).reduce((sum, val) => sum + val, 0);
@@ -344,9 +343,9 @@ const DynamicQBRankings = () => {
       }
     }
     
-    setWeights(normalizedWeights);
-    setCurrentPreset('custom');
-  }, [weights, applyPreset]);
+    onWeightsChange(normalizedWeights);
+    onPresetChange('custom');
+  }, [weights, applyPreset, onWeightsChange, onPresetChange]);
 
   // Normalization functions for sub-components
   const normalizeSupportWeights = useCallback(() => {
@@ -972,26 +971,44 @@ const DynamicQBRankings = () => {
   const [shareModalScreenshotUrl, setShareModalScreenshotUrl] = useState(null);
   const [shareModalLink, setShareModalLink] = useState('');
   const [shareModalType, setShareModalType] = useState('quick');
-  const [isScreenshotLoading, setIsScreenshotLoading] = useState(false);
+  const [isQuickShareLoading, setIsQuickShareLoading] = useState(false);
+  const [isFullShareLoading, setIsFullShareLoading] = useState(false);
 
   // Share functionality
   const handleShare = useCallback(async (shareType = 'quick') => {
+    console.log('🔗 Share button clicked:', shareType);
     try {
-      setIsScreenshotLoading(true);
+      if (shareType === 'quick') {
+        setIsQuickShareLoading(true);
+      } else {
+        setIsFullShareLoading(true);
+      }
       
       // Generate share link with URL shortening
+      console.log('🔗 Generating share link...');
       const linkResult = await generateShareLink(
         shareType === 'full', // fullDetail
         true // useShortening
       );
+      
+      console.log('🔗 Share link result:', linkResult);
       
       if (!linkResult.success) {
         throw new Error(linkResult.error || 'Failed to generate share link');
       }
 
       // Take screenshot
+      console.log('📸 Taking screenshot...');
       const isSingleYear = true; // All modes are now single-year
-      const { blobUrl } = await captureTop10QBsScreenshot(rankedQBs, { includePlayoffs, include2024Only: isSingleYear });
+      const screenshotResult = await captureTop10QBsScreenshot(rankedQBs, { includePlayoffs, include2024Only: isSingleYear });
+      
+      console.log('📸 Screenshot result:', screenshotResult);
+      const { blobUrl } = screenshotResult;
+      console.log('📸 Screenshot captured:', blobUrl);
+      
+      if (!blobUrl) {
+        throw new Error('Failed to generate screenshot - no blob URL returned');
+      }
       
       setShareModalScreenshotUrl(blobUrl);
       setShareModalLink(linkResult.url);
@@ -1010,12 +1027,17 @@ const DynamicQBRankings = () => {
       // You can store this in state if you want to show shortening info in the modal
       console.log('Share link generated:', modalData);
       
+      console.log('🔗 Opening share modal...');
       setIsShareModalOpen(true);
     } catch (err) {
       console.error('Failed to share:', err);
       alert(`Failed to generate ${linkResult?.fallbackUsed ? 'short URL (using full URL instead)' : 'screenshot or link'}.`);
     } finally {
-      setIsScreenshotLoading(false);
+      if (shareType === 'quick') {
+        setIsQuickShareLoading(false);
+      } else {
+        setIsFullShareLoading(false);
+      }
     }
   }, [generateShareLink, rankedQBs, includePlayoffs, yearMode]);
 
@@ -1050,7 +1072,7 @@ const DynamicQBRankings = () => {
         
         // Apply main weights
         if (decodedSettings.weights) {
-          setWeights(decodedSettings.weights);
+          onWeightsChange(decodedSettings.weights);
         }
         
         // Apply support weights if present
@@ -1080,15 +1102,15 @@ const DynamicQBRankings = () => {
         
         // Apply global settings if present
         if (decodedSettings.includePlayoffs !== undefined) {
-          setIncludePlayoffs(decodedSettings.includePlayoffs);
+          onIncludePlayoffsChange(decodedSettings.includePlayoffs);
         }
         
         // Apply year mode setting if present (with default to 2024)
         if (decodedSettings.yearMode !== undefined) {
-          setYearMode(decodedSettings.yearMode);
+          onYearModeChange(decodedSettings.yearMode);
         }
         
-        setCurrentPreset(preset && PHILOSOPHY_PRESETS[preset] ? preset : 'custom');
+        onPresetChange(preset && PHILOSOPHY_PRESETS[preset] ? preset : 'custom');
       }
     } else if (preset && PHILOSOPHY_PRESETS[preset]) {
       // Call applyPreset directly here instead of using it as a dependency
@@ -1097,8 +1119,8 @@ const DynamicQBRankings = () => {
         const { description, ...weightCategories } = presetData;
         
         startTransition(() => {
-          setWeights(weightCategories);
-          setCurrentPreset(preset);
+          onWeightsChange(weightCategories);
+          onPresetChange(preset);
           
           if (preset === 'default') {
             setSupportWeights({
@@ -1137,7 +1159,7 @@ const DynamicQBRankings = () => {
     
     // Mark that initial mount is complete
     setIsInitialMount(false);
-  }, []); // Only run once on mount - removed problematic dependency
+  }, [onWeightsChange, onPresetChange, onIncludePlayoffsChange, onYearModeChange]); // Dependencies for context handlers
 
   // Effect to handle playoff toggle changes for slider disabling only
   // REMOVED automatic weight adjustments to preserve user settings
@@ -1203,116 +1225,12 @@ const DynamicQBRankings = () => {
           </p>
         </div>
 
-        {/* Navigation Bar */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 mb-6">
-          <div className="flex flex-wrap justify-center gap-3">
-            <Link
-              to="/"
-              className="bg-blue-500/20 hover:bg-blue-500/30 px-4 py-2 rounded-lg font-bold transition-colors text-blue-200 hover:text-white"
-            >
-              🏈 QB Rankings
-            </Link>
-            <Link
-              to="/splits-comparison"
-              className="bg-orange-500/20 hover:bg-orange-500/30 px-4 py-2 rounded-lg font-bold transition-colors text-orange-200 hover:text-white"
-            >
-              📊 Splits Comparison
-            </Link>
-            <Link
-              to="/documentation"
-              className="bg-purple-500/20 hover:bg-purple-500/30 px-4 py-2 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
-            >
-              📚 Documentation
-            </Link>
-            <Link
-              to="/sql-test"
-              className="bg-green-500/20 hover:bg-green-500/30 px-4 py-2 rounded-lg font-bold transition-colors text-green-200 hover:text-white"
-            >
-              🧪 SQL Test
-            </Link>
-          </div>
-        </div>
 
 
 
 
 
-        {/* Quick Philosophy Presets - Collapsible (Hidden in 2025 mode) */}
-        {yearMode !== '2025' && (
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl mb-6">
-            {/* Presets Accordion Header */}
-            <div 
-              className="p-6 cursor-pointer hover:bg-white/5 transition-colors select-none"
-              onClick={() => setIsPresetsAccordionOpen(!isPresetsAccordionOpen)}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold text-white">⚡ Quick Philosophy Presets</h3>
-                  <p className="text-blue-200 text-sm mt-1">
-                    💡 Current: {getCurrentPresetDescription}
-                  </p>
-                </div>
-                <div className="ml-6 flex items-center justify-center">
-                  <div className={`
-                    w-8 h-8 rounded-full bg-white/10 border border-white/20 
-                    flex items-center justify-center
-                    transition-all duration-300 ease-in-out
-                    hover:bg-white/20 hover:border-white/30
-                    ${isPresetsAccordionOpen ? 'rotate-180 bg-blue-500/30 border-blue-400/50' : 'rotate-0'}
-                  `}>
-                    <svg 
-                      className="w-4 h-4 text-white transition-colors duration-300" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth={2} 
-                        d="M19 9l-7 7-7-7" 
-                      />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {/* Presets Accordion Content */}
-            {isPresetsAccordionOpen && (
-              <div className="border-t border-white/10">
-                <div className="p-6">
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => applyPreset('default')}
-                      className="px-4 py-2 rounded-lg font-medium transition-colors bg-gray-600/20 hover:bg-gray-600/30 text-gray-200"
-                    >
-                      ⚙️ Default
-                    </button>
-                    <button
-                      onClick={() => applyPreset('winner')}
-                      className="px-4 py-2 rounded-lg font-medium transition-colors bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-200"
-                    >
-                      🏆 Winner
-                    </button>
-                    <button
-                      onClick={() => applyPreset('analyst')}
-                      className="px-4 py-2 rounded-lg font-medium transition-colors bg-green-600/20 hover:bg-green-600/30 text-green-200"
-                    >
-                      📊 Analyst
-                    </button>
-                    <button
-                      onClick={() => applyPreset('context')}
-                      className="px-4 py-2 rounded-lg font-medium transition-colors bg-purple-600/20 hover:bg-purple-600/30 text-purple-200"
-                    >
-                      🏢 Context
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Customize Your QB Philosophy - Accordion */}
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl mb-8">
@@ -1360,9 +1278,9 @@ const DynamicQBRankings = () => {
               <div className="p-6">
                 <GlobalSettings
                   includePlayoffs={includePlayoffs}
-                  onIncludePlayoffsChange={setIncludePlayoffs}
+                  onIncludePlayoffsChange={onIncludePlayoffsChange}
                   yearMode={yearMode}
-                  onYearModeChange={setYearMode}
+                  onYearModeChange={onYearModeChange}
                 />
           
                 <WeightControls
@@ -1375,18 +1293,18 @@ const DynamicQBRankings = () => {
                   supportWeights={supportWeights}
                   onUpdateSupportWeight={updateSupportWeight}
                   onNormalizeSupportWeights={normalizeSupportWeights}
-                            statsWeights={statsWeights}
-          onUpdateStatsWeight={updateStatsWeight}
-          onNormalizeStatsWeights={normalizeStatsWeights}
-          efficiencyWeights={efficiencyWeights}
-          onUpdateEfficiencyWeight={updateEfficiencyWeight}
-          onNormalizeEfficiencyWeights={normalizeEfficiencyWeights}
-          protectionWeights={protectionWeights}
-          onUpdateProtectionWeight={updateProtectionWeight}
-          onNormalizeProtectionWeights={normalizeProtectionWeights}
-          volumeWeights={volumeWeights}
-          onUpdateVolumeWeight={updateVolumeWeight}
-          onNormalizeVolumeWeights={normalizeVolumeWeights}
+                  statsWeights={statsWeights}
+                  onUpdateStatsWeight={updateStatsWeight}
+                  onNormalizeStatsWeights={normalizeStatsWeights}
+                  efficiencyWeights={efficiencyWeights}
+                  onUpdateEfficiencyWeight={updateEfficiencyWeight}
+                  onNormalizeEfficiencyWeights={normalizeEfficiencyWeights}
+                  protectionWeights={protectionWeights}
+                  onUpdateProtectionWeight={updateProtectionWeight}
+                  onNormalizeProtectionWeights={normalizeProtectionWeights}
+                  volumeWeights={volumeWeights}
+                  onUpdateVolumeWeight={updateVolumeWeight}
+                  onNormalizeVolumeWeights={normalizeVolumeWeights}
                   teamWeights={teamWeights}
                   onUpdateTeamWeight={updateTeamWeight}
                   onNormalizeTeamWeights={normalizeTeamWeights}
@@ -1409,18 +1327,24 @@ const DynamicQBRankings = () => {
           <div className="flex flex-wrap justify-center gap-3 mb-2">
             <button 
               id="share-button-top"
-              onClick={() => handleShare('quick')}
+              onClick={() => {
+                console.log('🔗 Quick Share button clicked!');
+                handleShare('quick');
+              }}
               className="bg-blue-500/20 hover:bg-blue-500/30 px-6 py-3 rounded-lg font-bold transition-colors text-white"
-              disabled={isScreenshotLoading}
+              disabled={isQuickShareLoading || isFullShareLoading}
             >
-              {isScreenshotLoading ? '⏳ Generating...' : '🔗 Quick Share'}
+              {isQuickShareLoading ? '⏳ Generating...' : '🔗 Quick Share'}
             </button>
             <button 
-              onClick={() => handleShare('full')}
+              onClick={() => {
+                console.log('📋 Full Detail Share button clicked!');
+                handleShare('full');
+              }}
               className="bg-purple-500/20 hover:bg-purple-500/30 px-6 py-3 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
-              disabled={isScreenshotLoading}
+              disabled={isQuickShareLoading || isFullShareLoading}
             >
-              {isScreenshotLoading ? '⏳ Generating...' : '📋 Full Detail Share'}
+              {isFullShareLoading ? '⏳ Generating...' : '📋 Full Detail Share'}
             </button>
           </div>
           <p className="text-xs text-blue-400">
@@ -1449,18 +1373,24 @@ const DynamicQBRankings = () => {
             <div className="flex flex-wrap justify-center gap-3 mb-2">
               <button 
                 id="share-button"
-                onClick={() => handleShare('quick')}
+                onClick={() => {
+                  console.log('🔗 Bottom Quick Share button clicked!');
+                  handleShare('quick');
+                }}
                 className="bg-blue-500/20 hover:bg-blue-500/30 px-5 py-2 rounded-lg font-bold transition-colors"
-                disabled={isScreenshotLoading}
+                disabled={isQuickShareLoading || isFullShareLoading}
               >
-                {isScreenshotLoading ? '⏳ Generating...' : '🔗 Quick Share'}
+                {isQuickShareLoading ? '⏳ Generating...' : '🔗 Quick Share'}
               </button>
               <button 
-                onClick={() => handleShare('full')}
+                onClick={() => {
+                  console.log('📋 Bottom Full Detail Share button clicked!');
+                  handleShare('full');
+                }}
                 className="bg-purple-500/20 hover:bg-purple-500/30 px-5 py-2 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
-                disabled={isScreenshotLoading}
+                disabled={isQuickShareLoading || isFullShareLoading}
               >
-                {isScreenshotLoading ? '⏳ Generating...' : '📋 Full Detail Share'}
+                {isFullShareLoading ? '⏳ Generating...' : '📋 Full Detail Share'}
               </button>
             </div>
             <p className="text-xs text-blue-400">
@@ -1476,12 +1406,6 @@ const DynamicQBRankings = () => {
                   📚 View Scoring Methodology & Documentation
                 </Link>
                 <Link 
-                  to="/sql-test"
-                  className="bg-green-500/20 hover:bg-green-500/30 px-6 py-2 rounded-lg font-bold transition-colors text-green-200 hover:text-white"
-                >
-                  🧪 SQL Test & Data Examples
-                </Link>
-                <Link 
                   to="/splits-comparison"
                   className="bg-orange-500/20 hover:bg-orange-500/30 px-6 py-2 rounded-lg font-bold transition-colors text-orange-200 hover:text-white"
                 >
@@ -1490,9 +1414,6 @@ const DynamicQBRankings = () => {
               </div>
               <p className="text-xs text-purple-300 mt-2">
                 Learn how our QB evaluation system works - from team success to clutch performance
-              </p>
-              <p className="text-xs text-green-300 mt-1">
-                Test Supabase connections and explore 3rd & 1-3 quarterback data
               </p>
               <p className="text-xs text-orange-300 mt-1">
                 Compare any statistic from qb_splits or qb_splits_advanced tables

@@ -67,9 +67,13 @@ const calculateEfficiencyZScores = (qbSeasonData, allQBData, efficiencyWeights, 
     
     const regSeasonAtts = parseInt(data.Att) || 0;
     
-    // Apply attempt thresholds - 150 for recent years (2024+), 200 for older years
+    // Apply attempt thresholds - 40 for 2025 (partial season), 150 for 2024+, 200 for older years
     const yearNum = parseInt(year);
-    const threshold = (yearNum >= 2024) ? 150 : 200;
+    const threshold = (() => {
+      if (yearNum === 2025) return 40;   // Partial season - much lower threshold
+      if (yearNum >= 2024) return 150;   // Full recent seasons
+      return 200;                        // Historical seasons
+    })();
     if (regSeasonAtts < threshold) return;
     
     // Build population data for this year across all QBs
@@ -103,9 +107,13 @@ const calculateEfficiencyZScores = (qbSeasonData, allQBData, efficiencyWeights, 
       if (qbYearData) {
         const qbAtts = parseInt(qbYearData.Att) || 0;
         
-        // Apply same thresholds - 150 for recent years (2024+), 200 for older years
+        // Apply same thresholds - 75 for 2025 (partial season), 150 for 2024+, 200 for older years
         const yearNum = parseInt(year);
-        const threshold = (yearNum >= 2024) ? 150 : 200;
+        const threshold = (() => {
+          if (yearNum === 2025) return 40;   // Partial season - much lower threshold
+          if (yearNum >= 2024) return 150;   // Full recent seasons
+          return 200;                        // Historical seasons
+        })();
         const meetsThreshold = qbAtts >= threshold;
         
         if (meetsThreshold) {
@@ -196,9 +204,13 @@ const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, 
     const regSeasonInts = parseInt(data.Int) || 0;
     const regSeasonFumbles = parseInt(data.Fumbles) || 0;
     
-    // Apply attempt thresholds - 150 for recent years (2024+), 200 for older years
+    // Apply attempt thresholds - 75 for 2025 (partial season), 150 for 2024+, 200 for older years
     const yearNum = parseInt(year);
-    const threshold = (yearNum >= 2024) ? 150 : 200;
+    const threshold = (() => {
+      if (yearNum === 2025) return 40;   // Partial season - much lower threshold
+      if (yearNum >= 2024) return 150;   // Full recent seasons
+      return 200;                        // Historical seasons
+    })();
     if (regSeasonAtts < threshold) return;
     
     // Build population data for this year
@@ -232,9 +244,13 @@ const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, 
       if (qbYearData) {
         const qbAtts = parseInt(qbYearData.Att) || 0;
         
-        // Apply same thresholds - 150 for recent years (2024+), 200 for older years
+        // Apply same thresholds - 75 for 2025 (partial season), 150 for 2024+, 200 for older years
         const yearNum = parseInt(year);
-        const threshold = (yearNum >= 2024) ? 150 : 200;
+        const threshold = (() => {
+          if (yearNum === 2025) return 40;   // Partial season - much lower threshold
+          if (yearNum >= 2024) return 150;   // Full recent seasons
+          return 200;                        // Historical seasons
+        })();
         const meetsThreshold = qbAtts >= threshold;
         
         if (meetsThreshold) {
@@ -322,9 +338,13 @@ const calculateVolumeZScores = (qbSeasonData, allQBData, volumeWeights, includeP
     
     const regSeasonAtts = parseInt(data.Att) || 0;
     
-    // Apply attempt thresholds - 150 for recent years (2024+), 200 for older years
+    // Apply attempt thresholds - 75 for 2025 (partial season), 150 for 2024+, 200 for older years
     const yearNum = parseInt(year);
-    const threshold = (yearNum >= 2024) ? 150 : 200;
+    const threshold = (() => {
+      if (yearNum === 2025) return 40;   // Partial season - much lower threshold
+      if (yearNum >= 2024) return 150;   // Full recent seasons
+      return 200;                        // Historical seasons
+    })();
     if (regSeasonAtts < threshold) return;
     
     // Build population data
@@ -358,9 +378,13 @@ const calculateVolumeZScores = (qbSeasonData, allQBData, volumeWeights, includeP
       if (qbYearData) {
         const qbAtts = parseInt(qbYearData.Att) || 0;
         
-        // Apply same thresholds - 150 for recent years (2024+), 200 for older years
+        // Apply same thresholds - 40 for 2025 (partial season), 150 for 2024+, 200 for older years
         const yearNum = parseInt(year);
-        const threshold = (yearNum >= 2024) ? 150 : 200;
+        const threshold = (() => {
+          if (yearNum === 2025) return 40;   // Partial season - much lower threshold
+          if (yearNum >= 2024) return 150;   // Full recent seasons
+          return 200;                        // Historical seasons
+        })();
         const meetsThreshold = qbAtts >= threshold;
         
         if (meetsThreshold) {

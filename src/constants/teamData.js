@@ -52,55 +52,57 @@ export const TEAM_MAP = {
 
 export const PHILOSOPHY_PRESETS = {
   default: {
-    team: 40, stats: 40, clutch: 0, durability: 10, support: 10,
-    description: "Balanced default configuration with equal team/stats emphasis",
-    // Sub-component weights for default preset
+    team: 0, stats: 100, clutch: 0, durability: 0, support: 0,
+    description: "Pure QB Quality Focus - Statistical evaluation isolating individual quarterback talent",
+    // Sub-component weights for QB quality evaluation (NFL Scout Optimized)
     supportWeights: {
-      offensiveLine: 34,
+      offensiveLine: 34,  // Not used in default (support: 0)
       weapons: 33,
       defense: 33
     },
     statsWeights: {
-      efficiency: 40,
-      protection: 35,
-      volume: 25
+      efficiency: 55,      // Increased - efficiency is the core of QB evaluation
+      protection: 15,     // Reduced - still important for decision-making
+      volume: 30          // Increased - production matters for QB evaluation
     },
     teamWeights: {
-      regularSeason: 60,
+      regularSeason: 60,  // Not used in default (team: 0)
       offenseDVOA: 40,
       playoff: 0
     },
     clutchWeights: {
-      gameWinningDrives: 25,
+      gameWinningDrives: 25,  // Not used in default (clutch: 0)
       fourthQuarterComebacks: 25,
       clutchRate: 25,
       playoffBonus: 25
     },
     durabilityWeights: {
-      availability: 60,
+      availability: 60,   // Not used in default (durability: 0)
       consistency: 40
     },
-    // Inverted protection weights - INT% more important than Sack%
+    // Efficiency weights optimized for pure QB evaluation
     efficiencyWeights: {
-      anyA: 45,
-      tdPct: 30,
-      completionPct: 25
+      anyA: 50,           // Increased - ANY/A is the gold standard QB metric
+      tdPct: 35,          // Increased - TDs are the ultimate production measure
+      completionPct: 15    // Reduced - completion% has limitations in modern NFL
     },
+    // Protection weights focused on QB decision-making
     protectionWeights: {
-      sackPct: 40,        // Reduced - more O-line dependent
-      turnoverRate: 60    // Increased - more QB dependent
+      sackPct: 25,        // Reduced - heavily influenced by O-line
+      turnoverRate: 75    // Increased - pure QB decision-making and ball security
     },
+    // Volume weights balanced for production evaluation
     volumeWeights: {
-      passYards: 25,
-      passTDs: 25,
-      rushYards: 20,
-      rushTDs: 15,
-      totalAttempts: 15
+      passYards: 30,      // Increased - passing yards show arm talent and accuracy
+      passTDs: 35,         // Increased - TDs are the ultimate measure of success
+      rushYards: 15,       // Reduced - rushing is secondary for QB evaluation
+      rushTDs: 15,         // Reduced - passing TDs more valuable than rushing
+      totalAttempts: 5     // Reduced - attempts don't measure quality
     }
   },
   
   winner: {
-    team: 70, stats: 25, clutch: 0, durability: 5, support: 0,
+    team: 70, stats: 30, clutch: 0, durability: 0, support: 0,
     description: "Winning is everything - results-focused with elite QB recognition",
     // Sub-component weights for winner preset
     supportWeights: {

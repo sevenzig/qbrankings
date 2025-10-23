@@ -2,6 +2,9 @@ import React, { useState, useCallback } from 'react';
 
 const ShareModal = ({ isOpen, onClose, screenshotUrl, shareLink, shareType }) => {
   const [copySuccess, setCopySuccess] = useState(false);
+  
+  // Debug logging
+  console.log('📸 ShareModal props:', { isOpen, screenshotUrl, shareLink, shareType });
 
   const copyToClipboard = useCallback(async () => {
     try {
@@ -119,18 +122,30 @@ const ShareModal = ({ isOpen, onClose, screenshotUrl, shareLink, shareType }) =>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
             {/* Left Column - Screenshot */}
             <div className="order-1">
-              {screenshotUrl && (
-                <div>
-                  <h3 className="text-lg font-semibold text-white mb-3">📱 Preview</h3>
-                  <div className="bg-white/5 rounded-xl p-4 border border-blue-400/20">
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-3">📱 Preview</h3>
+                <div className="bg-white/5 rounded-xl p-4 border border-blue-400/20">
+                  {screenshotUrl ? (
                     <img 
                       src={screenshotUrl} 
                       alt="QB Rankings Screenshot" 
                       className="w-full h-auto rounded-lg shadow-lg border border-blue-400/30"
                       style={{ maxHeight: '500px', objectFit: 'contain' }}
+                      onLoad={() => console.log('📸 Image loaded successfully')}
+                      onError={(e) => console.error('📸 Image failed to load:', e)}
                     />
-                    
-                    {/* Screenshot Options - Mobile Layout (stacked buttons) */}
+                  ) : (
+                    <div className="flex items-center justify-center h-64 bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-600">
+                      <div className="text-center text-gray-400">
+                        <div className="text-4xl mb-2">📸</div>
+                        <div className="text-sm">Screenshot not available</div>
+                        <div className="text-xs mt-1">Preview will appear here</div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Screenshot Options - Mobile Layout (stacked buttons) */}
+                  {screenshotUrl && (
                     <div className="mt-3 flex flex-wrap gap-2 lg:hidden">
                       <button
                         onClick={downloadScreenshot}
@@ -151,9 +166,9 @@ const ShareModal = ({ isOpen, onClose, screenshotUrl, shareLink, shareType }) =>
                         🔍 View Full Size
                       </button>
                     </div>
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Right Column - Share Options */}
