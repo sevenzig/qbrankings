@@ -6,6 +6,8 @@
 export class URLShortener {
   static async shortenUrl(longUrl) {
     try {
+      console.log('🔗 Attempting to shorten URL:', longUrl.substring(0, 100) + '...');
+      
       const response = await fetch('/api/shorten', {
         method: 'POST',
         headers: {
@@ -14,12 +16,34 @@ export class URLShortener {
         body: JSON.stringify({ url: longUrl }),
       });
 
+      console.log('🔗 Response status:', response.status);
+      console.log('🔗 Response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
-        const errorData = await response.json();
+        let errorData;
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+          errorData = await response.json();
+        } else {
+          const textResponse = await response.text();
+          console.error('🔗 Non-JSON response:', textResponse);
+          throw new Error(`API returned non-JSON response (${response.status}): ${textResponse.substring(0, 100)}`);
+        }
+        
         throw new Error(errorData.error || 'Failed to shorten URL');
       }
 
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const textResponse = await response.text();
+        console.error('🔗 Expected JSON but got:', textResponse);
+        throw new Error('API returned non-JSON response');
+      }
+
       const data = await response.json();
+      console.log('✅ URL shortened successfully:', data.shortUrl);
+      
       return {
         success: true,
         shortUrl: data.shortUrl,
@@ -28,7 +52,8 @@ export class URLShortener {
         expiresIn: data.expiresIn,
       };
     } catch (error) {
-      console.error('URL shortening failed:', error);
+      console.error('❌ URL shortening failed:', error);
+      console.error('❌ Error details:', error.message);
       return {
         success: false,
         error: error.message,
@@ -48,6 +73,29 @@ export class URLShortener {
     // Create the full URL
     const presetParam = preset !== 'custom' && preset ? `&preset=${preset}` : '';
     const fullUrl = `${baseUrl}?s=${encodedSettings}${presetParam}`;
+
+    // Check if we're in development mode (localhost)
+    const isDevelopment = window.location.hostname === 'localhost' || 
+                         window.location.hostname === '127.0.0.1' ||
+                         window.location.hostname.includes('192.168.') ||
+                         window.location.port !== '';
+    
+    // Disable URL shortening in development mode (API routes not available)
+    if (isDevelopment && !useShortening) {
+      console.log('🔗 Development mode - using full URL (shortening disabled)');
+      return {
+        success: true,
+        url: fullUrl,
+        isShortened: false,
+        originalLength: fullUrl.length,
+        developmentMode: true,
+      };
+    }
+    
+    // In development, still try to shorten if explicitly requested
+    if (isDevelopment && useShortening) {
+      console.log('⚠️ Development mode - URL shortening may not work (API routes unavailable in dev)');
+    }
 
     // If URL shortening is disabled or URL is already short, return as-is
     if (!useShortening || fullUrl.length < 100) {
@@ -75,6 +123,7 @@ export class URLShortener {
       };
     } else {
       // Fallback to original URL if shortening fails
+      console.warn('⚠️ URL shortening failed, using full URL as fallback');
       return {
         success: true,
         url: fullUrl,

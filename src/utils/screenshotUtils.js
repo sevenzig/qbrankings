@@ -14,22 +14,43 @@ const preloadTeamLogos = async (qbs) => {
     teams.forEach(team => {
       const teamInfo = getTeamInfo(team.team);
       if (teamInfo.logo) {
-        logoUrls.add(teamInfo.logo);
+        // Convert relative path to absolute URL
+        let logoUrl = teamInfo.logo;
+        if (logoUrl.startsWith('/')) {
+          logoUrl = window.location.origin + logoUrl;
+        }
+        logoUrls.add(logoUrl);
       }
     });
   });
   
+  console.log('📸 Preloading', logoUrls.size, 'unique team logos');
+  
   const loadPromises = Array.from(logoUrls).map(url => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => resolve(img);
-      img.onerror = () => resolve(null); // Don't fail on logo load errors
+      
+      // Only use crossOrigin for external URLs
+      if (url.startsWith('http') && !url.startsWith(window.location.origin)) {
+        img.crossOrigin = 'anonymous';
+      }
+      
+      img.onload = () => {
+        console.log('✅ Logo preloaded:', url);
+        resolve(img);
+      };
+      img.onerror = (err) => {
+        console.warn('⚠️ Logo failed to preload:', url, err);
+        resolve(null); // Don't fail on logo load errors
+      };
       img.src = url;
     });
   });
   
-  return Promise.all(loadPromises);
+  const results = await Promise.all(loadPromises);
+  const successCount = results.filter(r => r !== null).length;
+  console.log(`📸 Preloaded ${successCount}/${logoUrls.size} logos successfully`);
+  return results;
 };
 
 /**
@@ -136,40 +157,64 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
   console.log('📸 Adding container to DOM...');
   document.body.appendChild(screenshotContainer);
   
-  // Wait a bit for images to load
-  console.log('📸 Waiting for images to load...');
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  // Wait for images to load and render
+  console.log('📸 Waiting for images to render...');
+  await new Promise(resolve => setTimeout(resolve, 2000)); // Increased wait time
   
   try {
     // Take screenshot with html2canvas
     console.log('📸 Taking screenshot with html2canvas...');
+    console.log('📸 Container dimensions:', screenshotContainer.offsetWidth, 'x', screenshotContainer.offsetHeight);
+    
     const canvas = await html2canvas(screenshotContainer, {
-      backgroundColor: '#1e3a8a', // Set background color
-      scale: 1, // Start with scale 1 for debugging
+      backgroundColor: '#1e3a8a',
+      scale: 2, // Higher quality screenshots
       useCORS: true,
-      allowTaint: true,
-      logging: true, // Enable logging to see what's happening
+      allowTaint: false, // Changed to false for better CORS handling
+      logging: false, // Disable verbose logging
+      imageTimeout: 15000, // 15 second timeout for images
+      removeContainer: false, // Keep container for debugging
+      foreignObjectRendering: false, // Use traditional rendering
       onclone: (clonedDoc) => {
-        console.log('📸 html2canvas cloned document');
+        console.log('📸 Document cloned for rendering');
+        // Ensure all images in cloned doc have loaded
+        const images = clonedDoc.querySelectorAll('img');
+        console.log('📸 Found', images.length, 'images in cloned document');
         return clonedDoc;
       }
     });
     
-    console.log('📸 Canvas created:', canvas.width, 'x', canvas.height);
+    console.log('📸 Canvas created successfully:', canvas.width, 'x', canvas.height, 'pixels');
+    
+    if (canvas.width === 0 || canvas.height === 0) {
+      throw new Error('Canvas has zero dimensions - screenshot failed');
+    }
     
     // Convert to blob URL for display in browser
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       canvas.toBlob((blob) => {
-        console.log('📸 Blob created:', blob?.size, 'bytes');
+        if (!blob) {
+          console.error('❌ Failed to create blob from canvas');
+          reject(new Error('Failed to create blob from canvas'));
+          return;
+        }
+        
+        console.log('📸 Blob created successfully:', (blob.size / 1024).toFixed(2), 'KB');
         const blobUrl = URL.createObjectURL(blob);
         console.log('📸 Blob URL created:', blobUrl);
         resolve({ blob, blobUrl });
       }, 'image/png', 1.0);
     });
     
+  } catch (error) {
+    console.error('❌ Screenshot generation failed:', error);
+    throw new Error(`Screenshot generation failed: ${error.message}`);
   } finally {
     // Clean up
-    document.body.removeChild(screenshotContainer);
+    console.log('📸 Cleaning up screenshot container');
+    if (document.body.contains(screenshotContainer)) {
+      document.body.removeChild(screenshotContainer);
+    }
   }
 };
 
@@ -216,31 +261,55 @@ async function getTeamLogosHtml(qb) {
         // Create a promise to load the image and convert to base64
         return new Promise((resolve) => {
           const img = new Image();
-          img.crossOrigin = 'anonymous';
+          
+          // Convert relative path to absolute URL using current origin
+          let logoUrl = teamInfo.logo;
+          if (logoUrl.startsWith('/')) {
+            logoUrl = window.location.origin + logoUrl;
+          }
+          
+          console.log('📸 Loading logo for', team.team, 'from:', logoUrl);
+          
+          // Only set crossOrigin for external URLs
+          if (logoUrl.startsWith('http') && !logoUrl.startsWith(window.location.origin)) {
+            img.crossOrigin = 'anonymous';
+          }
+          
           img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            // Use high resolution for crisp rendering
-            canvas.width = 64; // Good resolution for display
-            canvas.height = 64;
-            
-            // Enable smoothing for better quality
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            
-            // Draw at high resolution
-            ctx.drawImage(img, 0, 0, 64, 64);
-            const dataUrl = canvas.toDataURL('image/png', 1.0);
-            // Larger logos for better visibility
-            resolve(`<img src="${dataUrl}" style="width: 32px; height: 32px; object-fit: contain; vertical-align: middle; border-radius: 4px;" alt="${team.team}" />`);
+            try {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              // Use high resolution for crisp rendering
+              canvas.width = 64;
+              canvas.height = 64;
+              
+              // Enable smoothing for better quality
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              
+              // Draw at high resolution
+              ctx.drawImage(img, 0, 0, 64, 64);
+              const dataUrl = canvas.toDataURL('image/png', 1.0);
+              console.log('✅ Logo converted to base64 for', team.team);
+              // Larger logos for better visibility
+              resolve(`<img src="${dataUrl}" style="width: 32px; height: 32px; object-fit: contain; vertical-align: middle; border-radius: 4px;" alt="${team.team}" />`);
+            } catch (canvasError) {
+              console.warn('⚠️ Canvas conversion failed for', team.team, canvasError);
+              // Fallback to team abbreviation on canvas error
+              resolve(`<span style="color: white; font-weight: bold; font-size: 12px; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 4px; display: inline-block;">${team.team}</span>`);
+            }
           };
-          img.onerror = () => {
+          
+          img.onerror = (err) => {
+            console.warn('⚠️ Logo failed to load for', team.team, 'from', logoUrl, err);
             // Fallback to team abbreviation if logo fails to load
             resolve(`<span style="color: white; font-weight: bold; font-size: 12px; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 4px; display: inline-block;">${team.team}</span>`);
           };
-          img.src = teamInfo.logo;
+          
+          img.src = logoUrl;
         });
       } catch (error) {
+        console.warn('⚠️ Error processing logo for', team.team, error);
         // Fallback to team abbreviation
         return `<span style="color: white; font-weight: bold; font-size: 12px; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 4px; display: inline-block;">${team.team}</span>`;
       }

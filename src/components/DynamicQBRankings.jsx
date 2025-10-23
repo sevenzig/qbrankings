@@ -893,8 +893,9 @@ const DynamicQBRankings = () => {
     const qbsWithBaseScores = qbData.map(qb => {
       const baseScores = calculateQBMetrics(qb, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, parseInt(yearMode), efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights, qbData, weights.support);
       
-      // DEBUG: Log if we're getting zero/invalid base scores for 2025
-      if (yearMode === '2025' && (!baseScores.team || !baseScores.stats)) {
+      // DEBUG: Log if we're getting actually invalid base scores for 2025 (null, undefined, or NaN)
+      const isInvalidScore = (score) => score == null || isNaN(score);
+      if (yearMode === '2025' && (isInvalidScore(baseScores.team) || isInvalidScore(baseScores.stats))) {
         console.warn(`⚠️ ${qb.name} has invalid base scores:`, {
           team: baseScores.team,
           stats: baseScores.stats,
@@ -977,6 +978,8 @@ const DynamicQBRankings = () => {
   // Share functionality
   const handleShare = useCallback(async (shareType = 'quick') => {
     console.log('🔗 Share button clicked:', shareType);
+    let linkResult = null;
+    
     try {
       if (shareType === 'quick') {
         setIsQuickShareLoading(true);
@@ -986,7 +989,7 @@ const DynamicQBRankings = () => {
       
       // Generate share link with URL shortening
       console.log('🔗 Generating share link...');
-      const linkResult = await generateShareLink(
+      linkResult = await generateShareLink(
         shareType === 'full', // fullDetail
         true // useShortening
       );
@@ -998,17 +1001,29 @@ const DynamicQBRankings = () => {
       }
 
       // Take screenshot
-      console.log('📸 Taking screenshot...');
+      console.log('📸 Starting screenshot generation...');
+      console.log('📸 Ranked QBs count:', rankedQBs.length);
+      
       const isSingleYear = true; // All modes are now single-year
-      const screenshotResult = await captureTop10QBsScreenshot(rankedQBs, { includePlayoffs, include2024Only: isSingleYear });
+      const screenshotResult = await captureTop10QBsScreenshot(rankedQBs, { 
+        includePlayoffs, 
+        include2024Only: isSingleYear 
+      });
       
       console.log('📸 Screenshot result:', screenshotResult);
-      const { blobUrl } = screenshotResult;
-      console.log('📸 Screenshot captured:', blobUrl);
       
-      if (!blobUrl) {
-        throw new Error('Failed to generate screenshot - no blob URL returned');
+      if (!screenshotResult) {
+        throw new Error('Screenshot generation returned null/undefined');
       }
+      
+      const { blobUrl, blob } = screenshotResult;
+      
+      if (!blobUrl || !blob) {
+        throw new Error('Failed to generate screenshot - missing blob or blobUrl');
+      }
+      
+      console.log('📸 Screenshot captured successfully:', blobUrl);
+      console.log('📸 Screenshot size:', (blob.size / 1024).toFixed(2), 'KB');
       
       setShareModalScreenshotUrl(blobUrl);
       setShareModalLink(linkResult.url);
@@ -1024,14 +1039,29 @@ const DynamicQBRankings = () => {
         shareType: shareType,
       };
       
-      // You can store this in state if you want to show shortening info in the modal
-      console.log('Share link generated:', modalData);
-      
+      console.log('✅ Share link generated successfully:', modalData);
       console.log('🔗 Opening share modal...');
       setIsShareModalOpen(true);
+      
     } catch (err) {
-      console.error('Failed to share:', err);
-      alert(`Failed to generate ${linkResult?.fallbackUsed ? 'short URL (using full URL instead)' : 'screenshot or link'}.`);
+      console.error('❌ Failed to share:', err);
+      console.error('❌ Error stack:', err.stack);
+      
+      // More detailed error message
+      let errorMessage = 'Failed to generate share content. ';
+      if (err.message.includes('screenshot')) {
+        errorMessage += 'Screenshot generation failed. Please try again.';
+      } else if (err.message.includes('link')) {
+        errorMessage += 'URL generation failed. Please try again.';
+      } else {
+        errorMessage += err.message;
+      }
+      
+      if (linkResult?.fallbackUsed) {
+        errorMessage += ' (Using full URL instead of shortened URL)';
+      }
+      
+      alert(errorMessage);
     } finally {
       if (shareType === 'quick') {
         setIsQuickShareLoading(false);

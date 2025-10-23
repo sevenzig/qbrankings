@@ -9,7 +9,7 @@
       "destination": "/api/s/:id"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api).*)",
       "destination": "/index.html"
     }
   ]
