@@ -14,7 +14,7 @@
  */
 import React, { useState, useEffect, useMemo, useCallback, startTransition } from 'react';
 import { Link } from 'react-router-dom';
-import { useUnifiedQBData } from '../hooks/useUnifiedQBData.js';
+import { useSupabaseQBData } from '../hooks/useSupabaseQBData.js';
 import { useNavigation } from '../contexts/NavigationContext.jsx';
 import { calculateQEI, calculateQBMetrics } from '../utils/qbCalculations.js';
 
@@ -41,8 +41,9 @@ const DynamicQBRankings = () => {
     error, 
     lastFetch, 
     shouldRefreshData, 
-    fetchAllQBData
-  } = useUnifiedQBData('supabase'); // Use Supabase as primary data source
+    fetchAllQBData,
+    forceRefresh
+  } = useSupabaseQBData(); // Use Supabase as primary data source
   
   // Get navigation state from context
   const {
@@ -97,7 +98,7 @@ const DynamicQBRankings = () => {
   const [clutchWeights, setClutchWeights] = useState({
     gameWinningDrives: 25,    // GWD score component
     fourthQuarterComebacks: 25, // 4QC score component
-    clutchRate: 25,           // Combined clutch rate score
+    clutchRate: 25,           // Combined clutch rate scoregit a
     playoffBonus: 25          // Playoff success bonus (disabled when playoffs off)
   });
   const [showClutchDetails, setShowClutchDetails] = useState(false);
@@ -1311,6 +1312,7 @@ const DynamicQBRankings = () => {
                   onIncludePlayoffsChange={onIncludePlayoffsChange}
                   yearMode={yearMode}
                   onYearModeChange={onYearModeChange}
+                  onForceRefresh={forceRefresh}
                 />
           
                 <WeightControls

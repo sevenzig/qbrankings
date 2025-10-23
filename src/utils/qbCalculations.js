@@ -182,7 +182,9 @@ export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, wea
         // Add rushing data
         RushingYds: season.rushingYards || 0,
         RushingTDs: season.rushingTDs || 0,
+        RushingAtt: season.rushingAttempts || 0,
         Fumbles: season.fumbles || 0,
+        FumblesLost: season.fumblesLost || 0,
         
         // Add playoff data if available AND if playoffs are included globally
         playoffData: (season.playoffData && includePlayoffs) ? season.playoffData : null

@@ -1,8 +1,24 @@
 // Data processing utility functions
-import { parseQBRecord } from './csvParser.js';
 import { getTeamInfo } from '../constants/teamData.js';
 
-export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQbs2024, playoffQbs2023, playoffQbs2022, rushingQbs2024, rushingQbs2023, rushingQbs2022, rushingPlayoffQbs2024, rushingPlayoffQbs2023, rushingPlayoffQbs2022, qbs2025 = [], playoffQbs2025 = [], rushingQbs2025 = [], rushingPlayoffQbs2025 = []) => {
+// Parse QB record string (e.g., "12-4" -> {wins: 12, losses: 4, winPercentage: 0.75})
+export const parseQBRecord = (qbRecord) => {
+  if (!qbRecord || qbRecord === '') {
+    return { wins: 0, losses: 0, winPercentage: 0 };
+  }
+  
+  const parts = qbRecord.split('-');
+  const wins = parseInt(parts[0]) || 0;
+  const losses = parseInt(parts[1]) || 0;
+  const ties = parseInt(parts[2]) || 0;
+  
+  const totalGames = wins + losses + ties;
+  const winPercentage = totalGames > 0 ? wins / totalGames : 0;
+  
+  return { wins, losses, winPercentage };
+};
+
+export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQbs2024, playoffQbs2023, playoffQbs2022, qbs2025 = [], playoffQbs2025 = []) => {
   const playerData = {};
   
   // Process each year of data
@@ -227,99 +243,8 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
     });
   });
   
-  // Process rushing data for regular season
-  const rushingYearsData = [
-    { year: 2025, data: rushingQbs2025 },
-    { year: 2024, data: rushingQbs2024 },
-    { year: 2023, data: rushingQbs2023 },
-    { year: 2022, data: rushingQbs2022 }
-  ];
-
-  rushingYearsData.forEach(({ year, data }) => {
-    data.forEach(qb => {
-      // Only process quarterbacks with valid data - rushing CSV uses Pos▲ column
-      const position = qb.Pos || qb['Pos▲'] || '';
-      if (position !== 'QB' || !qb.Player || !qb.Team || qb.Team.length > 3) {
-        return;
-      }
-      
-      const playerName = qb.Player.trim();
-      
-      // Only add rushing data if the player already exists (played regular season passing)
-      if (!playerData[playerName]) return;
-      
-      // Add rushing data to the existing regular season data for this year
-      const existingSeasonIndex = playerData[playerName].seasons.findIndex(s => s.year === year);
-      if (existingSeasonIndex >= 0) {
-        const season = playerData[playerName].seasons[existingSeasonIndex];
-        
-        // Add rushing statistics
-        season.rushingYards = parseInt(qb.Yds) || 0;
-        season.rushingTDs = parseInt(qb.TD) || 0;
-        season.rushingAttempts = parseInt(qb.Att) || 0;
-        season.fumbles = parseInt(qb.Fmb) || 0;
-        
-        // Update career rushing totals
-        const career = playerData[playerName].career;
-        career.rushingYards = (career.rushingYards || 0) + season.rushingYards;
-        career.rushingTDs = (career.rushingTDs || 0) + season.rushingTDs;
-        career.fumbles = (career.fumbles || 0) + season.fumbles;
-        
-        // Debug for mobile QBs and Mahomes
-        if (season.rushingYards > 200 || playerName.includes('Mahomes')) {
-          console.log(`🏃 RUSHING ${playerName} ${year}: ${season.rushingYards} yards, ${season.rushingTDs} TDs, ${season.fumbles} fumbles`);
-          if (playerName.includes('Mahomes')) {
-            console.log(`🏃 MAHOMES ${year} RUSHING: ${season.rushingYards} yards added, career rushing total now: ${career.rushingYards}`);
-          }
-        }
-      }
-    });
-  });
-
-  // Process rushing playoff data
-  const rushingPlayoffYearsData = [
-    { year: 2025, data: rushingPlayoffQbs2025 },
-    { year: 2024, data: rushingPlayoffQbs2024 },
-    { year: 2023, data: rushingPlayoffQbs2023 },
-    { year: 2022, data: rushingPlayoffQbs2022 }
-  ];
-
-  rushingPlayoffYearsData.forEach(({ year, data }) => {
-    data.forEach(qb => {
-      // Only process quarterbacks with valid data - rushing CSV uses Pos▲ column
-      const position = qb.Pos || qb['Pos▲'] || '';
-      if (position !== 'QB' || !qb.Player || !qb.Team || qb.Team.length > 3) {
-        return;
-      }
-      
-      const playerName = qb.Player.trim();
-      
-      // Only add rushing playoff data if the player already exists
-      if (!playerData[playerName]) return;
-      
-      // Add rushing playoff data to the existing season
-      const existingSeasonIndex = playerData[playerName].seasons.findIndex(s => s.year === year);
-      if (existingSeasonIndex >= 0) {
-        const season = playerData[playerName].seasons[existingSeasonIndex];
-        
-        // Ensure playoff data exists
-        if (!season.playoffData) {
-          season.playoffData = {};
-        }
-        
-        // Add rushing playoff statistics
-        season.playoffData.rushingYards = parseInt(qb.Yds) || 0;
-        season.playoffData.rushingTDs = parseInt(qb.TD) || 0;
-        season.playoffData.rushingAttempts = parseInt(qb.Att) || 0;
-        season.playoffData.fumbles = parseInt(qb.Fmb) || 0;
-        
-        // Debug rushing playoff data for mobile QBs
-        if (season.playoffData.rushingYards > 50) {
-          console.log(`🏃🏆 PLAYOFF RUSHING ${playerName} ${year}: ${season.playoffData.rushingYards} yards, ${season.playoffData.rushingTDs} TDs`);
-        }
-      }
-    });
-  });
+  // Note: Rushing data is now fetched directly from Supabase qb_splits table
+  // Data is merged in the Supabase queries
   
   // Calculate final career averages
   Object.values(playerData).forEach(player => {
@@ -360,7 +285,8 @@ export const processQBData = (combinedQBData, filterYear = null) => {
         
         // Adjust threshold based on year (2025 has fewer games)
         // For 2025 mid-season: use 1 game minimum since season is in progress
-        const minGames = filterYear === 2025 ? 1 : 9; // Very low threshold for in-progress 2025 season
+        // For older seasons: use 3 games minimum to match the 50 attempts threshold (~3 games)
+        const minGames = filterYear === 2025 ? 1 : 3; // Lower threshold to match 50 attempts (~3 games)
         const passes = hasYearActivity && totalYearGames >= minGames;
         
         if (!passes) {

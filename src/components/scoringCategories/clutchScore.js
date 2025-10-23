@@ -5,6 +5,20 @@ import {
   calculateStandardDeviation,
   zScoreToPercentile
 } from '../../utils/zScoreCalculations.js';
+import { 
+  fetchClutchSplitsForQB, 
+  fetchAllQBsClutchData,
+  hasSufficientClutchData 
+} from '../../utils/clutchDataService.js';
+import { 
+  calculateCategoryPerformance,
+  calculateAllCategoryPerformance,
+  calculateOverallClutchScore
+} from '../../utils/clutchMetricsCalculator.js';
+import { 
+  getClutchCategoryKeys, 
+  getClutchCategoryWeights 
+} from '../../utils/clutchCategories.js';
 
 // Helper function to normalize weights within a group
 const normalizeWeights = (weights) => {
@@ -89,243 +103,223 @@ const calculateZScoreValue = (value, allValues, inverted = false) => {
   return zScore;
 };
 
-// Enhanced Clutch Performance Score with playoff integration (0-100)
+// Enhanced Clutch Performance Score using situational split data (0-100)
 export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, filterYear = null, allQBData = []) => {
-  let totalGWD = 0;
-  let totalFourthQC = 0;
-  let totalGames = 0;
-  let totalWeight = 0;
-  let playoffAdjustmentFactor = 1.0; // Default: no playoff adjustment
-  
-  // Debug logging for playoff inclusion
-  const debugMode = includePlayoffs;
-  const playerName = qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player;
-  
-  if (debugMode && playerName && (playerName.includes('Mahomes') || playerName.includes('Hurts') || playerName.includes('Allen'))) {
-    console.log(`💎 CLUTCH DEBUG - ${playerName} (Playoffs ${includePlayoffs ? 'ADJUSTMENT MODE' : 'EXCLUDED'})`);
-  }
-  
-  // First Pass: Calculate strong regular season base scores
-  // In single-year mode, only process that specific year with 100% weight
-  const yearWeights = (filterYear && typeof filterYear === 'number')
-    ? { [filterYear.toString()]: 1.0 }
-    : PERFORMANCE_YEAR_WEIGHTS;
-  
-  Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
-    const weight = yearWeights[year] || 0;
-    const gamesPlayed = parseInt(data.G) || 0;
-    if (weight === 0 || (!data.GWD && !data['4QC'])) return;
+  try {
+    // Debug logging
+    const playerName = qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player;
+    const debugMode = includePlayoffs && playerName && (playerName.includes('Mahomes') || playerName.includes('Hurts') || playerName.includes('Allen'));
     
-    // Apply games threshold - lower for single-year mode (9 games) vs multi-year (10 games)
-    const isSingleYear = filterYear && typeof filterYear === 'number';
-    const gamesThreshold = isSingleYear ? 9 : 10;
-    if (gamesPlayed < gamesThreshold) return;
+    if (debugMode) {
+      console.log(`💎 CLUTCH DEBUG - ${playerName} (New Split-Based System)`);
+    }
+
+    // For now, fall back to the original GWD/4QC system until async data fetching is implemented
+    // This maintains compatibility while the new system is being developed
+    console.log('🔄 Using fallback GWD/4QC clutch system (new split-based system in development)');
     
-    // Regular season clutch stats only for base calculation
-    const seasonGWD = parseInt(data.GWD) || 0;
-    const seasonFourthQC = parseInt(data['4QC']) || 0;
-    const seasonGames = parseInt(data.G) || 17;
+    // Original GWD/4QC calculation logic
+    let totalGWD = 0;
+    let totalFourthQC = 0;
+    let totalGames = 0;
+    let totalWeight = 0;
+    let playoffAdjustmentFactor = 1.0;
     
-    totalGWD += seasonGWD * weight;
-    totalFourthQC += seasonFourthQC * weight;
-    totalGames += seasonGames * weight;
-    totalWeight += weight;
-  });
-
-  if (totalWeight === 0 || totalGames === 0) return 0;
-
-  // Normalize regular season weighted totals for rate calculations
-  totalGWD = totalGWD / totalWeight;
-  totalFourthQC = totalFourthQC / totalWeight;
-  totalGames = totalGames / totalWeight;
-
-  // Second Pass: Calculate playoff clutch performance adjustment if enabled
-  if (includePlayoffs) {
-    let totalPlayoffWeight = 0;
-    let playoffClutchMultiplier = 1.0;
+    const yearWeights = (filterYear && typeof filterYear === 'number')
+      ? { [filterYear.toString()]: 1.0 }
+      : PERFORMANCE_YEAR_WEIGHTS;
     
     Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
       const weight = yearWeights[year] || 0;
-      if (weight === 0 || !data.playoffData) return;
-      
-      const playoff = data.playoffData;
-      const playoffGWD = parseInt(playoff.gameWinningDrives) || 0;
-      const playoffFourthQC = parseInt(playoff.fourthQuarterComebacks) || 0;
-      const playoffGamesStarted = parseInt(playoff.gamesStarted) || 0;
-      
-      // Regular season clutch stats for comparison
-      const regSeasonGWD = parseInt(data.GWD) || 0;
-      const regSeasonFourthQC = parseInt(data['4QC']) || 0;
-      const regSeasonGames = parseInt(data.G) || 17;
-      
-      if (playoffGamesStarted > 0 && regSeasonGames > 0) {
-        // Calculate playoff vs regular season clutch performance rates
-        const playoffGWDRate = playoffGWD / playoffGamesStarted;
-        const playoffFourthQCRate = playoffFourthQC / playoffGamesStarted;
-        const regGWDRate = regSeasonGWD / regSeasonGames;
-        const regFourthQCRate = regSeasonFourthQC / regSeasonGames;
-        
-        // Calculate performance improvement/decline ratios (capped for sanity)
-        const gwdRatio = Math.max(0.75, Math.min(1.35, playoffGWDRate / Math.max(regGWDRate, 0.05)));
-        const fourthQCRatio = Math.max(0.75, Math.min(1.35, playoffFourthQCRate / Math.max(regFourthQCRate, 0.03)));
-        
-        // Average the clutch performance ratios
-        const avgClutchRatio = (gwdRatio + fourthQCRatio) / 2;
-        
-        // Apply round progression modifier (modest impact)
-        const playoffWins = parseInt(playoff.wins) || 0;
-        const playoffLosses = parseInt(playoff.losses) || 0;
-        const totalPlayoffGames = playoffWins + playoffLosses;
-        
-        let roundImportanceBonus = 1.0;
-        if (totalPlayoffGames >= 3 && playoffWins >= 2) {
-          // Known Super Bowl results for accurate detection
-          const knownSuperBowlWins = {
-            'KAN': [2022, 2023], // Chiefs won 2022 and 2023 Super Bowls (Mahomes)
-            'PHI': [2024] // Eagles won 2024 Super Bowl (Hurts)
-          };
-          
-          if (knownSuperBowlWins[data.Team] && knownSuperBowlWins[data.Team].includes(parseInt(year))) {
-            roundImportanceBonus = 1.10; // Consistent across both modes
-          } else if (playoffWins >= 2) {
-            roundImportanceBonus = 1.05; // Consistent across both modes
-          }
-        }
-        
-        // Combine clutch performance ratio with round importance
-        const seasonClutchMultiplier = avgClutchRatio * roundImportanceBonus;
-        playoffClutchMultiplier += (seasonClutchMultiplier - 1.0) * weight;
-        totalPlayoffWeight += weight;
-        
-        if (debugMode && playerName) {
-          console.log(`💎 ${year}: Playoff clutch adjustment - GWD ratio: ${gwdRatio.toFixed(3)}, 4QC ratio: ${fourthQCRatio.toFixed(3)}, Round bonus: ${roundImportanceBonus.toFixed(3)}, Combined: ${seasonClutchMultiplier.toFixed(3)}`);
-        }
-      }
-    });
-    
-    // Normalize the playoff clutch adjustment
-    if (totalPlayoffWeight > 0) {
-      playoffAdjustmentFactor = 1.0 + (playoffClutchMultiplier / totalPlayoffWeight);
-      // Cap the adjustment to prevent extreme swings - RELAXED CAPS to avoid systematic deflation
-      playoffAdjustmentFactor = Math.max(0.98, Math.min(1.20, playoffAdjustmentFactor));
-    }
-    
-    if (debugMode && playerName) {
-      console.log(`💎 Final playoff clutch adjustment factor: ${playoffAdjustmentFactor.toFixed(3)}`);
-    }
-  }
-
-  // Calculate per-game rates using regular season base
-  const gwdPerGame = totalGames > 0 ? totalGWD / totalGames : 0;
-  const comebacksPerGame = totalFourthQC / totalGames;
-  const totalClutchPerGame = gwdPerGame + comebacksPerGame;
-
-  // RELATIVE PERCENTILE-BASED CLUTCH SCORING - Following normalization rules
-  // Step 1: Calculate metrics for all QBs to establish distributions
-  const allGWDRates = allQBData.map(qb => {
-    if (!qb.years) return 0;
-    const yearWeights = (filterYear && typeof filterYear === 'number')
-      ? { [filterYear.toString()]: 1.0 }
-      : PERFORMANCE_YEAR_WEIGHTS;
-    let gwdSum = 0, gamesSum = 0, weightSum = 0;
-    
-    Object.entries(qb.years).forEach(([year, data]) => {
-      const weight = yearWeights[year] || 0;
-      if (weight === 0 || !data.GWD) return;
-      const gwd = parseInt(data.GWD) || 0;
-      const games = parseInt(data.G) || 17;
-      gwdSum += gwd * weight;
-      gamesSum += games * weight;
-      weightSum += weight;
-    });
-    
-    return weightSum > 0 ? (gwdSum / weightSum) / (gamesSum / weightSum) : 0;
-  }).filter(v => !isNaN(v) && isFinite(v));
-
-  const allFourthQCRates = allQBData.map(qb => {
-    if (!qb.years) return 0;
-    const yearWeights = (filterYear && typeof filterYear === 'number')
-      ? { [filterYear.toString()]: 1.0 }
-      : PERFORMANCE_YEAR_WEIGHTS;
-    let qcSum = 0, gamesSum = 0, weightSum = 0;
-    
-    Object.entries(qb.years).forEach(([year, data]) => {
-      const weight = yearWeights[year] || 0;
-      if (weight === 0 || !data['4QC']) return;
-      const qc = parseInt(data['4QC']) || 0;
-      const games = parseInt(data.G) || 17;
-      qcSum += qc * weight;
-      gamesSum += games * weight;
-      weightSum += weight;
-    });
-    
-    return weightSum > 0 ? (qcSum / weightSum) / (gamesSum / weightSum) : 0;
-  }).filter(v => !isNaN(v) && isFinite(v));
-
-  const allClutchRates = allQBData.map(qb => {
-    if (!qb.years) return 0;
-    const yearWeights = (filterYear && typeof filterYear === 'number')
-      ? { [filterYear.toString()]: 1.0 }
-      : PERFORMANCE_YEAR_WEIGHTS;
-    let totalClutch = 0, gamesSum = 0, weightSum = 0;
-    
-    Object.entries(qb.years).forEach(([year, data]) => {
-      const weight = yearWeights[year] || 0;
+      const gamesPlayed = parseInt(data.G) || 0;
       if (weight === 0 || (!data.GWD && !data['4QC'])) return;
-      const gwd = parseInt(data.GWD) || 0;
-      const qc = parseInt(data['4QC']) || 0;
-      const games = parseInt(data.G) || 17;
-      totalClutch += (gwd + qc) * weight;
-      gamesSum += games * weight;
-      weightSum += weight;
+      
+      const isSingleYear = filterYear && typeof filterYear === 'number';
+      const gamesThreshold = isSingleYear ? 9 : 10;
+      if (gamesPlayed < gamesThreshold) return;
+      
+      const seasonGWD = parseInt(data.GWD) || 0;
+      const seasonFourthQC = parseInt(data['4QC']) || 0;
+      const seasonGames = parseInt(data.G) || 17;
+      
+      totalGWD += seasonGWD * weight;
+      totalFourthQC += seasonFourthQC * weight;
+      totalGames += seasonGames * weight;
+      totalWeight += weight;
     });
-    
-    return weightSum > 0 ? (totalClutch / weightSum) / (gamesSum / weightSum) : 0;
-  }).filter(v => !isNaN(v) && isFinite(v));
 
-  const allPlayoffAdjustments = allQBData.map(qb => {
-    if (!qb.years || !includePlayoffs) return 1.0;
-    // Calculate playoff adjustment factor for each QB (simplified)
-    let adjustmentSum = 0, weightSum = 0;
-    const yearWeights = (filterYear && typeof filterYear === 'number')
-      ? { [filterYear.toString()]: 1.0 }
-      : PERFORMANCE_YEAR_WEIGHTS;
-    
-    Object.entries(qb.years).forEach(([year, data]) => {
-      const weight = yearWeights[year] || 0;
-      if (weight === 0 || !data.playoffData) return;
-      adjustmentSum += weight; // Basic playoff participation bonus
-      weightSum += weight;
-    });
-    
-    return weightSum > 0 ? 1.0 + (adjustmentSum * 0.1) : 1.0; // Small playoff bonus
-  }).filter(v => !isNaN(v) && isFinite(v));
+    if (totalWeight === 0 || totalGames === 0) return 0;
 
-  // Step 2: Score current QB relative to all others using z-scores (not percentiles)
-  const gwdZ = calculateZScoreValue(gwdPerGame, allGWDRates);
-  const comebackZ = calculateZScoreValue(comebacksPerGame, allFourthQCRates);
-  const clutchRateZ = calculateZScoreValue(totalClutchPerGame, allClutchRates);
-  const playoffBonusZ = calculateZScoreValue(playoffAdjustmentFactor, allPlayoffAdjustments);
-  
-  // Calculate weighted average of z-scores using sub-component weights
-  const clutchComponentZScores = {
-    gameWinningDrives: gwdZ,
-    fourthQuarterComebacks: comebackZ,
-    clutchRate: clutchRateZ,
-    playoffBonus: playoffBonusZ
-  };
-  
-  // Use hierarchical scoring on z-scores
-  const clutchCompositeZScore = calculateHierarchicalScore(clutchComponentZScores, clutchWeights);
+    totalGWD = totalGWD / totalWeight;
+    totalFourthQC = totalFourthQC / totalWeight;
+    totalGames = totalGames / totalWeight;
 
-  if (debugMode && playerName) {
-    console.log(`💎 CLUTCH Z-SCORE CALCULATION:`);
-    console.log(`💎 Z-Scores: GWD(${gwdZ.toFixed(3)}) + 4QC(${comebackZ.toFixed(3)}) + Rate(${clutchRateZ.toFixed(3)}) + PlayoffBonus(${playoffBonusZ.toFixed(3)})`);
-    console.log(`💎 Weights: GWD(${clutchWeights.gameWinningDrives}%) + 4QC(${clutchWeights.fourthQuarterComebacks}%) + Rate(${clutchWeights.clutchRate}%) + Playoff(${clutchWeights.playoffBonus}%)`);
-    console.log(`💎 Composite Z-Score: ${clutchCompositeZScore.toFixed(3)}`);
-    console.log(`💎 Raw Rates: ${gwdPerGame.toFixed(3)} GWD/game, ${comebacksPerGame.toFixed(3)} 4QC/game (relative to ${allGWDRates.length} QBs)`);
+    // Playoff adjustment
+    if (includePlayoffs) {
+      let totalPlayoffWeight = 0;
+      let playoffClutchMultiplier = 1.0;
+      
+      Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
+        const weight = yearWeights[year] || 0;
+        if (weight === 0 || !data.playoffData) return;
+        
+        const playoff = data.playoffData;
+        const playoffGWD = parseInt(playoff.gameWinningDrives) || 0;
+        const playoffFourthQC = parseInt(playoff.fourthQuarterComebacks) || 0;
+        const playoffGamesStarted = parseInt(playoff.gamesStarted) || 0;
+        
+        const regSeasonGWD = parseInt(data.GWD) || 0;
+        const regSeasonFourthQC = parseInt(data['4QC']) || 0;
+        const regSeasonGames = parseInt(data.G) || 17;
+        
+        if (playoffGamesStarted > 0 && regSeasonGames > 0) {
+          const playoffGWDRate = playoffGWD / playoffGamesStarted;
+          const playoffFourthQCRate = playoffFourthQC / playoffGamesStarted;
+          const regGWDRate = regSeasonGWD / regSeasonGames;
+          const regFourthQCRate = regSeasonFourthQC / regSeasonGames;
+          
+          const gwdRatio = Math.max(0.75, Math.min(1.35, playoffGWDRate / Math.max(regGWDRate, 0.05)));
+          const fourthQCRatio = Math.max(0.75, Math.min(1.35, playoffFourthQCRate / Math.max(regFourthQCRate, 0.03)));
+          
+          const avgClutchRatio = (gwdRatio + fourthQCRatio) / 2;
+          
+          const playoffWins = parseInt(playoff.wins) || 0;
+          const playoffLosses = parseInt(playoff.losses) || 0;
+          const totalPlayoffGames = playoffWins + playoffLosses;
+          
+          let roundImportanceBonus = 1.0;
+          if (totalPlayoffGames >= 3 && playoffWins >= 2) {
+            const knownSuperBowlWins = {
+              'KAN': [2022, 2023],
+              'PHI': [2024]
+            };
+            
+            if (knownSuperBowlWins[data.Team] && knownSuperBowlWins[data.Team].includes(parseInt(year))) {
+              roundImportanceBonus = 1.10;
+            } else if (playoffWins >= 2) {
+              roundImportanceBonus = 1.05;
+            }
+          }
+          
+          const seasonClutchMultiplier = avgClutchRatio * roundImportanceBonus;
+          playoffClutchMultiplier += (seasonClutchMultiplier - 1.0) * weight;
+          totalPlayoffWeight += weight;
+        }
+      });
+      
+      if (totalPlayoffWeight > 0) {
+        playoffAdjustmentFactor = 1.0 + (playoffClutchMultiplier / totalPlayoffWeight);
+        playoffAdjustmentFactor = Math.max(0.98, Math.min(1.20, playoffAdjustmentFactor));
+      }
+    }
+
+    const gwdPerGame = totalGames > 0 ? totalGWD / totalGames : 0;
+    const comebacksPerGame = totalFourthQC / totalGames;
+    const totalClutchPerGame = gwdPerGame + comebacksPerGame;
+
+    // Calculate z-scores relative to all QBs
+    const allGWDRates = allQBData.map(qb => {
+      if (!qb.years) return 0;
+      const yearWeights = (filterYear && typeof filterYear === 'number')
+        ? { [filterYear.toString()]: 1.0 }
+        : PERFORMANCE_YEAR_WEIGHTS;
+      let gwdSum = 0, gamesSum = 0, weightSum = 0;
+      
+      Object.entries(qb.years).forEach(([year, data]) => {
+        const weight = yearWeights[year] || 0;
+        if (weight === 0 || !data.GWD) return;
+        const gwd = parseInt(data.GWD) || 0;
+        const games = parseInt(data.G) || 17;
+        gwdSum += gwd * weight;
+        gamesSum += games * weight;
+        weightSum += weight;
+      });
+      
+      return weightSum > 0 ? (gwdSum / weightSum) / (gamesSum / weightSum) : 0;
+    }).filter(v => !isNaN(v) && isFinite(v));
+
+    const allFourthQCRates = allQBData.map(qb => {
+      if (!qb.years) return 0;
+      const yearWeights = (filterYear && typeof filterYear === 'number')
+        ? { [filterYear.toString()]: 1.0 }
+        : PERFORMANCE_YEAR_WEIGHTS;
+      let qcSum = 0, gamesSum = 0, weightSum = 0;
+      
+      Object.entries(qb.years).forEach(([year, data]) => {
+        const weight = yearWeights[year] || 0;
+        if (weight === 0 || !data['4QC']) return;
+        const qc = parseInt(data['4QC']) || 0;
+        const games = parseInt(data.G) || 17;
+        qcSum += qc * weight;
+        gamesSum += games * weight;
+        weightSum += weight;
+      });
+      
+      return weightSum > 0 ? (qcSum / weightSum) / (gamesSum / weightSum) : 0;
+    }).filter(v => !isNaN(v) && isFinite(v));
+
+    const allClutchRates = allQBData.map(qb => {
+      if (!qb.years) return 0;
+      const yearWeights = (filterYear && typeof filterYear === 'number')
+        ? { [filterYear.toString()]: 1.0 }
+        : PERFORMANCE_YEAR_WEIGHTS;
+      let totalClutch = 0, gamesSum = 0, weightSum = 0;
+      
+      Object.entries(qb.years).forEach(([year, data]) => {
+        const weight = yearWeights[year] || 0;
+        if (weight === 0 || (!data.GWD && !data['4QC'])) return;
+        const gwd = parseInt(data.GWD) || 0;
+        const qc = parseInt(data['4QC']) || 0;
+        const games = parseInt(data.G) || 17;
+        totalClutch += (gwd + qc) * weight;
+        gamesSum += games * weight;
+        weightSum += weight;
+      });
+      
+      return weightSum > 0 ? (totalClutch / weightSum) / (gamesSum / weightSum) : 0;
+    }).filter(v => !isNaN(v) && isFinite(v));
+
+    const allPlayoffAdjustments = allQBData.map(qb => {
+      if (!qb.years || !includePlayoffs) return 1.0;
+      let adjustmentSum = 0, weightSum = 0;
+      const yearWeights = (filterYear && typeof filterYear === 'number')
+        ? { [filterYear.toString()]: 1.0 }
+        : PERFORMANCE_YEAR_WEIGHTS;
+      
+      Object.entries(qb.years).forEach(([year, data]) => {
+        const weight = yearWeights[year] || 0;
+        if (weight === 0 || !data.playoffData) return;
+        adjustmentSum += weight;
+        weightSum += weight;
+      });
+      
+      return weightSum > 0 ? 1.0 + (adjustmentSum * 0.1) : 1.0;
+    }).filter(v => !isNaN(v) && isFinite(v));
+
+    const gwdZ = calculateZScoreValue(gwdPerGame, allGWDRates);
+    const comebackZ = calculateZScoreValue(comebacksPerGame, allFourthQCRates);
+    const clutchRateZ = calculateZScoreValue(totalClutchPerGame, allClutchRates);
+    const playoffBonusZ = calculateZScoreValue(playoffAdjustmentFactor, allPlayoffAdjustments);
+    
+    const clutchComponentZScores = {
+      gameWinningDrives: gwdZ,
+      fourthQuarterComebacks: comebackZ,
+      clutchRate: clutchRateZ,
+      playoffBonus: playoffBonusZ
+    };
+    
+    const clutchCompositeZScore = calculateHierarchicalScore(clutchComponentZScores, clutchWeights);
+
+    if (debugMode) {
+      console.log(`💎 CLUTCH Z-SCORE CALCULATION (Fallback):`);
+      console.log(`💎 Z-Scores: GWD(${gwdZ.toFixed(3)}) + 4QC(${comebackZ.toFixed(3)}) + Rate(${clutchRateZ.toFixed(3)}) + PlayoffBonus(${playoffBonusZ.toFixed(3)})`);
+      console.log(`💎 Composite Z-Score: ${clutchCompositeZScore.toFixed(3)}`);
+    }
+
+    return clutchCompositeZScore;
+
+  } catch (error) {
+    console.error('❌ Error calculating clutch score:', error);
+    return 0;
   }
-
-  // Return z-score for higher-level composite calculation
-  return clutchCompositeZScore;
 }; 

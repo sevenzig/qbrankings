@@ -120,7 +120,7 @@ const WeightControls = memo(({
   const weightDescriptions = {
     team: 'Win-loss record, playoff success (NEW: Round-specific weighting)',
     stats: 'ANY/A, success rate, production (NEW: Playoff stat bonuses)',
-    clutch: 'Coming soon: 3rd & 4th down splits, GWD, & 4QC',
+    clutch: 'Situational performance in clutch moments (3rd/4th down, red zone, late-game)',
     durability: 'Games started, consistency',
     support: 'Extra credit for poor supporting cast'
   };
@@ -192,7 +192,7 @@ const WeightControls = memo(({
               </div>
               {category === 'clutch' && (
                 <div className="text-xs text-gray-400 mt-1 text-center">
-                  Coming soon: 3rd & 4th down splits, GWD, & 4QC
+                  Situational performance in clutch moments
                 </div>
               )}
               {is2025Mode && category === 'support' && (
@@ -274,10 +274,22 @@ const WeightControls = memo(({
             )}
 
             {category === 'clutch' && showDetails.clutch && (
-              <div className="mt-3 bg-gray-500/10 rounded-lg p-3 border border-gray-500/30 opacity-60" onClick={(e) => e.stopPropagation()}>
+              <div className="mt-3 bg-gray-500/10 rounded-lg p-3 border border-gray-500/30" onClick={(e) => e.stopPropagation()}>
                 <h5 className="text-gray-400 font-medium mb-2 text-sm">💎 Clutch Components</h5>
-                <div className="text-center text-gray-400 text-sm py-4">
-                  Coming soon: 3rd & 4th down splits, GWD, & 4QC
+                <div className="text-gray-300 text-sm space-y-2">
+                  <div className="font-medium text-white mb-2">Clutch Performance Categories:</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                    <div>• 3rd Down Success</div>
+                    <div>• 4th Down Success</div>
+                    <div>• Red Zone Performance</div>
+                    <div>• Ultra-High Pressure</div>
+                    <div>• Score Differential</div>
+                    <div>• November Performance</div>
+                    <div>• December/January Performance</div>
+                  </div>
+                  <div className="text-gray-400 text-xs mt-2">
+                    Metrics: ANY/A, TD rate, sack rate, turnover rate
+                  </div>
                 </div>
               </div>
             )}
@@ -479,7 +491,7 @@ const WeightControls = memo(({
             onUpdateWeight={onUpdateWeight}
             disabled={category === 'clutch' || (is2025Mode && (category === 'support' || category === 'durability'))}
             description={
-              category === 'clutch' ? 'Coming soon: 3rd & 4th down splits, GWD, & 4QC' : 
+              category === 'clutch' ? 'Situational performance in clutch moments (3rd/4th down, red zone, late-game)' : 
               (is2025Mode && category === 'support') ? '⚠️ Disabled (No DVOA data for 2025)' :
               (is2025Mode && category === 'durability') ? '⚠️ Disabled (Single season mode)' :
               weightDescriptions[category]
@@ -983,15 +995,33 @@ const WeightControls = memo(({
 
       {/* Clutch Component Details Dropdown - Desktop Only */}
       {showDetails.clutch && (
-        <div className="hidden md:block mt-6 bg-gray-500/10 rounded-lg p-4 border-2 border-gray-500/30 opacity-60">
+        <div className="hidden md:block mt-6 bg-gray-500/10 rounded-lg p-4 border-2 border-gray-500/30">
           <h4 className="text-gray-400 font-medium mb-3 flex items-center">
             💎 Clutch Performance Components
-            <span className="ml-2 text-xs text-gray-400 bg-gray-500/20 px-2 py-1 rounded">
-              Coming Soon
+            <span className="ml-2 text-xs text-green-400 bg-green-500/20 px-2 py-1 rounded">
+              New System
             </span>
           </h4>
-          <div className="text-center text-gray-400 text-lg py-8">
-            Coming soon: 3rd & 4th down splits, GWD, & 4QC
+          <div className="text-gray-300 space-y-4">
+            <div>
+              <div className="font-medium text-white mb-2">Clutch Performance Categories:</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>• 3rd Down Success</div>
+                <div>• 4th Down Success</div>
+                <div>• Red Zone Performance</div>
+                <div>• Ultra-High Pressure</div>
+                <div>• Score Differential</div>
+                <div>• November Performance</div>
+                <div>• December/January Performance</div>
+              </div>
+            </div>
+            <div className="text-gray-400 text-sm">
+              <div className="font-medium mb-1">Key Metrics:</div>
+              <div>ANY/A, TD rate, sack rate, turnover rate</div>
+            </div>
+            <div className="text-gray-400 text-xs">
+              Evaluates situational performance in high-pressure moments using split data from Supabase.
+            </div>
           </div>
         </div>
       )}

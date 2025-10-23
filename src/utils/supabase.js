@@ -103,11 +103,10 @@ export const qbDataService = {
           console.error('🔧 FIX REQUIRED: Your Supabase database needs to be re-imported with proper data.');
           console.error('   The gs (games started) column is NULL for all records.');
           console.error('');
-          console.error('💡 TEMPORARY WORKAROUND: Switch to CSV data source');
-          console.error('   In DynamicQBRankings.jsx line 44, change:');
-          console.error('   useUnifiedQBData(\'supabase\') → useUnifiedQBData(\'csv\')');
+          console.error('💡 SOLUTION: Check your Supabase database configuration');
+          console.error('   Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set correctly');
           
-          throw new Error('Database has records but gs (games started) is NULL. Please re-import your data or use CSV data source.');
+          throw new Error('Database has records but gs (games started) is NULL. Please re-import your data.');
         }
         
         throw new Error('No data returned from Supabase - database may be empty or query failed');
@@ -143,28 +142,58 @@ export const qbDataService = {
         }
       }
       
-      // Transform the data to match expected format
-      const transformedData = data.map(record => ({
-        ...record,
-        player_name: record.players?.player_name || record.player_name,
-        team: record.team, // Use team directly from qb_passing_stats
-        team_name: record.team, // Use team code as team name for now
-        // Map field names to match expected format
-        passer_rating: record.rate,
-        games_started: record.gs,
-        completions: record.cmp,
-        attempts: record.att,
-        completion_pct: record.cmp_pct,
-        pass_yards: record.yds,
-        pass_tds: record.td,
-        interceptions: record.int,
-        sacks: record.sk,
-        sack_yards: record.sk_yds,
-        fourth_quarter_comebacks: record.four_qc,
-        game_winning_drives: record.gwd
-      }));
+      // Fetch rushing stats from qb_splits for all years
+      const { data: rushingData, error: rushingError } = await supabase
+        .from('qb_splits')
+        .select('pfr_id, player_name, season, rush_att, rush_yds, rush_td, fmb, fl')
+        .eq('split', 'League')
+        .eq('value', 'NFL');
       
-      console.log(`✅ Successfully fetched and transformed ${transformedData.length} QB records from Supabase`);
+      if (rushingError) {
+        console.warn('⚠️ Could not fetch rushing data:', rushingError);
+      }
+      
+      // Create a map of rushing data by pfr_id and season for quick lookup
+      const rushingMap = {};
+      if (rushingData) {
+        rushingData.forEach(record => {
+          const key = `${record.pfr_id}_${record.season}`;
+          rushingMap[key] = record;
+        });
+      }
+      
+      // Transform the data to match expected format
+      const transformedData = data.map(record => {
+        const rushingKey = `${record.pfr_id}_${record.season}`;
+        const rushingStats = rushingMap[rushingKey];
+        return {
+          ...record,
+          player_name: record.players?.player_name || record.player_name,
+          team: record.team, // Use team directly from qb_passing_stats
+          team_name: record.team, // Use team code as team name for now
+          // Map field names to match expected format
+          passer_rating: record.rate,
+          games_started: record.gs,
+          completions: record.cmp,
+          attempts: record.att,
+          completion_pct: record.cmp_pct,
+          pass_yards: record.yds,
+          pass_tds: record.td,
+          interceptions: record.int,
+          sacks: record.sk,
+          sack_yards: record.sk_yds,
+          fourth_quarter_comebacks: record.four_qc,
+          game_winning_drives: record.gwd,
+          // Add rushing data from qb_splits
+          rush_att: rushingStats?.rush_att || 0,
+          rush_yds: rushingStats?.rush_yds || 0,
+          rush_td: rushingStats?.rush_td || 0,
+          fumbles: rushingStats?.fmb || 0,
+          fumbles_lost: rushingStats?.fl || 0
+        };
+      });
+      
+      console.log(`✅ Successfully fetched and transformed ${transformedData.length} QB records from Supabase with rushing data`);
       return transformedData;
       
     } catch (error) {
@@ -188,7 +217,8 @@ export const qbDataService = {
 
       console.log(`🔄 Fetching QB data for ${year} from Supabase...`);
       
-      const { data, error } = await supabase
+      // Fetch passing stats
+      const { data: passingData, error: passingError } = await supabase
         .from('qb_passing_stats')
         .select('*')
         .eq('season', year)
@@ -196,33 +226,62 @@ export const qbDataService = {
         .gte('gs', 1)            // Only QBs who actually started games
         .order('rate', { ascending: false });
       
-      if (error) {
-        console.error('❌ Supabase query error:', error);
-        throw new Error(`Failed to fetch ${year} QB data: ${error.message}`);
+      if (passingError) {
+        console.error('❌ Supabase query error:', passingError);
+        throw new Error(`Failed to fetch ${year} QB data: ${passingError.message}`);
       }
       
-      // Transform the data to match expected format
-      const transformedData = data.map(record => ({
-        ...record,
-        player_name: record.players?.player_name || record.player_name,
-        team: record.team, // Use team directly from qb_passing_stats
-        team_name: record.team, // Use team code as team name for now
-        // Map field names to match expected format
-        passer_rating: record.rate,
-        games_started: record.gs,
-        completions: record.cmp,
-        attempts: record.att,
-        completion_pct: record.cmp_pct,
-        pass_yards: record.yds,
-        pass_tds: record.td,
-        interceptions: record.int,
-        sacks: record.sk,
-        sack_yards: record.sk_yds,
-        fourth_quarter_comebacks: record.four_qc,
-        game_winning_drives: record.gwd
-      }));
+      // Fetch rushing stats from qb_splits (League/NFL split contains all rushing data)
+      const { data: rushingData, error: rushingError } = await supabase
+        .from('qb_splits')
+        .select('pfr_id, player_name, season, rush_att, rush_yds, rush_td, fmb, fl')
+        .eq('season', year)
+        .eq('split', 'League')
+        .eq('value', 'NFL');
       
-      console.log(`✅ Successfully fetched ${transformedData.length} QB records for ${year}`);
+      if (rushingError) {
+        console.warn('⚠️ Could not fetch rushing data:', rushingError);
+      }
+      
+      // Create a map of rushing data by pfr_id for quick lookup
+      const rushingMap = {};
+      if (rushingData) {
+        rushingData.forEach(record => {
+          rushingMap[record.pfr_id] = record;
+        });
+      }
+      
+      // Transform and merge the data
+      const transformedData = passingData.map(record => {
+        const rushingStats = rushingMap[record.pfr_id];
+        return {
+          ...record,
+          player_name: record.player_name,
+          team: record.team, // Use team directly from qb_passing_stats
+          team_name: record.team, // Use team code as team name for now
+          // Map field names to match expected format
+          passer_rating: record.rate,
+          games_started: record.gs,
+          completions: record.cmp,
+          attempts: record.att,
+          completion_pct: record.cmp_pct,
+          pass_yards: record.yds,
+          pass_tds: record.td,
+          interceptions: record.int,
+          sacks: record.sk,
+          sack_yards: record.sk_yds,
+          fourth_quarter_comebacks: record.four_qc,
+          game_winning_drives: record.gwd,
+          // Add rushing data from qb_splits
+          rush_att: rushingStats?.rush_att || 0,
+          rush_yds: rushingStats?.rush_yds || 0,
+          rush_td: rushingStats?.rush_td || 0,
+          fumbles: rushingStats?.fmb || 0,
+          fumbles_lost: rushingStats?.fl || 0
+        };
+      });
+      
+      console.log(`✅ Successfully fetched ${transformedData.length} QB records for ${year} with rushing data`);
       return transformedData;
       
     } catch (error) {

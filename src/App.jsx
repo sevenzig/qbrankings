@@ -10,8 +10,7 @@ import ThirdAndShortTest from './components/ThirdAndShortTest';
 import ThirdAndShortDiagnostic from './components/ThirdAndShortDiagnostic';
 import SupabaseTest from './components/SupabaseTest';
 import SplitsComparison from './components/SplitsComparison';
-import DataSourceSelector from './components/DataSourceSelector.jsx';
-import { useUnifiedQBData } from './hooks/useUnifiedQBData.js';
+import { useSupabaseQBData } from './hooks/useSupabaseQBData.js';
 
 // Get GA Measurement ID from environment variables
 // In production, set VITE_GA_MEASUREMENT_ID in your Vercel environment variables
@@ -95,14 +94,6 @@ const SplitsComparisonPage = () => {
 // SQL Test Page Component
 const SQLTestPage = () => {
   const [activeTab, setActiveTab] = useState('connection');
-  
-  // Initialize the unified data hook for data source management
-  const {
-    dataSource,
-    switchDataSource,
-    isSwitching,
-    isSupabaseAvailable
-  } = useUnifiedQBData('csv'); // Default to CSV for testing
 
   return (
     <>
@@ -130,16 +121,6 @@ const SQLTestPage = () => {
             </div>
           </div>
 
-          {/* Data Source Selector */}
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Data Source Configuration</h2>
-            <DataSourceSelector
-              dataSource={dataSource}
-              onDataSourceChange={switchDataSource}
-              loading={isSwitching}
-              disabled={!isSupabaseAvailable}
-            />
-          </div>
 
           {/* Navigation Tabs */}
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">

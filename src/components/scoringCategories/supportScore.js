@@ -547,8 +547,8 @@ export const calculateSupportScore = (qbSeasonData, supportWeights = { offensive
       const gamesStarted = seasonData.GS || seasonData.gamesStarted || 0;
       
       // Calculate support for each team played for in this year
-      // Use lower threshold for single-year mode (9 games) vs multi-year mode (10 games)
-      const gamesThreshold = (filterYear && typeof filterYear === 'number') ? 9 : 10;
+      // Use lower threshold for single-year mode (3 games) vs multi-year mode (10 games)
+      const gamesThreshold = (filterYear && typeof filterYear === 'number') ? 3 : 10;
       if (teamsThisYear.length > 0 && gamesStarted >= gamesThreshold) {
         // For multi-team seasons, average the support scores
         const yearSupportScores = teamsThisYear.map(team => calculateWeightedSupportScore(team, yearNum, supportWeights));

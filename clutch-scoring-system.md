@@ -1,11 +1,16 @@
 # Clutch Performance Scoring System Documentation
 
 ## Overview
-The Clutch Performance Score evaluates a quarterback's ability to perform in high-pressure, game-deciding situations. The system combines regular season clutch statistics with playoff performance bonuses, using sophisticated weighting to account for the increased difficulty of clutch moments in playoff scenarios. The maximum possible score is **100 points**.
+The Clutch Performance Score evaluates a quarterback's ability to perform in high-pressure, game-deciding situations using situational split data from Supabase. The system analyzes performance across 7 clutch categories using advanced metrics (ANY/A, TD rate, sack rate, turnover rate) instead of traditional passer rating. The maximum possible score is **100 points**.
 
 ---
 
 ## System Architecture
+
+### Data Source
+The system uses situational split data from Supabase tables:
+- **`qb_splits_advanced`**: Primary source for situational statistics
+- **`qb_splits`**: Secondary source for fumble data and additional metrics
 
 ### Temporal Weighting
 All clutch calculations use the same year-based weighting system:
@@ -13,281 +18,225 @@ All clutch calculations use the same year-based weighting system:
 - **2023**: 35% weight (recent performance)
 - **2022**: 10% weight (historical context)
 
-### Core Clutch Metrics
-The system tracks two primary clutch statistics:
-1. **Game Winning Drives (GWD)**: Drives that directly lead to game-winning scores
-2. **4th Quarter Comebacks (4QC)**: Successful comebacks initiated in the 4th quarter
+### Core Clutch Categories
+The system evaluates 7 clutch performance categories:
+1. **Third Down Success**: Performance on 3rd down conversions
+2. **Fourth Down Success**: Performance on 4th down attempts
+3. **Red Zone Success**: Performance in the red zone
+4. **Ultra-High Pressure**: Performance in late-game situations
+5. **Score Differential**: Performance when trailing vs leading
+6. **November Performance**: Late-season pressure situations
+7. **December/January Performance**: Playoff push situations
 
 ---
 
 ## Scoring Components Breakdown
 
-### 1. Game Winning Drives Score (0-40 points)
-**Primary clutch metric representing the quarterback's ability to lead game-winning drives**
+### 1. Third Down Success (20% weight)
+**Performance on 3rd down conversions across all distances**
 
-#### Formula:
-```javascript
-gwdScore = min(40, gwdPerGame × 120)
-```
+#### Split Queries:
+- **Split Type**: "Down & Yards to Go"
+- **Values**: "3rd & 1-3", "3rd & 4-6", "3rd & 7-9", "3rd & 10+"
 
-#### Calculation Details:
-- **Input**: Total Game Winning Drives per game across all seasons
-- **Scale Factor**: 120 points per GWD/game
-- **Maximum Threshold**: 0.33 GWD/game = 40 points
-- **Benchmark**: Elite clutch QBs average ~0.25-0.30 GWD/game
+#### Metrics:
+- **Conversion Rate** (40%): First downs per attempt
+- **ANY/A** (25%): Adjusted Net Yards per Attempt
+- **Sack Rate** (20%): Sacks per dropback (inverted)
+- **Turnover Rate** (15%): Turnovers per attempt (inverted)
 
-#### Performance Benchmarks:
-| GWD/Game | Score | Performance Level |
-|----------|-------|------------------|
-| 0.33+ | 40 pts | Elite Clutch |
-| 0.25 | 30 pts | Very Good |
-| 0.20 | 24 pts | Above Average |
-| 0.15 | 18 pts | Average |
-| 0.10 | 12 pts | Below Average |
-| 0.05 | 6 pts | Poor |
+### 2. Fourth Down Success (15% weight)
+**Performance on 4th down attempts across all distances**
 
-### 2. 4th Quarter Comebacks Score (0-25 points)
-**Measures the quarterback's ability to orchestrate comeback victories**
+#### Split Queries:
+- **Split Type**: "Down & Yards to Go"
+- **Values**: "4th & 1-3", "4th & 4-6", "4th & 7-9", "4th & 10+"
 
-#### Formula:
-```javascript
-comebackScore = min(25, comebacksPerGame × 100)
-```
+#### Metrics:
+- **Conversion Rate** (50%): First downs per attempt
+- **ANY/A** (30%): Adjusted Net Yards per Attempt
+- **Turnover Rate** (20%): Turnovers per attempt (inverted)
 
-#### Calculation Details:
-- **Input**: Total 4th Quarter Comebacks per game across all seasons
-- **Scale Factor**: 100 points per comeback/game
-- **Maximum Threshold**: 0.25 comebacks/game = 25 points
-- **Benchmark**: Elite comeback QBs average ~0.15-0.20 comebacks/game
+### 3. Red Zone Success (15% weight)
+**Performance in the red zone (opponent's 20-yard line and in)**
 
-#### Performance Benchmarks:
-| 4QC/Game | Score | Performance Level |
-|----------|-------|------------------|
-| 0.25+ | 25 pts | Elite Comeback Artist |
-| 0.20 | 20 pts | Very Good |
-| 0.15 | 15 pts | Above Average |
-| 0.12 | 12 pts | Average |
-| 0.08 | 8 pts | Below Average |
-| 0.04 | 4 pts | Poor |
+#### Split Queries:
+- **Split Type**: "Field Position"
+- **Values**: "Red Zone"
 
-### 3. Combined Clutch Rate Score (0-15 points)
-**Rewards quarterbacks with high overall clutch opportunities**
+#### Metrics:
+- **Touchdown Rate** (40%): Touchdowns per attempt
+- **ANY/A** (30%): Adjusted Net Yards per Attempt
+- **Turnover Rate** (20%): Turnovers per attempt (inverted)
+- **Sack Rate** (10%): Sacks per dropback (inverted)
 
-#### Formula:
-```javascript
-clutchRateScore = min(15, totalClutchPerGame × 50)
-where totalClutchPerGame = gwdPerGame + comebacksPerGame
-```
+### 4. Ultra-High Pressure (20% weight)
+**Performance in ultra-high pressure late-game situations**
 
-#### Calculation Details:
-- **Input**: Combined GWD and 4QC per game
-- **Scale Factor**: 50 points per combined clutch opportunity/game
-- **Maximum Threshold**: 0.30 combined clutch/game = 15 points
-- **Purpose**: Rewards QBs who consistently face and succeed in clutch situations
+#### Split Queries:
+- **Split Type**: "Game Situation"
+- **Values**: "Trailing, < 2 min to go", "Tied, < 2 min to go", "Trailing, < 4 min to go"
 
-### 4. Playoff Success Bonus (0-20 points)
-**Additional points for clutch performance in playoff scenarios**
+#### Metrics:
+- **ANY/A** (35%): Adjusted Net Yards per Attempt
+- **Touchdown Rate** (25%): Touchdowns per attempt
+- **Sack Rate** (20%): Sacks per dropback (inverted)
+- **Turnover Rate** (20%): Turnovers per attempt (inverted)
 
-#### Formula:
-```javascript
-playoffSuccessScore = min(20, playoffWinRate × 20 + playoffGames × 2)
-```
+### 5. Score Differential (10% weight)
+**Performance when trailing vs leading in games**
 
-#### Calculation Details:
-- **Base Component**: Playoff win rate × 20 (0-20 points based on success rate)
-- **Participation Bonus**: 2 points per playoff game played
-- **Maximum**: 20 points total
-- **Logic**: Rewards both playoff success and experience in high-pressure games
+#### Split Queries:
+- **Split Type**: "Score Differential"
+- **Values**: "Trailing", "Leading"
 
-#### Playoff Success Benchmarks:
-| Playoff Win Rate | Base Score | + Games Bonus | Total Possible |
-|------------------|------------|---------------|----------------|
-| 100% (4-0) | 20 pts | 8 pts | 20 pts (capped) |
-| 75% (3-1) | 15 pts | 8 pts | 20 pts (capped) |
-| 67% (2-1) | 13.4 pts | 6 pts | 19.4 pts |
-| 50% (2-2) | 10 pts | 8 pts | 18 pts |
-| 33% (1-2) | 6.6 pts | 6 pts | 12.6 pts |
+#### Metrics:
+- **Trailing ANY/A** (40%): ANY/A when trailing
+- **Trailing Touchdown Rate** (30%): TD rate when trailing
+- **Trailing Turnover Rate** (30%): Turnover rate when trailing (inverted)
 
----
+### 6. November Performance (10% weight)
+**Performance in November (late-season pressure)**
 
-## Playoff Clutch Multipliers
+#### Split Queries:
+- **Split Type**: "Month"
+- **Values**: "November"
 
-### Round-Specific Weighting System
-Clutch moments in playoff games receive multipliers based on the round's importance. The system has undergone a **70% reduction** from original values to balance playoff vs. regular season importance.
+#### Metrics:
+- **ANY/A** (40%): Adjusted Net Yards per Attempt
+- **Touchdown Rate** (30%): Touchdowns per attempt
+- **Sack Rate** (15%): Sacks per dropback (inverted)
+- **Turnover Rate** (15%): Turnovers per attempt (inverted)
 
-#### Current Multiplier Values:
-| Playoff Round | Multiplier | Original Value | Reduction |
-|---------------|------------|----------------|-----------|
-| **Wild Card** | 1.06× | 1.2× | 70% reduced |
-| **Divisional** | 1.08× | 1.4× | 70% reduced |
-| **Conference Championship** | 1.12× | 1.8× | 70% reduced |
-| **Super Bowl** | 1.22× | 2.4× | 70% reduced |
+### 7. December/January Performance (10% weight)
+**Performance in December/January (playoff push)**
 
-### Playoff Path Detection Algorithm
-The system automatically determines which playoff rounds were played based on total games and win/loss patterns:
+#### Split Queries:
+- **Split Type**: "Month"
+- **Values**: "December", "January"
 
-#### 4-Game Playoff Run (No First-Round Bye):
-```javascript
-if (totalGames === 4) {
-  averageMultiplier = (1.06 + 1.08 + 1.12 + 1.22) / 4 = 1.12×
-}
-```
-**Rounds**: Wild Card → Divisional → Conference Championship → Super Bowl
-
-#### 3-Game Playoff Run (With First-Round Bye):
-```javascript
-if (totalGames === 3) {
-  averageMultiplier = (1.08 + 1.12 + 1.22) / 3 = 1.14×
-}
-```
-**Rounds**: Divisional → Conference Championship → Super Bowl
-
-#### 2-Game Playoff Run:
-```javascript
-if (totalGames === 2) {
-  averageMultiplier = (1.08 + 1.12) / 2 = 1.10×
-}
-```
-**Typical Rounds**: Divisional → Conference Championship
-
-#### 1-Game Playoff Run:
-```javascript
-if (totalGames === 1) {
-  averageMultiplier = 1.06×
-}
-```
-**Round**: Wild Card only
-
-#### Default (No Playoff Data):
-```javascript
-defaultMultiplier = 1.06×
-```
+#### Metrics:
+- **ANY/A** (40%): Adjusted Net Yards per Attempt
+- **Touchdown Rate** (30%): Touchdowns per attempt
+- **Sack Rate** (15%): Sacks per dropback (inverted)
+- **Turnover Rate** (15%): Turnovers per attempt (inverted)
 
 ---
 
-## Detailed Calculation Process
+## Key Metrics Explained
 
-### Step-by-Step Clutch Score Calculation:
+### ANY/A (Adjusted Net Yards per Attempt)
+**Formula**: `(pass yards + 20*(pass TD) - 45*(interceptions) - sack yards)/(passing attempts + sacks)`
 
-#### 1. Data Collection Phase:
-```javascript
-// For each season (2022-2024):
-const regularGWD = seasonData.GWD || 0;
-const regularFourthQC = seasonData['4QC'] || 0;
-const regularGames = seasonData.G || 0;
+The gold standard for QB efficiency, incorporating:
+- **Positive factors**: Passing yards, touchdowns
+- **Negative factors**: Interceptions, sacks, sack yards
+- **Context**: Accounts for all dropbacks (attempts + sacks)
 
-// Collect playoff data if available:
-const playoffGWD = playoffData.gameWinningDrives || 0;
-const playoffFourthQC = playoffData.fourthQuarterComebacks || 0;
-const playoffGames = playoffData.gamesPlayed || 0;
-```
+### Touchdown Rate
+**Formula**: `touchdowns / attempts`
 
-#### 2. Playoff Multiplier Application:
-```javascript
-// Calculate round-specific multiplier:
-const clutchMultiplier = calculatePlayoffClutchMultiplier(playoffData, team, year);
+More accurate than TD% which uses completions as denominator. Better reflects true scoring efficiency.
 
-// Apply multiplier to playoff clutch stats:
-const weightedPlayoffGWD = playoffGWD * clutchMultiplier;
-const weightedPlayoffFourthQC = playoffFourthQC * clutchMultiplier;
-```
+### Sack Rate
+**Formula**: `sacks / (attempts + sacks)`
 
-#### 3. Year-Based Weighting:
-```javascript
-const yearWeight = yearWeights[year]; // 2024: 0.55, 2023: 0.35, 2022: 0.10
+Critical in clutch situations where avoiding negative plays is essential. Lower is better.
 
-// Weight each season's contribution:
-totalGWD += (regularGWD + weightedPlayoffGWD) * yearWeight;
-totalFourthQC += (regularFourthQC + weightedPlayoffFourthQC) * yearWeight;
-totalGames += (regularGames + playoffGames) * yearWeight;
-```
+### Turnover Rate
+**Formula**: `(interceptions + fumbles) / attempts`
 
-#### 4. Per-Game Rate Calculation:
-```javascript
-// Normalize by total weight sum:
-const normalizedGWD = totalGWD / weightSum;
-const normalizedFourthQC = totalFourthQC / weightSum;
-const normalizedGames = totalGames / weightSum;
+Combines both passing and rushing turnovers. More comprehensive than just interception rate. Lower is better.
 
-// Calculate per-game rates:
-const gwdPerGame = normalizedGames > 0 ? normalizedGWD / normalizedGames : 0;
-const comebacksPerGame = normalizedGames > 0 ? normalizedFourthQC / normalizedGames : 0;
-```
+### Conversion Rate
+**Formula**: `first_downs / attempts`
 
-#### 5. Final Score Components:
-```javascript
-// Primary clutch metrics:
-const gwdScore = Math.min(40, gwdPerGame * 120);
-const comebackScore = Math.min(25, comebacksPerGame * 100);
-
-// Combined rate bonus:
-const totalClutchPerGame = gwdPerGame + comebacksPerGame;
-const clutchRateScore = Math.min(15, totalClutchPerGame * 50);
-
-// Playoff success bonus:
-const playoffWinRate = totalPlayoffWins / totalPlayoffGames;
-const playoffSuccessScore = Math.min(20, playoffWinRate * 20 + totalPlayoffGames * 2);
-
-// Final clutch score:
-const finalClutchScore = gwdScore + comebackScore + clutchRateScore + playoffSuccessScore;
-```
+Measures situational success in converting downs. Higher is better.
 
 ---
 
-## Scaling Constants Reference
+## Calculation Methodology
 
-### Original SCALING_RANGES Values:
-```javascript
-const SCALING_RANGES = {
-  GWD_TOTAL: { scale: 10, max: 50 },      // 10 points per GWD, max 50
-  FOURTH_QC: { scale: 7.5, max: 30 },     // 7.5 points per 4QC, max 30
-  CLUTCH_RATE: { scale: 50, max: 20 }     // GWD per game rate, max 20
-};
-```
+### 1. Data Aggregation
+For each category, the system:
+- Queries relevant split data from Supabase
+- Aggregates multiple split values (e.g., all "3rd & X" situations)
+- Applies year weights (2024: 55%, 2023: 35%, 2022: 10%)
+- Requires minimum 10 attempts per category
 
-**Note**: These constants are from an earlier version. The current implementation uses the more sophisticated per-game rate calculations described above.
+### 2. Metric Calculation
+For each category:
+- Calculates all relevant metrics from raw stats
+- Applies metric weights within the category
+- Normalizes inverted metrics (sack rate, turnover rate)
+- Combines metrics into category score
 
----
+### 3. Z-Score Normalization
+- Compares QB's category performance to all QBs
+- Calculates z-scores for relative performance
+- Uses statistical standardization for accurate scoring
 
-## Real-World Examples
-
-### Elite Clutch Performance (90+ points):
-- **GWD/Game**: 0.30+ (36+ points)
-- **4QC/Game**: 0.20+ (20+ points)
-- **Combined Rate**: 0.50+ (15 points - capped)
-- **Playoff Success**: High win rate + multiple games (18+ points)
-
-### Above Average Clutch Performance (70-89 points):
-- **GWD/Game**: 0.20-0.29 (24-35 points)
-- **4QC/Game**: 0.12-0.19 (12-19 points)
-- **Combined Rate**: 0.30-0.49 (10-14 points)
-- **Playoff Success**: Moderate success (10-17 points)
-
-### Average Clutch Performance (50-69 points):
-- **GWD/Game**: 0.12-0.19 (14-23 points)
-- **4QC/Game**: 0.08-0.11 (8-11 points)
-- **Combined Rate**: 0.20-0.29 (6-9 points)
-- **Playoff Success**: Limited playoff experience (5-12 points)
+### 4. Final Score Calculation
+- Applies category weights (Critical: 50%, Late-Game: 30%, Late-Season: 20%)
+- Combines weighted z-scores
+- Scales to 0-100 range
+- Applies playoff adjustment if enabled
 
 ---
 
-## Historical Context and Adjustments
+## Performance Benchmarks
 
-### Reduction History:
-1. **Original System**: Higher playoff multipliers (1.2× to 2.4×)
-2. **First Reduction**: 60% reduction applied
-3. **Current System**: Additional 70% reduction for balance
+### Elite Clutch Performance (90+ points)
+- **ANY/A**: 7.5+ in clutch situations
+- **Conversion Rate**: 60%+ on 3rd/4th down
+- **Touchdown Rate**: 8%+ in red zone
+- **Turnover Rate**: <3% in pressure situations
 
-### Design Philosophy:
-- **Regular Season Focus**: Clutch moments in 17+ games more representative than limited playoff sample
-- **Playoff Recognition**: Still rewards playoff clutch performance but doesn't overweight small samples
-- **Consistency Emphasis**: Per-game rates prevent volume bias
-- **Balanced Scaling**: Multiple scoring components prevent single-metric dominance
+### Very Good Clutch Performance (75-89 points)
+- **ANY/A**: 6.5-7.5 in clutch situations
+- **Conversion Rate**: 50-60% on 3rd/4th down
+- **Touchdown Rate**: 6-8% in red zone
+- **Turnover Rate**: 3-5% in pressure situations
 
-### Quality Thresholds:
-The system includes debug logging for quarterbacks who exceed:
-- **GWD/Game ≥ 0.15** (above average clutch performance)
-- **4QC/Game ≥ 0.10** (above average comeback ability)
+### Above Average Clutch Performance (60-74 points)
+- **ANY/A**: 5.5-6.5 in clutch situations
+- **Conversion Rate**: 40-50% on 3rd/4th down
+- **Touchdown Rate**: 4-6% in red zone
+- **Turnover Rate**: 5-7% in pressure situations
+
+### Average Clutch Performance (45-59 points)
+- **ANY/A**: 4.5-5.5 in clutch situations
+- **Conversion Rate**: 30-40% on 3rd/4th down
+- **Touchdown Rate**: 2-4% in red zone
+- **Turnover Rate**: 7-10% in pressure situations
+
+### Below Average Clutch Performance (<45 points)
+- **ANY/A**: <4.5 in clutch situations
+- **Conversion Rate**: <30% on 3rd/4th down
+- **Touchdown Rate**: <2% in red zone
+- **Turnover Rate**: >10% in pressure situations
+
+---
+
+## Technical Implementation
+
+### Data Requirements
+- **Minimum Attempts**: 10 per category for statistical significance
+- **Split Data**: Available in `qb_splits_advanced` and `qb_splits` tables
+- **Year Coverage**: 2022-2024 for multi-year analysis
+- **Playoff Integration**: Optional playoff adjustment factor
+
+### Error Handling
+- **Missing Data**: Defaults to 0 with logging
+- **Insufficient Sample**: Requires minimum attempt thresholds
+- **Database Errors**: Graceful fallback to 0 score
+- **Invalid Metrics**: Validation and sanitization
+
+### Performance Considerations
+- **Caching**: Split data cached at season level
+- **Batch Queries**: Minimize database calls
+- **Z-Score Calculation**: Efficient statistical processing
+- **Memory Management**: Optimized data structures
 
 ---
 
@@ -306,33 +255,60 @@ The system includes debug logging for quarterbacks who exceed:
 
 ---
 
-## Technical Implementation Notes
+## Advantages of New System
 
-### Data Sources:
-- **Regular Season**: Game Winning Drives and 4th Quarter Comebacks from CSV data
-- **Playoff Data**: Enhanced playoff statistics with round-specific tracking
-- **Historical Records**: Known playoff results for accurate round detection
+### 1. **Situational Accuracy**
+- Uses actual split data instead of outcome-based metrics
+- Evaluates performance in specific clutch situations
+- More predictive of future clutch performance
 
-### Error Handling:
-- **Missing Data**: Defaults to 0 for missing clutch statistics
-- **Incomplete Seasons**: Pro-rated based on games played
-- **Multi-Team QBs**: Aggregates clutch statistics across all teams in a season
+### 2. **Advanced Metrics**
+- ANY/A is more accurate than passer rating
+- Sack rate and turnover rate better reflect risk management
+- Conversion rate measures situational success
 
-### Performance Considerations:
-- **Caching**: Playoff multipliers calculated once per season
-- **Optimization**: Per-game calculations prevent expensive per-play analysis
-- **Scalability**: System handles varying numbers of seasons and games efficiently
+### 3. **Comprehensive Coverage**
+- 7 different clutch categories
+- Multiple pressure situations
+- Late-season performance emphasis
+
+### 4. **Statistical Rigor**
+- Z-score normalization for fair comparison
+- Minimum sample size requirements
+- Proper weighting and aggregation
+
+### 5. **Data-Driven**
+- Uses Supabase split data
+- Real-time performance evaluation
+- Scalable to additional categories
 
 ---
 
-## Maximum Possible Scores Summary
+## Future Enhancements
 
-| Component | Formula | Max Points | Elite Threshold |
-|-----------|---------|------------|-----------------|
-| **Game Winning Drives** | `min(40, gwdPerGame × 120)` | 40 | 0.33 GWD/game |
-| **4th Quarter Comebacks** | `min(25, comebacksPerGame × 100)` | 25 | 0.25 4QC/game |
-| **Combined Clutch Rate** | `min(15, totalClutchPerGame × 50)` | 15 | 0.30 combined/game |
-| **Playoff Success Bonus** | `min(20, winRate × 20 + games × 2)` | 20 | Perfect playoff record |
-| **Total Clutch Score** | | **100** | Elite across all components |
+### Potential Additions:
+- **Weather Conditions**: Performance in adverse weather
+- **Opponent Strength**: Clutch performance vs quality defenses
+- **Game Script**: Performance when trailing by different amounts
+- **Time of Day**: Prime time vs regular game performance
 
-The clutch scoring system provides a comprehensive evaluation of quarterback performance in high-pressure situations, balancing regular season consistency with playoff achievement while maintaining proper perspective on sample sizes and situational difficulty. 
+### Technical Improvements:
+- **Real-time Updates**: Live split data integration
+- **Advanced Analytics**: Machine learning for pattern recognition
+- **Visualization**: Interactive clutch performance charts
+- **Comparisons**: Head-to-head clutch performance analysis
+
+---
+
+## Conclusion
+
+The new clutch scoring system represents a significant advancement in QB evaluation, moving from outcome-based metrics to performance-based analysis. By using situational split data and advanced metrics, the system provides a more accurate and comprehensive assessment of a quarterback's ability to perform in clutch moments.
+
+The system is designed to be:
+- **Accurate**: Uses the best available metrics and data
+- **Comprehensive**: Covers all major clutch situations
+- **Fair**: Statistical normalization ensures fair comparison
+- **Scalable**: Framework supports additional categories and metrics
+- **Transparent**: Clear methodology and benchmarks
+
+This approach better identifies quarterbacks who consistently perform well in high-pressure situations, providing valuable insights for team building and player evaluation.

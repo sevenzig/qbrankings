@@ -1,10 +1,10 @@
-// Data transformation utilities for converting Supabase data to CSV format
+// Data transformation utilities for converting Supabase data to application format
 // This ensures compatibility with existing QB calculations
 
 /**
- * Transform Supabase season summary data to match CSV format
+ * Transform Supabase season summary data to match application format
  * @param {Array} supabaseData - Data from qb_season_summary view
- * @returns {Array} Transformed data matching CSV format
+ * @returns {Array} Transformed data matching application format
  */
 export const transformSeasonSummaryToCSV = (supabaseData) => {
   if (!Array.isArray(supabaseData)) {
@@ -62,15 +62,15 @@ export const transformSeasonSummaryToCSV = (supabaseData) => {
     season: record.season,
     pfr_id: record.pfr_id,
     
-    // Rushing stats (if available)
+    // Rushing stats (now comes directly from merged Supabase data)
     RushingAtt: record.rush_att || 0,
     RushingYds: record.rush_yds || 0,
     RushingTDs: record.rush_td || 0,
-    RushingYPA: record.rush_y_a || 0,
+    RushingYPA: record.rush_att > 0 ? (record.rush_yds / record.rush_att).toFixed(2) : 0,
     
-    // Fumbles (if available)
-    Fumbles: record.fmb || 0,
-    FumblesLost: record.fl || 0,
+    // Fumbles (now comes directly from merged Supabase data)
+    Fumbles: record.fumbles || 0,
+    FumblesLost: record.fumbles_lost || 0,
     
     // Additional fields for compatibility
     'Player-additional': record.player_additional || '',
@@ -79,9 +79,9 @@ export const transformSeasonSummaryToCSV = (supabaseData) => {
 };
 
 /**
- * Transform detailed player data to CSV format
+ * Transform detailed player data to application format
  * @param {Object} detailedData - Data from fetchPlayerDetailedData
- * @returns {Object} Transformed data matching CSV format
+ * @returns {Object} Transformed data matching application format
  */
 export const transformDetailedDataToCSV = (detailedData) => {
   if (!detailedData || !detailedData.passing_stats) {
@@ -149,19 +149,13 @@ export const transformDetailedDataToCSV = (detailedData) => {
     Rk: passing.rk
   };
 
-  // Add splits data if available
-  if (detailedData.splits && detailedData.splits.length > 0) {
-    // Find relevant splits
-    const leagueSplit = detailedData.splits.find(s => s.split === 'League' && s.value === 'NFL');
-    if (leagueSplit) {
-      transformed.RushingAtt = leagueSplit.rush_att || 0;
-      transformed.RushingYds = leagueSplit.rush_yds || 0;
-      transformed.RushingTDs = leagueSplit.rush_td || 0;
-      transformed.RushingYPA = leagueSplit.rush_y_a || 0;
-      transformed.Fumbles = leagueSplit.fmb || 0;
-      transformed.FumblesLost = leagueSplit.fl || 0;
-    }
-  }
+  // Add rushing data (now comes directly from merged Supabase data)
+  transformed.RushingAtt = passing.rush_att || 0;
+  transformed.RushingYds = passing.rush_yds || 0;
+  transformed.RushingTDs = passing.rush_td || 0;
+  transformed.RushingYPA = passing.rush_att > 0 ? (passing.rush_yds / passing.rush_att).toFixed(2) : 0;
+  transformed.Fumbles = passing.fumbles || 0;
+  transformed.FumblesLost = passing.fumbles_lost || 0;
 
   return transformed;
 };

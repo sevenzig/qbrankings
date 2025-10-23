@@ -67,12 +67,11 @@ const calculateEfficiencyZScores = (qbSeasonData, allQBData, efficiencyWeights, 
     
     const regSeasonAtts = parseInt(data.Att) || 0;
     
-    // Apply attempt thresholds - 40 for 2025 (partial season), 150 for 2024+, 200 for older years
+    // Apply attempt thresholds - 40 for 2025 (partial season), 50 for all other years
     const yearNum = parseInt(year);
     const threshold = (() => {
       if (yearNum === 2025) return 40;   // Partial season - much lower threshold
-      if (yearNum >= 2024) return 150;   // Full recent seasons
-      return 200;                        // Historical seasons
+      return 50;                         // All other years (2024 and earlier)
     })();
     if (regSeasonAtts < threshold) return;
     
@@ -112,7 +111,7 @@ const calculateEfficiencyZScores = (qbSeasonData, allQBData, efficiencyWeights, 
         const threshold = (() => {
           if (yearNum === 2025) return 40;   // Partial season - much lower threshold
           if (yearNum >= 2024) return 150;   // Full recent seasons
-          return 200;                        // Historical seasons
+          return 50;                         // Historical seasons
         })();
         const meetsThreshold = qbAtts >= threshold;
         
@@ -202,14 +201,14 @@ const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, 
     const regSeasonSacks = parseInt(data.Sk) || 0;
     const regSeasonRushAtts = parseInt(data.RushingAtt) || 0;
     const regSeasonInts = parseInt(data.Int) || 0;
-    const regSeasonFumbles = parseInt(data.Fumbles) || 0;
+    const regSeasonFumblesLost = parseInt(data.FumblesLost) || 0;
     
     // Apply attempt thresholds - 75 for 2025 (partial season), 150 for 2024+, 200 for older years
     const yearNum = parseInt(year);
     const threshold = (() => {
       if (yearNum === 2025) return 40;   // Partial season - much lower threshold
       if (yearNum >= 2024) return 150;   // Full recent seasons
-      return 200;                        // Historical seasons
+      return 50;                         // Historical seasons
     })();
     if (regSeasonAtts < threshold) return;
     
@@ -249,7 +248,7 @@ const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, 
         const threshold = (() => {
           if (yearNum === 2025) return 40;   // Partial season - much lower threshold
           if (yearNum >= 2024) return 150;   // Full recent seasons
-          return 200;                        // Historical seasons
+          return 50;                         // Historical seasons
         })();
         const meetsThreshold = qbAtts >= threshold;
         
@@ -274,23 +273,24 @@ const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, 
     const sackPctZ = calculateZScore(sackPctValue, sackPctMean, sackPctStdDev, true); // Inverted
     yearlyZScores.sackPct.push({ zScore: sackPctZ, weight });
     
-    // Calculate Turnover Rate z-score (attempts per turnover - higher is better)
+    // Calculate Turnover Rate z-score (turnovers per 100 attempts - lower is better)
     const turnoverRateValues = extractStatValues(yearDataForAllQBs, d => {
       const atts = parseInt(d.Att) || 0;
       const rushAtts = parseInt(d.RushingAtt) || 0;
       const ints = parseInt(d.Int) || 0;
-      const fumbles = parseInt(d.Fumbles) || 0;
-      const totalTurnovers = ints + fumbles;
-      const seasonAttempts = atts + rushAtts;
-      return totalTurnovers > 0 && seasonAttempts > 0 ? seasonAttempts / totalTurnovers : 999;
+      const fumblesLost = parseInt(d.FumblesLost) || 0;
+      const totalTurnovers = ints + fumblesLost;
+      const totalAttempts = atts + rushAtts;
+      // Calculate as percentage (turnovers per 100 attempts) - lower is better
+      return totalAttempts > 0 ? (totalTurnovers / totalAttempts) * 100 : 0;
     });
     const turnoverRateMean = calculateMean(turnoverRateValues);
     const turnoverRateStdDev = calculateStandardDeviation(turnoverRateValues, turnoverRateMean);
-    const seasonAttempts = regSeasonAtts + regSeasonRushAtts;
-    const totalTurnovers = regSeasonInts + regSeasonFumbles;
-    const turnoverRateValue = totalTurnovers > 0 && seasonAttempts > 0 ? 
-      seasonAttempts / totalTurnovers : 999;
-    const turnoverRateZ = calculateZScore(turnoverRateValue, turnoverRateMean, turnoverRateStdDev, false);
+    const totalAttempts = regSeasonAtts + regSeasonRushAtts;
+    const totalTurnovers = regSeasonInts + regSeasonFumblesLost;
+    const turnoverRateValue = totalAttempts > 0 ? 
+      (totalTurnovers / totalAttempts) * 100 : 0;
+    const turnoverRateZ = calculateZScore(turnoverRateValue, turnoverRateMean, turnoverRateStdDev, true); // Inverted - lower is better
     yearlyZScores.turnoverRate.push({ zScore: turnoverRateZ, weight });
   });
   
@@ -343,7 +343,7 @@ const calculateVolumeZScores = (qbSeasonData, allQBData, volumeWeights, includeP
     const threshold = (() => {
       if (yearNum === 2025) return 40;   // Partial season - much lower threshold
       if (yearNum >= 2024) return 150;   // Full recent seasons
-      return 200;                        // Historical seasons
+      return 50;                         // Historical seasons
     })();
     if (regSeasonAtts < threshold) return;
     
@@ -378,12 +378,11 @@ const calculateVolumeZScores = (qbSeasonData, allQBData, volumeWeights, includeP
       if (qbYearData) {
         const qbAtts = parseInt(qbYearData.Att) || 0;
         
-        // Apply same thresholds - 40 for 2025 (partial season), 150 for 2024+, 200 for older years
+        // Apply same thresholds - 40 for 2025 (partial season), 50 for all other years
         const yearNum = parseInt(year);
         const threshold = (() => {
           if (yearNum === 2025) return 40;   // Partial season - much lower threshold
-          if (yearNum >= 2024) return 150;   // Full recent seasons
-          return 200;                        // Historical seasons
+          return 50;                         // All other years (2024 and earlier)
         })();
         const meetsThreshold = qbAtts >= threshold;
         
@@ -497,7 +496,7 @@ export const calculateStatsScore = (
     Object.entries(qbSeasonData.years || {}).forEach(([year, data]) => {
       if (year !== '2024') {
         const historicalAtts = parseInt(data.Att) || 0;
-        if (historicalAtts >= 200) {
+        if (historicalAtts >= 50) {
           hasSignificantHistoricalData = true;
         }
       }
@@ -576,7 +575,7 @@ export const calculateStatsScore = (
       const regSeasonInts = parseInt(data.Int) || 0;
       const regSeasonSacks = parseInt(data.Sk) || 0;
       const regSeasonRushAtts = parseInt(data.RushingAtt) || 0;
-      const regSeasonFumbles = parseInt(data.Fumbles) || 0;
+      const regSeasonFumblesLost = parseInt(data.FumblesLost) || 0;
       
       const regAnyA = data['ANY/A'] || 0;
       const regTDPct = regSeasonAtts > 0 ? (regSeasonTDs / regSeasonAtts) * 100 : 0;

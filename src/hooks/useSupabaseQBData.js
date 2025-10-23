@@ -97,7 +97,8 @@ export const useSupabaseQBData = () => {
               avgPasserRating: 0,
               totalPasserRatingPoints: 0,
               rushingYards: 0,
-              rushingTDs: 0
+              rushingTDs: 0,
+              fumblesLost: 0
             }
           };
         }
@@ -134,10 +135,12 @@ export const useSupabaseQBData = () => {
           // Clutch stats
           gameWinningDrives: parseInt(record.gwd || record.GWD || record.game_winning_drives) || 0,
           fourthQuarterComebacks: parseInt(record.four_qc || record['4QC'] || record.fourth_quarter_comebacks) || 0,
-          // Rushing stats (may not exist in all tables)
+          // Rushing stats (now comes from merged Supabase data)
           rushingYards: parseInt(record.rush_yds || record.RushingYds || 0) || 0,
           rushingTDs: parseInt(record.rush_td || record.RushingTDs || 0) || 0,
-          fumbles: parseInt(record.fmb || record.Fumbles || 0) || 0
+          rushingAttempts: parseInt(record.rush_att || record.RushingAtt || 0) || 0,
+          fumbles: parseInt(record.fumbles || record.Fumbles || 0) || 0,
+          fumblesLost: parseInt(record.fumbles_lost || record.FumblesLost || 0) || 0
         };
         
         // Add season to player's seasons array
@@ -156,6 +159,7 @@ export const useSupabaseQBData = () => {
         career.rushingYards += seasonData.rushingYards;
         career.rushingTDs += seasonData.rushingTDs;
         career.fumbles += seasonData.fumbles;
+        career.fumblesLost += seasonData.fumblesLost;
         
         // Track passer rating for weighted averaging
         if (seasonData.passerRating > 0 && gamesStarted > 0) {
@@ -260,6 +264,15 @@ export const useSupabaseQBData = () => {
     }
   }, []);
 
+  // Force refresh by clearing cache and refetching
+  const forceRefresh = useCallback(async () => {
+    console.log('🔄 Force refreshing QB data - clearing cache and refetching');
+    setLastFetch(null);
+    setQbData([]);
+    // Trigger a new fetch
+    await fetchAllQBData();
+  }, [fetchAllQBData]);
+
   const fetchQBDataByYear = useCallback(async (year) => {
     try {
       setLoading(true);
@@ -303,7 +316,8 @@ export const useSupabaseQBData = () => {
               avgPasserRating: 0,
               totalPasserRatingPoints: 0,
               rushingYards: 0,
-              rushingTDs: 0
+              rushingTDs: 0,
+              fumblesLost: 0
             }
           };
         }
@@ -431,7 +445,8 @@ export const useSupabaseQBData = () => {
               avgPasserRating: 0,
               totalPasserRatingPoints: 0,
               rushingYards: 0,
-              rushingTDs: 0
+              rushingTDs: 0,
+              fumblesLost: 0
             }
           };
         }
@@ -559,7 +574,8 @@ export const useSupabaseQBData = () => {
               avgPasserRating: 0,
               totalPasserRatingPoints: 0,
               rushingYards: 0,
-              rushingTDs: 0
+              rushingTDs: 0,
+              fumblesLost: 0
             }
           };
         }
@@ -658,6 +674,7 @@ export const useSupabaseQBData = () => {
     fetchAllQBData,
     fetchQBDataByYear,
     fetchQBDataByName,
-    fetchQBDataWithFilters
+    fetchQBDataWithFilters,
+    forceRefresh
   };
 }; 
