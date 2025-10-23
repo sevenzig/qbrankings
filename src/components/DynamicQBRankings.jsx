@@ -62,8 +62,8 @@ const DynamicQBRankings = () => {
   });
   const [showSupportDetails, setShowSupportDetails] = useState(false);
   const [statsWeights, setStatsWeights] = useState({
-    efficiency: 55,     // ANY/A, TD%, Completion% - Core of QB evaluation
-    protection: 15,      // Sack%, Turnover Rate - Decision-making focus
+    efficiency: 50,     // ANY/A, TD%, Completion% - Core of QB evaluation
+    protection: 20,      // Sack%, Turnover Rate - Decision-making focus
     volume: 30          // Volume and production metrics - Secondary to efficiency
   });
   const [showStatsDetails, setShowStatsDetails] = useState(false);
@@ -83,14 +83,14 @@ const DynamicQBRankings = () => {
   });
   const [volumeWeights, setVolumeWeights] = useState({
     passYards: 30,      // Passing yards - Increased (shows arm talent and accuracy)
-    passTDs: 35,         // Passing touchdowns - Increased (ultimate success measure)
+    passTDs: 30,         // Passing touchdowns - Increased (ultimate success measure)
     rushYards: 15,       // Rushing yards - Reduced (secondary for QB evaluation)
-    rushTDs: 15,         // Rushing touchdowns - Maintained (goal line value)
+    rushTDs: 20,         // Rushing touchdowns - Maintained (goal line value)
     totalAttempts: 5     // Total attempts - Reduced (attempts don't measure quality)
   });
   const [teamWeights, setTeamWeights] = useState({
-    regularSeason: 65,   // Regular season win percentage
-    offenseDVOA: 35,     // Offensive output performance
+    regularSeason: 60,   // Regular season win percentage
+    offenseDVOA: 40,     // Offensive output performance
     playoff: 0           // Career playoff achievement score (disabled by default)
   });
   const [showTeamDetails, setShowTeamDetails] = useState(false);
