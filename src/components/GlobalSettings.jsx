@@ -88,7 +88,7 @@ const GlobalSettings = memo(({
               </button>
               
               {isOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-blue-900 border border-blue-400/20 rounded-md shadow-lg z-50">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-blue-900 border border-blue-400/20 rounded-md shadow-lg z-50 max-h-64 overflow-y-auto">
                   {years.map((year) => (
                     <button
                       key={year}

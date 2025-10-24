@@ -399,6 +399,7 @@ const SplitsComparison = memo(() => {
                 onChange={(e) => setSeason(parseInt(e.target.value))}
                 className="w-full px-3 py-2 bg-blue-900/30 text-blue-100 border-[1px] border-blue-400/10 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 hover:bg-blue-800/40 hover:border-blue-400/20 transition-all duration-150"
                 style={{ borderWidth: '1px' }}
+                size={8}
               >
                 {Array.from({ length: 26 }, (_, i) => 2025 - i).map(year => (
                   <option key={year} className="bg-blue-900 text-blue-100" value={year}>{year}</option>
