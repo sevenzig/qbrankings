@@ -16,12 +16,14 @@ export const useSupabaseQBData = () => {
   const [error, setError] = useState(null);
   const [lastFetch, setLastFetch] = useState(null);
 
-  // Cache duration: 15 minutes (same as CSV version)
+  // Cache duration: 15 minutes for regular data, 60 minutes for 2025 to prevent flat 50 scores
   const CACHE_DURATION = 15 * 60 * 1000;
+  const CACHE_DURATION_2025 = 60 * 60 * 1000; // 1 hour for 2025 data
 
-  const shouldRefreshData = useCallback(() => {
+  const shouldRefreshData = useCallback((yearMode = '2024') => {
     if (!lastFetch) return true;
-    return Date.now() - lastFetch > CACHE_DURATION;
+    const cacheDuration = yearMode === '2025' ? CACHE_DURATION_2025 : CACHE_DURATION;
+    return Date.now() - lastFetch > cacheDuration;
   }, [lastFetch]);
 
   const fetchAllQBData = useCallback(async (yearMode = '2025') => {
@@ -226,6 +228,43 @@ export const useSupabaseQBData = () => {
       }
       
       console.log(`📊 After filtering: ${processedQBs.length} QBs passed threshold requirements`);
+      
+      // Special handling for 2025 mode to prevent flat 50 scores
+      if (yearMode === '2025') {
+        console.log('🔍 2025 Mode: Validating partial season data integrity');
+        const valid2025QBs = processedQBs.filter(qb => {
+          const has2025Data = qb.seasonData?.some(season => season.year === 2025);
+          if (!has2025Data) {
+            console.warn(`⚠️ ${qb.name} has no 2025 data - excluding from rankings`);
+            return false;
+          }
+          
+          // Additional validation for 2025 data quality
+          const season2025 = qb.seasonData.find(season => season.year === 2025);
+          const hasValidStats = season2025 && (
+            (season2025.attempts > 0) || 
+            (season2025.gamesStarted > 0) ||
+            (season2025.passingYards > 0)
+          );
+          
+          if (!hasValidStats) {
+            console.warn(`⚠️ ${qb.name} has invalid 2025 stats - excluding from rankings`);
+            return false;
+          }
+          
+          return true;
+        });
+        
+        if (valid2025QBs.length === 0) {
+          console.error('❌ No valid 2025 QBs found after data refresh');
+          setError('No valid 2025 quarterback data available');
+          setLoading(false);
+          return;
+        }
+        
+        console.log(`✅ 2025 Mode: ${valid2025QBs.length} QBs passed validation`);
+        processedQBs = valid2025QBs;
+      }
       
       // Calculate QEI metrics for each QB - pass processedQBs as allQBData for z-score calculations
       const qbsWithMetrics = processedQBs.map(qb => {
@@ -663,7 +702,7 @@ export const useSupabaseQBData = () => {
   // Auto-fetch data on mount
   useEffect(() => {
     fetchAllQBData();
-  }, [fetchAllQBData]);
+  }, []); // Remove fetchAllQBData dependency to prevent infinite loop
 
   return {
     qbData,

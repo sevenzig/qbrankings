@@ -35,9 +35,41 @@ const calculateSupportAdjustedScore = (rawScore, supportQuality, allQBBaseScores
   return rawScore;
 };
 
+// Helper: Validate 2025 player data to prevent flat 50 scores
+const validate2025PlayerData = (qb) => {
+  const has2025Season = qb.seasonData?.some(season => season.year === 2025);
+  if (!has2025Season) {
+    console.warn(`⚠️ ${qb.name} has no 2025 season data`);
+    return false;
+  }
+  
+  const season2025 = qb.seasonData.find(season => season.year === 2025);
+  if (!season2025) {
+    console.warn(`⚠️ ${qb.name} 2025 season data is null/undefined`);
+    return false;
+  }
+  
+  const hasValidStats = season2025 && (
+    (season2025.attempts > 0) || 
+    (season2025.gamesStarted > 0) ||
+    (season2025.passingYards > 0)
+  );
+  
+  if (!hasValidStats) {
+    console.warn(`⚠️ ${qb.name} has invalid 2025 stats:`, {
+      attempts: season2025.attempts,
+      gamesStarted: season2025.gamesStarted,
+      passingYards: season2025.passingYards
+    });
+    return false;
+  }
+  
+  return true;
+};
+
 // Helper: Calculate percentile rank of a score within an array
 const calculatePercentileRank = (score, sortedArray) => {
-  if (sortedArray.length === 0) return 50;
+  if (sortedArray.length === 0) return 0; // Return 0 instead of 50 for empty arrays
   
   let rank = 0;
   for (let i = 0; i < sortedArray.length; i++) {
@@ -328,7 +360,11 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
   // DURABILITY CONVERSION: Durability now returns 0-100 score, not z-score
   // Convert to z-score for hierarchical calculation
   // 100 (full season) = +2.0 SD, 50 (half season) = 0.0 SD, 0 (no games) = -2.0 SD
-  const durabilityZScore = ((baseScores.durability || 50) - 50) / 25;
+  // Handle missing durability data more gracefully - use 0 instead of defaulting to 50
+  const durabilityScore = baseScores.durability;
+  const durabilityZScore = (durabilityScore != null && !isNaN(durabilityScore)) 
+    ? ((durabilityScore - 50) / 25)
+    : 0; // Use 0 z-score for missing durability data instead of defaulting to 50
   
   // Use composite z-scores as-is (they already include sub-component weighting)
   let contextualScores = {
@@ -393,6 +429,35 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
     console.log(`   Z-Scores: Team(${contextualScores.team.toFixed(3)}) Stats(${contextualScores.stats.toFixed(3)}) Clutch(${contextualScores.clutch.toFixed(3)}) Durability(${contextualScores.durability.toFixed(3)}) Support(${contextualScores.support.toFixed(3)})`);
     console.log(`   Weights: Team(${topLevelWeights.team}) Stats(${topLevelWeights.stats}) Clutch(${topLevelWeights.clutch}) Durability(${topLevelWeights.durability}) Support(${topLevelWeights.support})`);
     console.log(`   Composite Z-Score: ${compositeZScore.toFixed(3)}`);
+  }
+  
+  // Special validation and debug logging for 2025 players to diagnose flat 50 scores
+  if (filterYear === 2025) {
+    // Validate 2025 player data before calculation
+    if (!validate2025PlayerData(qb)) {
+      console.error(`❌ ${qbName} failed 2025 data validation - returning 0 QEI`);
+      return 0;
+    }
+    
+    console.log(`🔍 2025 QEI CALCULATION ${qbName}:`, {
+      baseScores: {
+        team: baseScores.team?.toFixed(3),
+        stats: baseScores.stats?.toFixed(3),
+        clutch: baseScores.clutch?.toFixed(3),
+        durability: baseScores.durability?.toFixed(3),
+        support: baseScores.support?.toFixed(3)
+      },
+      weights: topLevelWeights,
+      durabilityScore: durabilityScore,
+      durabilityZScore: durabilityZScore?.toFixed(3),
+      contextualScores: {
+        team: contextualScores.team?.toFixed(3),
+        stats: contextualScores.stats?.toFixed(3),
+        clutch: contextualScores.clutch?.toFixed(3),
+        durability: contextualScores.durability?.toFixed(3),
+        support: contextualScores.support?.toFixed(3)
+      }
+    });
   }
   
   // Apply experience penalty for rookies and near-rookies in single-year mode only

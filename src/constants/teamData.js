@@ -46,6 +46,11 @@ export const TEAM_MAP = {
   'TAM': { id: '27', name: 'Tampa Bay Buccaneers', logo: '/logos/tb.png' },
   'WAS': { id: '28', name: 'Washington Commanders', logo: '/logos/wsh.png' },
   
+  // Historical team abbreviations (mapped to current teams)
+  'OAK': { id: '13', name: 'Las Vegas Raiders', logo: '/logos/lv.png' }, // Oakland Raiders → Las Vegas Raiders
+  'SDG': { id: '24', name: 'Los Angeles Chargers', logo: '/logos/lac.png' }, // San Diego Chargers → Los Angeles Chargers  
+  'STL': { id: '14', name: 'Los Angeles Rams', logo: '/logos/lar.png' }, // St. Louis Rams → Los Angeles Rams
+  
   // Special cases
   '2TM': { id: '0', name: 'Multiple Teams', logo: '' } // Special case for players who played for multiple teams
 };

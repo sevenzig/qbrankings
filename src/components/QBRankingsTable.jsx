@@ -1,8 +1,9 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import { getQEIColor, getQEITier } from '../utils/uiHelpers.js';
 import { getTeamInfo } from '../constants/teamData.js';
+import GlobalSettings from './GlobalSettings.jsx';
 
-const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = false }) => {
+const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = false, yearMode, onYearModeChange }) => {
   // Extract all QBs with QEI scores for dynamic tier calculation
   const allQBsWithQEI = useMemo(() => rankedQBs, [rankedQBs]);
   // Helper function to get all unique teams a QB played for
@@ -98,7 +99,13 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
   return (
     <div className="bg-white/10 backdrop-blur-lg rounded-2xl overflow-hidden">
       <div className="p-6 border-b border-white/20">
-        <h3 className="text-xl font-bold text-white">🏆 QB Rankings ({rankedQBs.length} Active QBs)</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-bold text-white">🏆 QB Rankings ({rankedQBs.length} Active QBs)</h3>
+          <GlobalSettings
+            yearMode={yearMode}
+            onYearModeChange={onYearModeChange}
+          />
+        </div>
       </div>
       
       <div className="overflow-x-auto custom-scrollbar">

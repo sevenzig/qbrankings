@@ -104,7 +104,7 @@ const erf = (x) => {
  * @returns {number} Percentile (0-100)
  */
 export const zScoreToPercentile = (zScore) => {
-  if (!isFinite(zScore) || isNaN(zScore)) return 50; // Default to median
+  if (!isFinite(zScore) || isNaN(zScore)) return 0; // Return 0 for invalid z-scores instead of 50
   
   // Use the error function to calculate cumulative probability
   // CDF(z) = 0.5 * (1 + erf(z / sqrt(2)))

@@ -250,8 +250,8 @@ const WeightControls = memo(({
                       component={component}
                       value={value}
                       onChange={onUpdateTeamWeight}
-                      className={`${(!includePlayoffs && component === 'playoff') ? 'bg-gray-500/30 text-gray-400' : 'bg-yellow-500/30 text-yellow-100'}`}
-                      disabled={!includePlayoffs && component === 'playoff'}
+                      className={`${((!includePlayoffs && component === 'playoff') || component === 'offenseDVOA') ? 'bg-gray-500/30 text-gray-400' : 'bg-yellow-500/30 text-yellow-100'}`}
+                      disabled={(!includePlayoffs && component === 'playoff') || component === 'offenseDVOA'}
                       includePlayoffs={includePlayoffs}
                     />
                   ))}
@@ -938,9 +938,9 @@ const WeightControls = memo(({
                     max="100"
                     value={value}
                     onChange={(e) => onUpdateTeamWeight(component, e.target.value)}
-                    disabled={!includePlayoffs && component === 'playoff'}
+                    disabled={(!includePlayoffs && component === 'playoff') || component === 'offenseDVOA'}
                     className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
-                      (!includePlayoffs && component === 'playoff')
+                      ((!includePlayoffs && component === 'playoff') || component === 'offenseDVOA')
                         ? 'bg-gray-400 cursor-not-allowed opacity-50' 
                         : 'bg-yellow-200'
                     }`}
@@ -951,9 +951,9 @@ const WeightControls = memo(({
                     max="100"
                     value={value}
                     onChange={(e) => onUpdateTeamWeight(component, e.target.value)}
-                    disabled={!includePlayoffs && component === 'playoff'}
+                    disabled={(!includePlayoffs && component === 'playoff') || component === 'offenseDVOA'}
                     className={`w-full px-2 py-1 border border-white/20 rounded text-sm text-center ${
-                      (!includePlayoffs && component === 'playoff')
+                      ((!includePlayoffs && component === 'playoff') || component === 'offenseDVOA')
                         ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
                         : 'bg-white/10 text-white'
                     }`}
@@ -973,9 +973,9 @@ const WeightControls = memo(({
             <span className={`text-sm font-bold ${Object.values(teamWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
               Component Total: {Object.values(teamWeights).reduce((sum, val) => sum + val, 0)}%
             </span>
-            {!includePlayoffs && (
+            {(!includePlayoffs || teamWeights.offenseDVOA === 0) && (
               <div className="text-xs text-orange-300 mt-1">
-                ⚠️ Playoff component disabled - only Regular Season will be scored
+                ⚠️ {!includePlayoffs ? 'Playoff component disabled - only Regular Season will be scored' : 'Offensive Output disabled (work in progress) - only Regular Season will be scored'}
               </div>
             )}
             {Object.values(teamWeights).reduce((sum, val) => sum + val, 0) !== 100 && (

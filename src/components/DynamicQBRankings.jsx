@@ -90,9 +90,9 @@ const DynamicQBRankings = () => {
     totalAttempts: 5     // Total attempts - Reduced (attempts don't measure quality)
   });
   const [teamWeights, setTeamWeights] = useState({
-    regularSeason: 60,   // Regular season win percentage
-    offenseDVOA: 40,     // Offensive output performance
-    playoff: 0           // Career playoff achievement score (disabled by default)
+    regularSeason: 100,  // Regular season win percentage - set to 100%
+    offenseDVOA: 0,       // Offensive output performance - disabled (work in progress)
+    playoff: 0           // Career playoff achievement score - disabled (work in progress)
   });
   const [showTeamDetails, setShowTeamDetails] = useState(false);
   const [clutchWeights, setClutchWeights] = useState({
@@ -155,22 +155,6 @@ const DynamicQBRankings = () => {
       setClutchWeights(prev => ({ ...prev, playoffBonus: 0 }));
     }
   }, [includePlayoffs]);
-
-  // Handle 2025 mode changes - disable support and durability, keep pure QB quality focus
-  useEffect(() => {
-    if (yearMode === '2025') {
-      console.log('🔄 2025 Mode: Maintaining pure QB quality focus (Stats 100%, Team 0%)');
-      onWeightsChange({
-        team: 0,      // Pure QB evaluation - no team bias
-        stats: 100,   // 100% statistical evaluation
-        clutch: 0,
-        durability: 0,
-        support: 0
-      });
-    }
-  }, [yearMode, onWeightsChange]);
-
-
 
   const updateWeight = useCallback((category, value) => {
     // In 2025 mode, prevent changes to support and durability (they don't have data)
@@ -1199,13 +1183,36 @@ const DynamicQBRankings = () => {
     setPrevIncludePlayoffs(includePlayoffs);
   }, [includePlayoffs]);
 
-  // Refetch data when year mode changes
+  // Handle year mode changes - both weight adjustments and data fetching
   useEffect(() => {
-    if (fetchAllQBData) {
-      console.log(`🔄 Mode switched, refetching data for: ${yearMode}`);
-      fetchAllQBData(yearMode);
+    console.log(`🔄 Year mode changed to: ${yearMode}`);
+    
+    // Handle 2025 mode weight changes
+    if (yearMode === '2025') {
+      console.log('🔄 2025 Mode: Maintaining pure QB quality focus (Stats 100%, Team 0%)');
+      onWeightsChange({
+        team: 0,      // Pure QB evaluation - no team bias
+        stats: 100,   // 100% statistical evaluation
+        clutch: 0,
+        durability: 0,
+        support: 0
+      });
+      
+      // Only refresh 2025 data if we don't have any data yet
+      if (fetchAllQBData && (!qbData || qbData.length === 0)) {
+        console.log('🔄 2025 Mode: No data available, fetching initial data');
+        fetchAllQBData(yearMode);
+      } else {
+        console.log('🔄 2025 Mode: Skipping automatic refresh to preserve partial season data integrity');
+      }
+    } else {
+      // Handle other year modes - always fetch data
+      if (fetchAllQBData) {
+        console.log(`🔄 Mode switched, refetching data for: ${yearMode}`);
+        fetchAllQBData(yearMode);
+      }
     }
-  }, [yearMode]); // Only depend on the year mode, not the function
+  }, [yearMode, fetchAllQBData, onWeightsChange]); // Consolidated dependencies
 
   if (loading) {
     return (
@@ -1250,7 +1257,7 @@ const DynamicQBRankings = () => {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">🏈 NFL QB Rankings</h1>
+          <h1 className="text-4xl font-bold text-white mb-2">🏆 QB Rankings</h1>
           <p className="text-blue-200">
             {yearMode} NFL season analysis • Single-season quarterback rankings • Dynamic QEI
           </p>
@@ -1307,14 +1314,6 @@ const DynamicQBRankings = () => {
           {isCustomizeAccordionOpen && (
             <div className="border-t border-white/10">
               <div className="p-6">
-                <GlobalSettings
-                  includePlayoffs={includePlayoffs}
-                  onIncludePlayoffsChange={onIncludePlayoffsChange}
-                  yearMode={yearMode}
-                  onYearModeChange={onYearModeChange}
-                  onForceRefresh={forceRefresh}
-                />
-          
                 <WeightControls
                   weights={weights}
                   onUpdateWeight={updateWeight}
@@ -1390,6 +1389,8 @@ const DynamicQBRankings = () => {
           rankedQBs={rankedQBs} 
           includePlayoffs={includePlayoffs}
           include2024Only={true}
+          yearMode={yearMode}
+          onYearModeChange={onYearModeChange}
         />
 
         {/* Footer */}
