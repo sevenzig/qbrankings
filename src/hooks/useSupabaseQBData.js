@@ -232,6 +232,18 @@ export const useSupabaseQBData = () => {
       // Special handling for 2025 mode to prevent flat 50 scores
       if (yearMode === '2025') {
         console.log('🔍 2025 Mode: Validating partial season data integrity');
+        console.log(`🔍 2025 Mode: Starting with ${processedQBs.length} QBs before validation`);
+        
+        // Debug: Show sample QB data structure
+        if (processedQBs.length > 0) {
+          console.log('🔍 Sample QB data structure:', {
+            name: processedQBs[0].name,
+            seasonData: processedQBs[0].seasonData,
+            hasSeasonData: !!processedQBs[0].seasonData,
+            seasonDataLength: processedQBs[0].seasonData?.length || 0
+          });
+        }
+        
         const valid2025QBs = processedQBs.filter(qb => {
           const has2025Data = qb.seasonData?.some(season => season.year === 2025);
           if (!has2025Data) {
@@ -239,16 +251,24 @@ export const useSupabaseQBData = () => {
             return false;
           }
           
-          // Additional validation for 2025 data quality
+          // Additional validation for 2025 data quality - more lenient for partial season
           const season2025 = qb.seasonData.find(season => season.year === 2025);
           const hasValidStats = season2025 && (
             (season2025.attempts > 0) || 
             (season2025.gamesStarted > 0) ||
-            (season2025.passingYards > 0)
+            (season2025.passingYards > 0) ||
+            (season2025.completions > 0) ||
+            (season2025.passingTDs > 0)
           );
           
           if (!hasValidStats) {
-            console.warn(`⚠️ ${qb.name} has invalid 2025 stats - excluding from rankings`);
+            console.warn(`⚠️ ${qb.name} has invalid 2025 stats - excluding from rankings:`, {
+              attempts: season2025?.attempts || 0,
+              gamesStarted: season2025?.gamesStarted || 0,
+              passingYards: season2025?.passingYards || 0,
+              completions: season2025?.completions || 0,
+              passingTDs: season2025?.passingTDs || 0
+            });
             return false;
           }
           

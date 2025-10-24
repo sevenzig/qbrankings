@@ -1198,12 +1198,10 @@ const DynamicQBRankings = () => {
         support: 0
       });
       
-      // Only refresh 2025 data if we don't have any data yet
-      if (fetchAllQBData && (!qbData || qbData.length === 0)) {
-        console.log('🔄 2025 Mode: No data available, fetching initial data');
+      // Always fetch 2025 data when switching to 2025 mode
+      if (fetchAllQBData) {
+        console.log('🔄 2025 Mode: Fetching 2025 data');
         fetchAllQBData(yearMode);
-      } else {
-        console.log('🔄 2025 Mode: Skipping automatic refresh to preserve partial season data integrity');
       }
     } else {
       // Handle other year modes - always fetch data
