@@ -7,6 +7,32 @@ import {
 } from '../../utils/zScoreCalculations.js';
 import { calculateHierarchicalScore } from '../../utils/qbCalculations.js';
 
+/**
+ * Calculate reliability-adjusted win percentage for early season data
+ * Blends raw win percentage with league average based on sample size
+ * @param {number} wins - Number of wins
+ * @param {number} totalGames - Total games played
+ * @param {number} minGames - Minimum games for full reliability (default: 8)
+ * @returns {number} Reliability-adjusted win percentage
+ */
+const calculateReliabilityAdjustedWinPct = (wins, totalGames, minGames = 8) => {
+  if (totalGames === 0) return 0.5; // Default to league average if no games
+  
+  const rawWinPct = wins / totalGames;
+  
+  // If we have enough games, use raw win percentage
+  if (totalGames >= minGames) {
+    return rawWinPct;
+  }
+  
+  // For small sample sizes, blend with league average
+  const sampleSizeFactor = totalGames / minGames;
+  const leagueAverage = 0.5;
+  
+  // Blend raw win% with league average based on sample size
+  return (rawWinPct * sampleSizeFactor) + (leagueAverage * (1 - sampleSizeFactor));
+};
+
 /*
  * TEAM ABBREVIATION AUDIT: All 32 NFL Teams Coverage
  * 
@@ -401,7 +427,7 @@ export const calculateTeamScore = (
     // Parse regular season QB record (format: "14-3-0")
     const [wins, losses, ties = 0] = data.QBrec.split('-').map(Number);
     const totalGames = wins + losses + ties;
-    const regularSeasonWinPct = totalGames > 0 ? wins / totalGames : 0;
+    const regularSeasonWinPct = calculateReliabilityAdjustedWinPct(wins, totalGames);
     
     // MINIMUM GAMES THRESHOLD: For single-year mode, require at least 9 starts; for multi-year, require 10 starts
     const gamesStarted = parseInt(data.GS) || 0;
@@ -626,7 +652,7 @@ export const calculateTeamScore = (
           
           const [wins, losses, ties = 0] = data.QBrec.split('-').map(Number);
           const totalGames = wins + losses + ties;
-          const winPct = totalGames > 0 ? wins / totalGames : 0;
+          const winPct = calculateReliabilityAdjustedWinPct(wins, totalGames);
           
           if (!isNaN(winPct) && isFinite(winPct)) {
             winPctValues.push(winPct);
@@ -652,7 +678,7 @@ export const calculateTeamScore = (
           const wins = season.wins || 0;
           const losses = season.losses || 0;
           const totalGames = wins + losses;
-          const winPct = totalGames > 0 ? wins / totalGames : 0;
+          const winPct = calculateReliabilityAdjustedWinPct(wins, totalGames);
           
           if (!isNaN(winPct) && isFinite(winPct)) {
             winPctValues.push(winPct);

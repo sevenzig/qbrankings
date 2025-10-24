@@ -26,8 +26,10 @@ All calculations use a weighted average across seasons:
 
 #### Win Percentage Calculation:
 - Takes QB record format: "14-3-0" (wins-losses-ties)
+- **Reliability-Adjusted for Early Season**: Small sample sizes (less than 8 games) are blended with league average (50%) to prevent extreme early season penalties
 - Adds weighted playoff performance to regular season record
 - Includes bye week bonuses for earned first-round byes
+- **Z-Score Based**: Uses population statistics for fair comparison across all QBs
 
 ### 2. Availability Score (0-15 points)
 **Formula**: `Availability × 15`
