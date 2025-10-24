@@ -10,7 +10,7 @@ const GlobalSettings = memo(({
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  const years = ['2020', '2021', '2022', '2023', '2024', '2025'];
+  const years = Array.from({ length: 26 }, (_, i) => (2000 + i).toString()).reverse();
 
   useEffect(() => {
     const handleClickOutside = (event) => {
