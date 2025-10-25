@@ -547,8 +547,15 @@ export const calculateSupportScore = (qbSeasonData, supportWeights = { offensive
       const gamesStarted = seasonData.GS || seasonData.gamesStarted || 0;
       
       // Calculate support for each team played for in this year
-      // Use lower threshold for single-year mode (3 games) vs multi-year mode (10 games)
-      const gamesThreshold = (filterYear && typeof filterYear === 'number') ? 3 : 10;
+      // Use lower threshold for single-year mode (1 for 2025 and pre-1967, 2 for modern era) vs multi-year mode (10 games)
+      const gamesThreshold = (() => {
+        if (filterYear && typeof filterYear === 'number') {
+          if (filterYear === 2025) return 1;  // Partial season
+          if (filterYear < 1967) return 1;   // Pre-merger era (shorter seasons)
+          return 2;                            // Modern era (1967+)
+        }
+        return 10;                            // Multi-year
+      })();
       if (teamsThisYear.length > 0 && gamesStarted >= gamesThreshold) {
         // For multi-team seasons, average the support scores
         const yearSupportScores = teamsThisYear.map(team => calculateWeightedSupportScore(team, yearNum, supportWeights));

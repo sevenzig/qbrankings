@@ -318,10 +318,15 @@ export const processQBData = (combinedQBData, filterYear = null) => {
           .filter(season => season.year === filterYear)
           .reduce((sum, season) => sum + (season.gamesStarted || 0), 0);
         
-        // Adjust threshold based on year (2025 has fewer games)
+        // Adjust threshold based on year (2025 has fewer games, pre-1967 had shorter seasons)
         // For 2025 mid-season: use 1 game minimum since season is in progress
-        // For older seasons: use 3 games minimum to match the 50 attempts threshold (~3 games)
-        const minGames = filterYear === 2025 ? 1 : 3; // Lower threshold to match 50 attempts (~3 games)
+        // For pre-1967: use 1 game minimum due to shorter seasons and different era
+        // For all other years: use 2 games minimum
+        const minGames = (() => {
+          if (filterYear === 2025) return 1;  // Partial season
+          if (filterYear < 1967) return 1;   // Pre-merger era (shorter seasons)
+          return 2;                           // Modern era (1967+)
+        })();
         const passes = hasYearActivity && totalYearGames >= minGames;
         
         if (!passes) {
@@ -332,18 +337,28 @@ export const processQBData = (combinedQBData, filterYear = null) => {
         
         return passes;
       } else {
-        // For multi-year mode: Original career-based filtering (legacy support)
+        // For multi-year mode: Career-based filtering with historical support
         const totalGames = data.career.gamesStarted;
+        
+        // Check for recent activity (2023+) OR historical significance (pre-1967 with sufficient games)
         const hasRecentActivity = data.seasons.some(season => season.year >= 2023);
-        const passes = totalGames >= 15 && hasRecentActivity;
+        const hasHistoricalSignificance = data.seasons.some(season => {
+          const year = season.year;
+          const games = season.gamesStarted || 0;
+          // Pre-1967 players need fewer games due to shorter seasons
+          return year < 1967 && games >= 5;
+        });
+        
+        // Require either recent activity OR historical significance
+        const passes = totalGames >= 15 && (hasRecentActivity || hasHistoricalSignificance);
         
         if (!passes) {
-          console.log(`🚫 FILTERED OUT ${playerName}: career games=${totalGames}, recentActivity=${hasRecentActivity}, seasons=${data.career.seasons}`);
+          console.log(`🚫 FILTERED OUT ${playerName}: career games=${totalGames}, recentActivity=${hasRecentActivity}, historicalSignificance=${hasHistoricalSignificance}, seasons=${data.career.seasons}`);
         } else {
-          console.log(`✅ PASSED ${playerName}: career games=${totalGames}, seasons=${data.career.seasons}`);
+          console.log(`✅ PASSED ${playerName}: career games=${totalGames}, recentActivity=${hasRecentActivity}, historicalSignificance=${hasHistoricalSignificance}, seasons=${data.career.seasons}`);
         }
         
-        return passes; // At least 15 career starts and active recently
+        return passes; // At least 15 career starts and (recent activity OR historical significance)
       }
     })
     .map(([playerName, data], index) => {

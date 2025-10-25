@@ -104,7 +104,7 @@ const calculateZScoreValue = (value, allValues, inverted = false) => {
 };
 
 // Enhanced Clutch Performance Score using situational split data (0-100)
-export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, filterYear = null, allQBData = []) => {
+export const calculateClutchScore = (qbSeasonData, includePlayoffs = false, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 0 }, filterYear = null, allQBData = []) => {
   try {
     // Debug logging
     const playerName = qbSeasonData.years && Object.values(qbSeasonData.years)[0]?.Player;
@@ -135,7 +135,13 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
       if (weight === 0 || (!data.GWD && !data['4QC'])) return;
       
       const isSingleYear = filterYear && typeof filterYear === 'number';
-      const gamesThreshold = isSingleYear ? 9 : 10;
+      const gamesThreshold = (() => {
+        if (isSingleYear) {
+          if (filterYear === 2025) return 1;  // Partial season
+          return 2;                            // All other years
+        }
+        return 10;                            // Multi-year
+      })();
       if (gamesPlayed < gamesThreshold) return;
       
       const seasonGWD = parseInt(data.GWD) || 0;
@@ -299,7 +305,8 @@ export const calculateClutchScore = (qbSeasonData, includePlayoffs = true, clutc
     const gwdZ = calculateZScoreValue(gwdPerGame, allGWDRates);
     const comebackZ = calculateZScoreValue(comebacksPerGame, allFourthQCRates);
     const clutchRateZ = calculateZScoreValue(totalClutchPerGame, allClutchRates);
-    const playoffBonusZ = calculateZScoreValue(playoffAdjustmentFactor, allPlayoffAdjustments);
+    // DISABLED: Playoff bonus disabled globally
+    const playoffBonusZ = 0; // calculateZScoreValue(playoffAdjustmentFactor, allPlayoffAdjustments);
     
     const clutchComponentZScores = {
       gameWinningDrives: gwdZ,

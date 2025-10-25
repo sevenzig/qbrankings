@@ -228,6 +228,10 @@ export const qbDataService = {
       
       if (passingError) {
         console.error('❌ Supabase query error:', passingError);
+        // For historical data, some team codes may not exist - log warning but continue
+        if (passingError.message.includes('foreign key') || passingError.message.includes('team')) {
+          console.warn(`⚠️ Historical team codes detected for ${year} - some records may have unknown teams`);
+        }
         throw new Error(`Failed to fetch ${year} QB data: ${passingError.message}`);
       }
       

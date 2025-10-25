@@ -21,6 +21,9 @@ export const useSupabaseQBData = () => {
   const CACHE_DURATION_2025 = 60 * 60 * 1000; // 1 hour for 2025 data
 
   const shouldRefreshData = useCallback((yearMode = '2024') => {
+    // TEMPORARILY DISABLED CACHING FOR TESTING - Remove this after testing
+    return true;
+    
     if (!lastFetch) return true;
     const cacheDuration = yearMode === '2025' ? CACHE_DURATION_2025 : CACHE_DURATION;
     return Date.now() - lastFetch > cacheDuration;

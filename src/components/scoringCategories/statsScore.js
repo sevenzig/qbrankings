@@ -67,11 +67,12 @@ const calculateEfficiencyZScores = (qbSeasonData, allQBData, efficiencyWeights, 
     
     const regSeasonAtts = parseInt(data.Att) || 0;
     
-    // Apply attempt thresholds - 40 for 2025 (partial season), 50 for all other years
+    // Apply attempt thresholds - 40 for 2025 (partial season), 15 for pre-1967, 50 for 1967-2024
     const yearNum = parseInt(year);
     const threshold = (() => {
-      if (yearNum === 2025) return 40;   // Partial season - much lower threshold
-      return 50;                         // All other years (2024 and earlier)
+      if (yearNum === 2025) return 40;      // Partial season - much lower threshold
+      if (yearNum < 1967) return 15;        // Early NFL era (pre-merger)
+      return 50;                            // Historical seasons (1967-2024)
     })();
     if (regSeasonAtts < threshold) return;
     
@@ -106,12 +107,12 @@ const calculateEfficiencyZScores = (qbSeasonData, allQBData, efficiencyWeights, 
       if (qbYearData) {
         const qbAtts = parseInt(qbYearData.Att) || 0;
         
-        // Apply same thresholds - 75 for 2025 (partial season), 150 for 2024+, 200 for older years
+        // Apply same thresholds - 40 for 2025 (partial season), 15 for pre-1967, 50 for 1967-2024
         const yearNum = parseInt(year);
         const threshold = (() => {
-          if (yearNum === 2025) return 40;   // Partial season - much lower threshold
-          if (yearNum >= 2024) return 150;   // Full recent seasons
-          return 50;                         // Historical seasons
+          if (yearNum === 2025) return 40;      // Partial season - much lower threshold
+          if (yearNum < 1967) return 15;        // Early NFL era (pre-merger)
+          return 50;                            // Historical seasons (1967-2024)
         })();
         const meetsThreshold = qbAtts >= threshold;
         
@@ -203,12 +204,12 @@ const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, 
     const regSeasonInts = parseInt(data.Int) || 0;
     const regSeasonFumblesLost = parseInt(data.FumblesLost) || 0;
     
-    // Apply attempt thresholds - 75 for 2025 (partial season), 150 for 2024+, 200 for older years
+    // Apply attempt thresholds - 40 for 2025 (partial season), 15 for pre-1967, 50 for 1967-2024
     const yearNum = parseInt(year);
     const threshold = (() => {
-      if (yearNum === 2025) return 40;   // Partial season - much lower threshold
-      if (yearNum >= 2024) return 150;   // Full recent seasons
-      return 50;                         // Historical seasons
+      if (yearNum === 2025) return 40;      // Partial season - much lower threshold
+      if (yearNum < 1967) return 15;        // Early NFL era (pre-merger)
+      return 50;                            // Historical seasons (1967-2024)
     })();
     if (regSeasonAtts < threshold) return;
     
@@ -243,12 +244,12 @@ const calculateProtectionZScores = (qbSeasonData, allQBData, protectionWeights, 
       if (qbYearData) {
         const qbAtts = parseInt(qbYearData.Att) || 0;
         
-        // Apply same thresholds - 75 for 2025 (partial season), 150 for 2024+, 200 for older years
+        // Apply same thresholds - 40 for 2025 (partial season), 15 for pre-1967, 50 for 1967-2024
         const yearNum = parseInt(year);
         const threshold = (() => {
-          if (yearNum === 2025) return 40;   // Partial season - much lower threshold
-          if (yearNum >= 2024) return 150;   // Full recent seasons
-          return 50;                         // Historical seasons
+          if (yearNum === 2025) return 40;      // Partial season - much lower threshold
+          if (yearNum < 1967) return 15;        // Early NFL era (pre-merger)
+          return 50;                            // Historical seasons (1967-2024)
         })();
         const meetsThreshold = qbAtts >= threshold;
         
@@ -338,12 +339,12 @@ const calculateVolumeZScores = (qbSeasonData, allQBData, volumeWeights, includeP
     
     const regSeasonAtts = parseInt(data.Att) || 0;
     
-    // Apply attempt thresholds - 75 for 2025 (partial season), 150 for 2024+, 200 for older years
+    // Apply attempt thresholds - 40 for 2025 (partial season), 15 for pre-1967, 50 for 1967-2024
     const yearNum = parseInt(year);
     const threshold = (() => {
-      if (yearNum === 2025) return 40;   // Partial season - much lower threshold
-      if (yearNum >= 2024) return 150;   // Full recent seasons
-      return 50;                         // Historical seasons
+      if (yearNum === 2025) return 40;      // Partial season - much lower threshold
+      if (yearNum < 1967) return 15;        // Early NFL era (pre-merger)
+      return 50;                            // Historical seasons (1967-2024)
     })();
     if (regSeasonAtts < threshold) return;
     
@@ -378,11 +379,12 @@ const calculateVolumeZScores = (qbSeasonData, allQBData, volumeWeights, includeP
       if (qbYearData) {
         const qbAtts = parseInt(qbYearData.Att) || 0;
         
-        // Apply same thresholds - 40 for 2025 (partial season), 50 for all other years
+        // Apply same thresholds - 40 for 2025 (partial season), 15 for pre-1967, 50 for 1967-2024
         const yearNum = parseInt(year);
         const threshold = (() => {
-          if (yearNum === 2025) return 40;   // Partial season - much lower threshold
-          return 50;                         // All other years (2024 and earlier)
+          if (yearNum === 2025) return 40;      // Partial season - much lower threshold
+          if (yearNum < 1967) return 15;        // Early NFL era (pre-merger)
+          return 50;                            // Historical seasons (1967-2024)
         })();
         const meetsThreshold = qbAtts >= threshold;
         

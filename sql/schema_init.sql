@@ -97,7 +97,8 @@ CREATE TABLE IF NOT EXISTS qb_passing_stats (
     -- Primary key and constraints
     PRIMARY KEY (pfr_id, season),
     CONSTRAINT fk_qb_passing_stats_player FOREIGN KEY (pfr_id) REFERENCES players(pfr_id) ON DELETE CASCADE,
-    CONSTRAINT fk_qb_passing_stats_team FOREIGN KEY (team) REFERENCES teams(team_code) ON DELETE RESTRICT
+    -- CONSTRAINT fk_qb_passing_stats_team FOREIGN KEY (team) REFERENCES teams(team_code) ON DELETE RESTRICT
+    -- Disabled to allow historical team codes that don't exist in teams table
 );
 
 -- QB Splits Table (matches advanced_stats_1.csv exactly)

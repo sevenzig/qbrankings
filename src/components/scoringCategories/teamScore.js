@@ -230,6 +230,12 @@ function getPlayoffProgress(team, year) {
  * Handles multi-team seasons by weighting DVOA based on games started with each team
  */
 const calculateOffensiveDVOAScore = (team, year, allTeams = null, teamsPlayed = null, gamesStartedPerTeam = null) => {
+  // DVOA scoring disabled globally - return neutral score (0 z-score)
+  console.log(`📊 DVOA DISABLED: Returning neutral score (0 z-score) for ${team} in ${year}`);
+  return 0;
+  
+  // Original DVOA calculation disabled below
+  /*
   const yearData = OFFENSIVE_DVOA_DATA[year];
   
   // Handle multi-team seasons (2TM, 3TM, etc.)
@@ -290,6 +296,7 @@ const calculateOffensiveDVOAScore = (team, year, allTeams = null, teamsPlayed = 
   
   // Return z-score (not percentile) for composite calculation
   return zScore;
+  */
 };
 
 // Helper function to calculate weighted playoff wins based on round progression
@@ -382,8 +389,8 @@ const calculateByeWeekBonus = (playoffData, team, year, filterYear = null) => {
 // Enhanced Team Success Score with configurable weights and playoff toggle (0-100)
 export const calculateTeamScore = (
   qbData,
-  teamWeights = { regularSeason: 50, offenseDVOA: 35, playoff: 15 },
-  includePlayoffs,
+  teamWeights = { regularSeason: 100, offenseDVOA: 0, playoff: 0 },
+  includePlayoffs = false, // Force disable playoffs globally
   filterYear = null, // CHANGED: from include2024Only boolean to filterYear number
   supportScore = 50, // Default to average support if not provided
   allQBData = [] // Population data for z-score calculations
@@ -429,9 +436,16 @@ export const calculateTeamScore = (
     const totalGames = wins + losses + ties;
     const regularSeasonWinPct = calculateReliabilityAdjustedWinPct(wins, totalGames);
     
-    // MINIMUM GAMES THRESHOLD: For single-year mode, require at least 9 starts; for multi-year, require 10 starts
+    // MINIMUM GAMES THRESHOLD: For single-year mode, require at least 2 starts (1 for 2025 and pre-1967); for multi-year, require 10 starts
     const gamesStarted = parseInt(data.GS) || 0;
-    const gamesThreshold = (filterYear && typeof filterYear === 'number') ? 9 : 10;
+    const gamesThreshold = (() => {
+      if (filterYear && typeof filterYear === 'number') {
+        if (filterYear === 2025) return 1;  // Partial season
+        if (filterYear < 1967) return 1;   // Pre-merger era (shorter seasons)
+        return 2;                            // Modern era (1967+)
+      }
+      return 10;                            // Multi-year threshold
+    })();
     if (gamesStarted < gamesThreshold) {
       if (debugMode && playerName) {
         console.log(`🔍 ${year}: SKIPPED - Only ${gamesStarted} games started (minimum required)`);
@@ -444,7 +458,7 @@ export const calculateTeamScore = (
     const teamsPlayed = data.teamsPlayed || [];
     const gamesStartedPerTeam = data.gamesStartedPerTeam || [];
     
-    // Calculate offensive DVOA score for this team/year
+    // Calculate offensive DVOA score for this team/year (DISABLED - returns 0)
     const offenseDVOAScore = calculateOffensiveDVOAScore(team, parseInt(year), null, teamsPlayed, gamesStartedPerTeam);
     
     // Debug: Store regular season data
@@ -479,7 +493,8 @@ export const calculateTeamScore = (
   
   // Second Pass: Calculate playoff performance adjustment if enabled AND weighted
   // CRITICAL: Only apply adjustment when includePlayoffs is true AND playoff weight > 0
-  if (includePlayoffs && teamWeights.playoff > 0) {
+  // DISABLED: Playoff scoring disabled globally
+  if (false && includePlayoffs && teamWeights.playoff > 0) {
     let totalPlayoffWeight = 0;
     let playoffPerformanceMultiplier = 1.0;
     const playoffYearWeights = (filterYear && typeof filterYear === 'number')
@@ -558,7 +573,8 @@ export const calculateTeamScore = (
     // CAREER PLAYOFF ACHIEVEMENT BONUS: Only calculate if playoffs are enabled
   let careerPlayoffScore = 0;
   
-  if (includePlayoffs) {
+  // DISABLED: Playoff scoring disabled globally
+  if (false && includePlayoffs) {
     const achievementYearWeights = (filterYear && typeof filterYear === 'number')
       ? { [filterYear.toString()]: 1.0 }
       : REGULAR_SEASON_YEAR_WEIGHTS;
@@ -645,7 +661,13 @@ export const calculateTeamScore = (
           if (weight === 0 || !data.QBrec) return;
           
           const gamesStarted = parseInt(data.GS) || 0;
-          const gamesThreshold = (filterYear && typeof filterYear === 'number') ? 9 : 10;
+          const gamesThreshold = (() => {
+            if (filterYear && typeof filterYear === 'number') {
+              if (filterYear === 2025) return 1;  // Partial season
+              return 2;                            // All other years
+            }
+            return 10;                            // Multi-year threshold
+          })();
           if (gamesStarted < gamesThreshold) {
             return;
           }
@@ -670,7 +692,13 @@ export const calculateTeamScore = (
           if (weight === 0) return;
           
           const gamesStarted = season.gamesStarted || 0;
-          const gamesThreshold = (filterYear && typeof filterYear === 'number') ? 9 : 10;
+          const gamesThreshold = (() => {
+            if (filterYear && typeof filterYear === 'number') {
+              if (filterYear === 2025) return 1;  // Partial season
+              return 2;                            // All other years
+            }
+            return 10;                            // Multi-year threshold
+          })();
           if (gamesStarted < gamesThreshold) {
             return;
           }
