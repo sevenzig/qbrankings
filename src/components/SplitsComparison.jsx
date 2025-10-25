@@ -401,7 +401,7 @@ const SplitsComparison = memo(() => {
                 style={{ borderWidth: '1px' }}
                 size={8}
               >
-                {Array.from({ length: 26 }, (_, i) => 2025 - i).map(year => (
+                {Array.from({ length: 94 }, (_, i) => 2025 - i).map(year => (
                   <option key={year} className="bg-blue-900 text-blue-100" value={year}>{year}</option>
                 ))}
               </select>

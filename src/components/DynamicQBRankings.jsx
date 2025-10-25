@@ -28,7 +28,7 @@ import {
 } from './scoringCategories/index.js';
 import GlobalSettings from './GlobalSettings.jsx';
 import WeightControls from './WeightControls.jsx';
-import QBRankingsTable from './QBRankingsTable.jsx';
+import QBRankingsTable from './QBRankingsTable';
 import ShareModal from './ShareModal.jsx';
 
 import { captureTop10QBsScreenshot } from '../utils/screenshotUtils.js';
@@ -586,8 +586,8 @@ const DynamicQBRankings = () => {
 
   // URL sharing functions - COMPACT: Much shorter URLs focusing on essentials
   const encodeSettings = (weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, yearMode, fullDetail = false) => {
-    // Convert yearMode to numeric: 0='2022', 1='2023', 2='2024', 3='2025'
-    const yearModeValue = yearMode === '2022' ? 0 : yearMode === '2023' ? 1 : yearMode === '2024' ? 2 : 3;
+    // Convert yearMode to numeric: 0='1932', 1='1933', ..., 93='2025'
+    const yearModeValue = parseInt(yearMode) - 1932;
     
     if (fullDetail) {
       // Full detail mode - includes all sub-component weights (longer URLs)
@@ -639,9 +639,9 @@ const DynamicQBRankings = () => {
             result.includePlayoffs = values[5] === 1;
           }
           if (values.length >= 7) {
-            // Convert numeric yearMode to string: 0='2022', 1='2023', 2='2024', 3='2025'
+            // Convert numeric yearMode to string: 0='1932', 1='1933', ..., 93='2025'
             const yearModeValue = values[6];
-            result.yearMode = yearModeValue === 0 ? '2022' : yearModeValue === 1 ? '2023' : yearModeValue === 2 ? '2024' : '2025';
+            result.yearMode = (1932 + yearModeValue).toString();
           }
           
           return result;
@@ -836,8 +836,8 @@ const DynamicQBRankings = () => {
         
         // Handle both old (y24) and new (ym) year mode formats
         if (settingsObj.ym !== undefined) {
-          // New format: 0='2022', 1='2023', 2='2024', 3='2025'
-          result.yearMode = settingsObj.ym === 0 ? '2022' : settingsObj.ym === 1 ? '2023' : settingsObj.ym === 2 ? '2024' : '2025';
+          // New format: 0='1932', 1='1933', ..., 93='2025'
+          result.yearMode = (1932 + settingsObj.ym).toString();
         } else if (settingsObj.y24 !== undefined) {
           // Old format: convert boolean to yearMode for backward compatibility
           result.yearMode = settingsObj.y24 === 1 ? '2024' : '2024';

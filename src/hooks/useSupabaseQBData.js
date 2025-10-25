@@ -113,59 +113,139 @@ export const useSupabaseQBData = () => {
           losses = parseInt(recordParts[1]) || 0;
         }
         
-        // Create season data object with flexible field mapping
-        const seasonData = {
-          year: seasonYear, // CRITICAL: Map 'season' to 'year'
-          team: record.team || 'UNK',
-          age: parseInt(record.age) || 25,
-          gamesStarted: gamesStarted, // CRITICAL: Map 'gs' to 'gamesStarted'
-          wins: wins,
-          losses: losses,
-          winPercentage: (wins + losses) > 0 ? wins / (wins + losses) : 0,
-          passingYards: parseInt(record.yds) || 0,
-          passingTDs: parseInt(record.td) || 0,
-          interceptions: parseInt(record.int) || 0,
-          completions: parseInt(record.cmp) || 0,
-          attempts: parseInt(record.att) || 0,
-          passerRating: parseFloat(record.rate) || 0,
-          // Try multiple possible field names for success rate
-          successRate: parseFloat(record.succ_pct || record['Succ%'] || record.success_pct) || 0,
-          // Try multiple possible field names for sack percentage
-          sackPercentage: parseFloat(record.sk_pct || record['Sk%'] || record.sack_pct) || 0,
-          // Try multiple possible field names for ANY/A
-          anyPerAttempt: parseFloat(record.any_a || record['ANY/A'] || record.adjusted_net_yards_per_attempt) || 0,
-          // Clutch stats
-          gameWinningDrives: parseInt(record.gwd || record.GWD || record.game_winning_drives) || 0,
-          fourthQuarterComebacks: parseInt(record.four_qc || record['4QC'] || record.fourth_quarter_comebacks) || 0,
-          // Rushing stats (now comes from merged Supabase data)
-          rushingYards: parseInt(record.rush_yds || record.RushingYds || 0) || 0,
-          rushingTDs: parseInt(record.rush_td || record.RushingTDs || 0) || 0,
-          rushingAttempts: parseInt(record.rush_att || record.RushingAtt || 0) || 0,
-          fumbles: parseInt(record.fumbles || record.Fumbles || 0) || 0,
-          fumblesLost: parseInt(record.fumbles_lost || record.FumblesLost || 0) || 0
-        };
+        // Check if we already have data for this year (to handle multi-team seasons)
+        const existingSeasonIndex = playerData[playerName].seasons.findIndex(s => s.year === seasonYear);
         
-        // Add season to player's seasons array
-        playerData[playerName].seasons.push(seasonData);
+        if (existingSeasonIndex >= 0) {
+          // Player already has data for this year - combine the stats (multi-team season)
+          const existingSeason = playerData[playerName].seasons[existingSeasonIndex];
+          existingSeason.gamesStarted += gamesStarted;
+          existingSeason.wins += wins;
+          existingSeason.losses += losses;
+          existingSeason.passingYards += parseInt(record.yds) || 0;
+          existingSeason.passingTDs += parseInt(record.td) || 0;
+          existingSeason.interceptions += parseInt(record.int) || 0;
+          existingSeason.completions += parseInt(record.cmp) || 0;
+          existingSeason.attempts += parseInt(record.att) || 0;
+          existingSeason.gameWinningDrives += parseInt(record.gwd || record.GWD || record.game_winning_drives) || 0;
+          existingSeason.fourthQuarterComebacks += parseInt(record.four_qc || record['4QC'] || record.fourth_quarter_comebacks) || 0;
+          existingSeason.rushingYards += parseInt(record.rush_yds || record.RushingYds || 0) || 0;
+          existingSeason.rushingTDs += parseInt(record.rush_td || record.RushingTDs || 0) || 0;
+          existingSeason.fumbles += parseInt(record.fumbles || record.Fumbles || 0) || 0;
+          existingSeason.fumblesLost += parseInt(record.fumbles_lost || record.FumblesLost || 0) || 0;
+          
+          // Track all teams played for during this season
+          if (!existingSeason.teamsPlayed) {
+            existingSeason.teamsPlayed = [];
+          }
+          if (!existingSeason.gamesStartedPerTeam) {
+            existingSeason.gamesStartedPerTeam = [];
+          }
+          if (!existingSeason.teamStats) {
+            existingSeason.teamStats = {};
+          }
+          
+          const currentTeam = record.team || 'UNK';
+          if (!existingSeason.teamsPlayed.includes(currentTeam)) {
+            existingSeason.teamsPlayed.push(currentTeam);
+            existingSeason.gamesStartedPerTeam.push(gamesStarted);
+          }
+          
+          // Store team-specific stats for detailed breakdown
+          existingSeason.teamStats[currentTeam] = {
+            gamesStarted,
+            wins,
+            losses,
+            passingYards: parseInt(record.yds) || 0,
+            passingTDs: parseInt(record.td) || 0,
+            interceptions: parseInt(record.int) || 0,
+            completions: parseInt(record.cmp) || 0,
+            attempts: parseInt(record.att) || 0,
+            passerRating: parseFloat(record.rate) || 0,
+            gameWinningDrives: parseInt(record.gwd || record.GWD || record.game_winning_drives) || 0,
+            fourthQuarterComebacks: parseInt(record.four_qc || record['4QC'] || record.fourth_quarter_comebacks) || 0
+          };
+          
+          // Update weighted averages
+          const totalGames = existingSeason.gamesStarted;
+          if (totalGames > 0) {
+            existingSeason.winPercentage = (existingSeason.wins + existingSeason.losses) > 0 ? 
+              existingSeason.wins / (existingSeason.wins + existingSeason.losses) : 0;
+          }
+        } else {
+          // Create new season data object with flexible field mapping
+          const seasonData = {
+            year: seasonYear, // CRITICAL: Map 'season' to 'year'
+            team: record.team || 'UNK',
+            age: parseInt(record.age) || 25,
+            gamesStarted: gamesStarted, // CRITICAL: Map 'gs' to 'gamesStarted'
+            wins: wins,
+            losses: losses,
+            winPercentage: (wins + losses) > 0 ? wins / (wins + losses) : 0,
+            passingYards: parseInt(record.yds) || 0,
+            passingTDs: parseInt(record.td) || 0,
+            interceptions: parseInt(record.int) || 0,
+            completions: parseInt(record.cmp) || 0,
+            attempts: parseInt(record.att) || 0,
+            passerRating: parseFloat(record.rate) || 0,
+            // Try multiple possible field names for success rate
+            successRate: parseFloat(record.succ_pct || record['Succ%'] || record.success_pct) || 0,
+            // Try multiple possible field names for sack percentage
+            sackPercentage: parseFloat(record.sk_pct || record['Sk%'] || record.sack_pct) || 0,
+            // Try multiple possible field names for ANY/A
+            anyPerAttempt: parseFloat(record.any_a || record['ANY/A'] || record.adjusted_net_yards_per_attempt) || 0,
+            // Clutch stats
+            gameWinningDrives: parseInt(record.gwd || record.GWD || record.game_winning_drives) || 0,
+            fourthQuarterComebacks: parseInt(record.four_qc || record['4QC'] || record.fourth_quarter_comebacks) || 0,
+            // Rushing stats (now comes from merged Supabase data)
+            rushingYards: parseInt(record.rush_yds || record.RushingYds || 0) || 0,
+            rushingTDs: parseInt(record.rush_td || record.RushingTDs || 0) || 0,
+            rushingAttempts: parseInt(record.rush_att || record.RushingAtt || 0) || 0,
+            fumbles: parseInt(record.fumbles || record.Fumbles || 0) || 0,
+            fumblesLost: parseInt(record.fumbles_lost || record.FumblesLost || 0) || 0,
+            // Multi-team tracking
+            teamsPlayed: [record.team || 'UNK'],
+            gamesStartedPerTeam: [gamesStarted],
+            teamStats: {
+              [record.team || 'UNK']: {
+                gamesStarted,
+                wins,
+                losses,
+                passingYards: parseInt(record.yds) || 0,
+                passingTDs: parseInt(record.td) || 0,
+                interceptions: parseInt(record.int) || 0,
+                completions: parseInt(record.cmp) || 0,
+                attempts: parseInt(record.att) || 0,
+                passerRating: parseFloat(record.rate) || 0,
+                gameWinningDrives: parseInt(record.gwd || record.GWD || record.game_winning_drives) || 0,
+                fourthQuarterComebacks: parseInt(record.four_qc || record['4QC'] || record.fourth_quarter_comebacks) || 0
+              }
+            }
+          };
+          
+          // Add season to player's seasons array
+          playerData[playerName].seasons.push(seasonData);
+        }
         
         // Update career totals
         const career = playerData[playerName].career;
         career.gamesStarted += gamesStarted;
         career.wins += wins;
         career.losses += losses;
-        career.passingYards += seasonData.passingYards;
-        career.passingTDs += seasonData.passingTDs;
-        career.interceptions += seasonData.interceptions;
-        career.completions += seasonData.completions;
-        career.attempts += seasonData.attempts;
-        career.rushingYards += seasonData.rushingYards;
-        career.rushingTDs += seasonData.rushingTDs;
-        career.fumbles += seasonData.fumbles;
-        career.fumblesLost += seasonData.fumblesLost;
+        career.passingYards += parseInt(record.yds) || 0;
+        career.passingTDs += parseInt(record.td) || 0;
+        career.interceptions += parseInt(record.int) || 0;
+        career.completions += parseInt(record.cmp) || 0;
+        career.attempts += parseInt(record.att) || 0;
+        career.rushingYards += parseInt(record.rush_yds || record.RushingYds || 0) || 0;
+        career.rushingTDs += parseInt(record.rush_td || record.RushingTDs || 0) || 0;
+        career.fumbles += parseInt(record.fumbles || record.Fumbles || 0) || 0;
+        career.fumblesLost += parseInt(record.fumbles_lost || record.FumblesLost || 0) || 0;
         
         // Track passer rating for weighted averaging
-        if (seasonData.passerRating > 0 && gamesStarted > 0) {
-          career.totalPasserRatingPoints += seasonData.passerRating * gamesStarted;
+        const passerRating = parseFloat(record.rate) || 0;
+        if (passerRating > 0 && gamesStarted > 0) {
+          career.totalPasserRatingPoints += passerRating * gamesStarted;
         }
       });
       

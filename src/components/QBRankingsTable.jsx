@@ -2,6 +2,7 @@ import React, { memo, useCallback, useMemo } from 'react';
 import { getQEIColor, getQEITier } from '../utils/uiHelpers.js';
 import { getTeamInfo } from '../constants/teamData.js';
 import GlobalSettings from './GlobalSettings.jsx';
+import TeamBreakdown from './TeamBreakdown.jsx';
 
 const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = false, yearMode, onYearModeChange }) => {
   // Extract all QBs with QEI scores for dynamic tier calculation
@@ -128,65 +129,85 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
               const hasPlayoffRecord = playoffRecord.wins > 0 || playoffRecord.losses > 0;
               
               return (
-                <tr key={qb.id} className={getRowClassName(index)}>
-                  <td className="px-4 py-3">
-                    <span className="text-xl font-bold text-white">#{index + 1}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div>
-                      <div className="font-bold text-white">{qb.name}</div>
-                      <div className="text-xs text-blue-200">{qb.experience} seasons • Age {qb.age}</div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center flex-wrap">
-                      {getQBTeams(qb).map((teamData, teamIndex) => (
-                        <div key={teamData.team} className="flex items-center">
-                          {teamData.logo && (
-                            <img 
-                              src={teamData.logo} 
-                              alt={teamData.team} 
-                              className="w-6 h-6" 
-                              title={teamData.team}
-                            />
-                          )}
-                          {teamIndex < getQBTeams(qb).length - 1 && (
-                            <span className="text-white/50 mx-1">/</span>
-                          )}
+                <>
+                  <tr key={qb.id} className={getRowClassName(index)}>
+                    <td className="px-4 py-3">
+                      <span className="text-xl font-bold text-white">#{index + 1}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <div className="font-bold text-white">{qb.name}</div>
+                        <div className="text-xs text-blue-200">{qb.experience} seasons • Age {qb.age}</div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center flex-wrap">
+                        {getQBTeams(qb).map((teamData, teamIndex) => (
+                          <div key={teamData.team} className="flex items-center">
+                            {teamData.logo && (
+                              <img 
+                                src={teamData.logo} 
+                                alt={teamData.team} 
+                                className="w-6 h-6" 
+                                title={teamData.team}
+                              />
+                            )}
+                            {teamIndex < getQBTeams(qb).length - 1 && (
+                              <span className="text-white/50 mx-1">/</span>
+                            )}
+                          </div>
+                        ))}
+                        {/* Show multi-team indicator if player played for multiple teams */}
+                        {getQBTeams(qb).length > 1 && (
+                          <div className="ml-2 text-xs text-blue-300" title={`Played for ${getQBTeams(qb).length} teams`}>
+                            {getQBTeams(qb).length}TM
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className={`inline-block px-3 py-1 rounded-lg ${getQEIColor(qb, allQBsWithQEI)}`}>
+                        <span className="text-xl font-bold">{qb.qei.toFixed(2)}</span>
+                        <div className="text-xs opacity-75">
+                          {getQEILabel(qb)}
                         </div>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <div className={`inline-block px-3 py-1 rounded-lg ${getQEIColor(qb, allQBsWithQEI)}`}>
-                      <span className="text-xl font-bold">{qb.qei.toFixed(2)}</span>
-                      <div className="text-xs opacity-75">
-                        {getQEILabel(qb)}
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-center text-blue-200">
-                    <div>{qb.combinedRecord}</div>
-                    {includePlayoffs && hasPlayoffRecord && (
-                      <div className="text-xs text-yellow-300 mt-1">
-                        Playoffs: {playoffRecord.wins}-{playoffRecord.losses}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center text-blue-200">
-                    <div>{qb.stats?.yardsPerGame?.toFixed(1) || '0.0'} yds/g</div>
-                    <div className="text-xs">{qb.stats?.tdsPerGame?.toFixed(2) || '0.00'} TD/g, {qb.stats?.turnoversPerGame?.toFixed(2) || '0.00'} TO/g</div>
-                  </td>
-                  <td className="px-4 py-3 text-center text-white">
-                    <div>{qb.experience}</div>
-                    <div className="text-xs text-blue-200">{qb.stats?.gamesStarted || 0} starts</div>
-                    {includePlayoffs && playoffStarts > 0 && (
-                      <div className="text-xs text-yellow-300 mt-1">
-                        {playoffStarts} playoff starts
-                      </div>
-                    )}
-                  </td>
-                </tr>
+                    </td>
+                    <td className="px-4 py-3 text-center text-blue-200">
+                      <div>{qb.combinedRecord}</div>
+                      {includePlayoffs && hasPlayoffRecord && (
+                        <div className="text-xs text-yellow-300 mt-1">
+                          Playoffs: {playoffRecord.wins}-{playoffRecord.losses}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center text-blue-200">
+                      <div>{qb.stats?.yardsPerGame?.toFixed(1) || '0.0'} yds/g</div>
+                      <div className="text-xs">{qb.stats?.tdsPerGame?.toFixed(2) || '0.00'} TD/g, {qb.stats?.turnoversPerGame?.toFixed(2) || '0.00'} TO/g</div>
+                    </td>
+                    <td className="px-4 py-3 text-center text-white">
+                      <div>{qb.experience}</div>
+                      <div className="text-xs text-blue-200">{qb.stats?.gamesStarted || 0} starts</div>
+                      {includePlayoffs && playoffStarts > 0 && (
+                        <div className="text-xs text-yellow-300 mt-1">
+                          {playoffStarts} playoff starts
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                  {/* Team breakdown for multi-team seasons */}
+                  {qb.seasonData && qb.seasonData.some(season => season.teamsPlayed && season.teamsPlayed.length > 1) && (
+                    <tr className="bg-blue-900/20">
+                      <td colSpan="6" className="px-4 py-3">
+                        {qb.seasonData
+                          .filter(season => season.teamsPlayed && season.teamsPlayed.length > 1)
+                          .map(season => (
+                            <TeamBreakdown key={season.year} qb={qb} season={season} />
+                          ))}
+                      </td>
+                    </tr>
+                  )}
+                </>
               );
             })}
           </tbody>

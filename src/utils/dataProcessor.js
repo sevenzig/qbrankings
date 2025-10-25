@@ -99,11 +99,30 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
         if (!existingSeason.gamesStartedPerTeam) {
           existingSeason.gamesStartedPerTeam = [];
         }
+        if (!existingSeason.teamStats) {
+          existingSeason.teamStats = {};
+        }
+        
         if (qb.Team && qb.Team.length === 3 && !qb.Team.match(/^\d+TM$/)) {
           if (!existingSeason.teamsPlayed.includes(qb.Team)) {
             existingSeason.teamsPlayed.push(qb.Team);
             existingSeason.gamesStartedPerTeam.push(gamesStarted);
           }
+          
+          // Store team-specific stats for detailed breakdown
+          existingSeason.teamStats[qb.Team] = {
+            gamesStarted,
+            wins: qbRecord.wins,
+            losses: qbRecord.losses,
+            passingYards: yearYards,
+            passingTDs: yearTDs,
+            interceptions: parseInt(qb.Int) || 0,
+            completions: parseInt(qb.Cmp) || 0,
+            attempts: parseInt(qb.Att) || 0,
+            passerRating,
+            gameWinningDrives: parseInt(qb.ClutchGWD) || 0,
+            fourthQuarterComebacks: parseInt(qb.ClutchFourthQC) || 0
+          };
         }
         
         // Update weighted averages
@@ -134,13 +153,29 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
           gameWinningDrives: parseInt(qb.ClutchGWD) || 0,
           fourthQuarterComebacks: parseInt(qb.ClutchFourthQC) || 0,
           teamsPlayed: [],
-          gamesStartedPerTeam: []
+          gamesStartedPerTeam: [],
+          teamStats: {}
         };
         
         // Add the current team to teamsPlayed (skip "2TM", "3TM" etc.)
         if (qb.Team && qb.Team.length === 3 && !qb.Team.match(/^\d+TM$/)) {
           newSeason.teamsPlayed.push(qb.Team);
           newSeason.gamesStartedPerTeam.push(gamesStarted);
+          
+          // Store team-specific stats
+          newSeason.teamStats[qb.Team] = {
+            gamesStarted,
+            wins: qbRecord.wins,
+            losses: qbRecord.losses,
+            passingYards: yearYards,
+            passingTDs: yearTDs,
+            interceptions: parseInt(qb.Int) || 0,
+            completions: parseInt(qb.Cmp) || 0,
+            attempts: parseInt(qb.Att) || 0,
+            passerRating,
+            gameWinningDrives: parseInt(qb.ClutchGWD) || 0,
+            fourthQuarterComebacks: parseInt(qb.ClutchFourthQC) || 0
+          };
         }
         
         playerData[playerName].seasons.push(newSeason);
