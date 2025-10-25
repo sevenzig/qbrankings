@@ -38,6 +38,7 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
       
       const playerName = qb.Player.trim();
       const gamesStarted = parseInt(qb.GS) || 0;
+      const games = parseInt(qb.G) || gamesStarted;
       
       // Include ALL games from ALL seasons - no minimum threshold
       
@@ -55,6 +56,7 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
           career: {
             seasons: 0,
             gamesStarted: 0,
+            games: 0,
             wins: 0,
             losses: 0,
             winPercentage: 0,
@@ -82,6 +84,7 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
         // Player already has data for this year - combine the stats (multi-team season)
         const existingSeason = playerData[playerName].seasons[existingSeasonIndex];
         existingSeason.gamesStarted += gamesStarted;
+        existingSeason.games += games;
         existingSeason.wins += qbRecord.wins;
         existingSeason.losses += qbRecord.losses;
         existingSeason.passingYards += yearYards;
@@ -138,6 +141,7 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
           team: qb.Team,
           age: parseInt(qb.Age) || 25,
           gamesStarted,
+          games,
           wins: qbRecord.wins,
           losses: qbRecord.losses,
           winPercentage: qbRecord.winPercentage,
@@ -188,6 +192,7 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
       // Always update career totals regardless
       const career = playerData[playerName].career;
       career.gamesStarted += gamesStarted;
+      career.games += games;
       career.wins += qbRecord.wins;
       career.losses += qbRecord.losses;
       career.passingYards += yearYards;
@@ -381,13 +386,14 @@ export const processQBData = (combinedQBData, filterYear = null) => {
         combinedRecord: `${data.career.wins}-${data.career.losses} (${data.career.winPercentage.toFixed(3)})`,
         stats: {
           gamesStarted: data.career.gamesStarted,
-          // Per-game averages - total yards, TDs, and turnovers (pass + rush)
-          yardsPerGame: data.career.gamesStarted > 0 ? 
-            (data.career.passingYards + (data.career.rushingYards || 0)) / data.career.gamesStarted : 0,
-          tdsPerGame: data.career.gamesStarted > 0 ? 
-            (data.career.passingTDs + (data.career.rushingTDs || 0)) / data.career.gamesStarted : 0,
-          turnoversPerGame: data.career.gamesStarted > 0 ? 
-            (data.career.interceptions + (data.career.fumbles || 0)) / data.career.gamesStarted : 0,
+          games: data.career.games,
+          // Per-game averages - total yards, TDs, and turnovers (pass + rush) - using games played
+          yardsPerGame: data.career.games > 0 ? 
+            (data.career.passingYards + (data.career.rushingYards || 0)) / data.career.games : 0,
+          tdsPerGame: data.career.games > 0 ? 
+            (data.career.passingTDs + (data.career.rushingTDs || 0)) / data.career.games : 0,
+          turnoversPerGame: data.career.games > 0 ? 
+            (data.career.interceptions + (data.career.fumbles || 0)) / data.career.games : 0,
           // Keep some totals for reference
           totalYards: data.career.passingYards + (data.career.rushingYards || 0),
           totalTDs: data.career.passingTDs + (data.career.rushingTDs || 0),

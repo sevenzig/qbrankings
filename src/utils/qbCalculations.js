@@ -187,7 +187,7 @@ export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, wea
     seasonsToProcess.forEach(season => {
       qbSeasonData.years[season.year] = {
         // Regular season data
-        G: season.gamesStarted,
+        G: season.games || season.gamesStarted,
         GS: season.gamesStarted,
         QBrec: `${season.wins}-${season.losses}-0`,
         Rate: season.passerRating,

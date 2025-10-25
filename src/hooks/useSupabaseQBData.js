@@ -74,6 +74,7 @@ export const useSupabaseQBData = () => {
         const playerName = record.player_name || 'Unknown Player';
         const seasonYear = parseInt(record.season) || year;
         const gamesStarted = parseInt(record.gs) || 0;
+        const games = parseInt(record.g) || gamesStarted;
         
         // Extra safety: Skip records that don't match our year mode
         if (seasonYear !== year) {
@@ -90,6 +91,7 @@ export const useSupabaseQBData = () => {
             career: {
               seasons: 0,
               gamesStarted: 0,
+              games: 0,
               wins: 0,
               losses: 0,
               winPercentage: 0,
@@ -123,6 +125,7 @@ export const useSupabaseQBData = () => {
           // Player already has data for this year - combine the stats (multi-team season)
           const existingSeason = playerData[playerName].seasons[existingSeasonIndex];
           existingSeason.gamesStarted += gamesStarted;
+          existingSeason.games += games;
           existingSeason.wins += wins;
           existingSeason.losses += losses;
           existingSeason.passingYards += parseInt(record.yds) || 0;
@@ -182,6 +185,7 @@ export const useSupabaseQBData = () => {
             team: record.team || 'UNK',
             age: parseInt(record.age) || 25,
             gamesStarted: gamesStarted, // CRITICAL: Map 'gs' to 'gamesStarted'
+            games: games, // CRITICAL: Map 'g' to 'games'
             wins: wins,
             losses: losses,
             winPercentage: (wins + losses) > 0 ? wins / (wins + losses) : 0,
@@ -233,6 +237,7 @@ export const useSupabaseQBData = () => {
         // Update career totals
         const career = playerData[playerName].career;
         career.gamesStarted += gamesStarted;
+        career.games += games;
         career.wins += wins;
         career.losses += losses;
         career.passingYards += parseInt(record.yds) || 0;
