@@ -605,23 +605,23 @@ const DynamicQBRankings = () => {
       const jsonString = JSON.stringify(settingsObj);
       return btoa(jsonString).replace(/[+/]/g, c => c === '+' ? '-' : '_').replace(/=+$/, '');
     } else {
-      // Compact mode - only main weights and global settings (much shorter)
-      const compactArray = [
-        weights.team, weights.stats, weights.clutch, weights.durability, weights.support,
-        includePlayoffs ? 1 : 0,
-        yearModeValue
-      ];
+      // Compact mode - main weights + global settings as base64 JSON
+      const compactObj = {
+        w: [weights.team, weights.stats, weights.clutch, weights.durability, weights.support],
+        pf: includePlayoffs ? 1 : 0,
+        ym: yearModeValue
+      };
       
-      // Convert to compact string format: "35.35.5.10.15.0.1"
-      return compactArray.join('.');
+      const jsonString = JSON.stringify(compactObj);
+      return btoa(jsonString).replace(/[+/]/g, c => c === '+' ? '-' : '_').replace(/=+$/, '');
     }
   };
 
   const decodeSettings = (encodedSettings) => {
     try {
-      // Handle multiple formats: dots (new compact), pipes (old), or Base64 (full detail)
+      // Handle multiple formats: dots (legacy compact), pipes (old), or Base64 (new compact + full detail)
       if (encodedSettings.includes('.') && !encodedSettings.includes('|')) {
-        // New compact format: "35.35.5.10.15.0.0"
+        // Legacy dot-separated format: "35.35.5.10.15.0.0"
         const values = encodedSettings.split('.').map(v => parseInt(v));
         if (values.length >= 5 && values.every(v => !isNaN(v) && v >= 0 && v <= 100)) {
           const result = {
@@ -766,7 +766,7 @@ const DynamicQBRankings = () => {
 
         return result;
       } else {
-        // Base64 format (full detail)
+        // Base64 format (both compact and full detail)
         // Restore padding and reverse URL-safe characters
         const padded = encodedSettings + '='.repeat((4 - encodedSettings.length % 4) % 4);
         const base64 = padded.replace(/[-_]/g, c => c === '-' ? '+' : '/');
@@ -789,7 +789,7 @@ const DynamicQBRankings = () => {
           }
         };
         
-        // Apply sub-component weights if present
+        // Apply sub-component weights if present (full detail format)
         if (settingsObj.sp && Array.isArray(settingsObj.sp) && settingsObj.sp.length === 3) {
           result.supportWeights = {
             offensiveLine: settingsObj.sp[0],
@@ -830,6 +830,7 @@ const DynamicQBRankings = () => {
           };
         }
         
+        // Global settings (both compact and full detail formats)
         if (settingsObj.pf !== undefined) {
           result.includePlayoffs = settingsObj.pf === 1;
         }
@@ -1001,7 +1002,7 @@ const DynamicQBRankings = () => {
         throw new Error('Screenshot generation returned null/undefined');
       }
       
-      const { blobUrl, blob } = screenshotResult;
+      const { blobUrl, blob, dataUrl } = screenshotResult;
       
       if (!blobUrl || !blob) {
         throw new Error('Failed to generate screenshot - missing blob or blobUrl');
@@ -1009,6 +1010,12 @@ const DynamicQBRankings = () => {
       
       console.log('📸 Screenshot captured successfully:', blobUrl);
       console.log('📸 Screenshot size:', (blob.size / 1024).toFixed(2), 'KB');
+      
+      // Store data URL globally for fallback
+      if (dataUrl) {
+        window.screenshotDataUrl = dataUrl;
+        console.log('📸 Data URL stored for fallback');
+      }
       
       setShareModalScreenshotUrl(blobUrl);
       setShareModalLink(linkResult.url);

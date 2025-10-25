@@ -5,6 +5,24 @@ const ShareModal = ({ isOpen, onClose, screenshotUrl, shareLink, shareType }) =>
   
   // Debug logging
   console.log('📸 ShareModal props:', { isOpen, screenshotUrl, shareLink, shareType });
+  
+  // Test blob URL validity
+  React.useEffect(() => {
+    if (screenshotUrl) {
+      console.log('📸 Testing blob URL validity:', screenshotUrl);
+      fetch(screenshotUrl)
+        .then(response => {
+          console.log('📸 Blob URL fetch response:', response.status, response.type);
+          return response.blob();
+        })
+        .then(blob => {
+          console.log('📸 Blob details:', blob.size, 'bytes, type:', blob.type);
+        })
+        .catch(error => {
+          console.error('📸 Blob URL test failed:', error);
+        });
+    }
+  }, [screenshotUrl]);
 
   const copyToClipboard = useCallback(async () => {
     try {
@@ -126,14 +144,30 @@ const ShareModal = ({ isOpen, onClose, screenshotUrl, shareLink, shareType }) =>
                 <h3 className="text-lg font-semibold text-white mb-3">📱 Preview</h3>
                 <div className="bg-white/5 rounded-xl p-4 border border-blue-400/20">
                   {screenshotUrl ? (
-                    <img 
-                      src={screenshotUrl} 
-                      alt="QB Rankings Screenshot" 
-                      className="w-full h-auto rounded-lg shadow-lg border border-blue-400/30"
-                      style={{ maxHeight: '500px', objectFit: 'contain' }}
-                      onLoad={() => console.log('📸 Image loaded successfully')}
-                      onError={(e) => console.error('📸 Image failed to load:', e)}
-                    />
+                    <div>
+                      <div className="text-xs text-gray-400 mb-2">Debug: {screenshotUrl}</div>
+                      <img 
+                        src={screenshotUrl} 
+                        alt="QB Rankings Screenshot" 
+                        className="w-full h-auto rounded-lg shadow-lg border border-blue-400/30"
+                        style={{ maxHeight: '500px', objectFit: 'contain' }}
+                        onLoad={(e) => {
+                          console.log('📸 Image loaded successfully');
+                          console.log('📸 Image dimensions:', e.target.naturalWidth, 'x', e.target.naturalHeight);
+                          console.log('📸 Image display dimensions:', e.target.offsetWidth, 'x', e.target.offsetHeight);
+                        }}
+                        onError={(e) => {
+                          console.error('📸 Image failed to load:', e);
+                          console.error('📸 Error details:', e.target.src);
+                          console.log('📸 Trying data URL fallback...');
+                          // Try data URL fallback if blob URL fails
+                          if (window.screenshotDataUrl) {
+                            e.target.src = window.screenshotDataUrl;
+                            console.log('📸 Switched to data URL fallback');
+                          }
+                        }}
+                      />
+                    </div>
                   ) : (
                     <div className="flex items-center justify-center h-64 bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-600">
                       <div className="text-center text-gray-400">

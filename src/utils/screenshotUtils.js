@@ -61,6 +61,13 @@ const preloadTeamLogos = async (qbs) => {
  */
 export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
   console.log('📸 Starting screenshot generation...');
+  
+  // Browser detection logging for Windows debugging
+  console.log('📸 Browser:', navigator.userAgent);
+  console.log('📸 Platform:', navigator.platform);
+  console.log('📸 Canvas support:', !!document.createElement('canvas').getContext);
+  console.log('📸 toBlob support:', !!HTMLCanvasElement.prototype.toBlob);
+  
   const { includePlayoffs = true, include2024Only = false } = options;
   
   // Get top 10 QBs
@@ -157,6 +164,12 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
   console.log('📸 Adding container to DOM...');
   document.body.appendChild(screenshotContainer);
   
+  // Verify container is actually rendered (Windows compatibility check)
+  if (screenshotContainer.offsetWidth === 0 || screenshotContainer.offsetHeight === 0) {
+    console.error('❌ Container has zero dimensions before html2canvas');
+    throw new Error('Screenshot container failed to render');
+  }
+  
   // Wait for images to load and render
   console.log('📸 Waiting for images to render...');
   await new Promise(resolve => setTimeout(resolve, 2000)); // Increased wait time
@@ -166,23 +179,31 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
     console.log('📸 Taking screenshot with html2canvas...');
     console.log('📸 Container dimensions:', screenshotContainer.offsetWidth, 'x', screenshotContainer.offsetHeight);
     
-    const canvas = await html2canvas(screenshotContainer, {
-      backgroundColor: '#1e3a8a',
-      scale: 2, // Higher quality screenshots
-      useCORS: true,
-      allowTaint: false, // Changed to false for better CORS handling
-      logging: false, // Disable verbose logging
-      imageTimeout: 15000, // 15 second timeout for images
-      removeContainer: false, // Keep container for debugging
-      foreignObjectRendering: false, // Use traditional rendering
-      onclone: (clonedDoc) => {
-        console.log('📸 Document cloned for rendering');
-        // Ensure all images in cloned doc have loaded
-        const images = clonedDoc.querySelectorAll('img');
-        console.log('📸 Found', images.length, 'images in cloned document');
-        return clonedDoc;
-      }
-    });
+    let canvas;
+    try {
+      console.log('📸 Calling html2canvas...');
+      canvas = await html2canvas(screenshotContainer, {
+        backgroundColor: '#1e3a8a',
+        scale: 2, // Higher quality screenshots
+        useCORS: true,
+        allowTaint: false, // Changed to false for better CORS handling
+        logging: true, // Enable diagnostic logging for Windows debugging
+        imageTimeout: 15000, // 15 second timeout for images
+        removeContainer: false, // Keep container for debugging
+        foreignObjectRendering: false, // Use traditional rendering
+        onclone: (clonedDoc) => {
+          console.log('📸 Document cloned for rendering');
+          // Ensure all images in cloned doc have loaded
+          const images = clonedDoc.querySelectorAll('img');
+          console.log('📸 Found', images.length, 'images in cloned document');
+          return clonedDoc;
+        }
+      });
+      console.log('📸 html2canvas completed');
+    } catch (html2canvasError) {
+      console.error('❌ html2canvas threw an error:', html2canvasError);
+      throw new Error(`html2canvas failed: ${html2canvasError.message}`);
+    }
     
     console.log('📸 Canvas created successfully:', canvas.width, 'x', canvas.height, 'pixels');
     
@@ -190,21 +211,30 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
       throw new Error('Canvas has zero dimensions - screenshot failed');
     }
     
-    // Convert to blob URL for display in browser
-    return new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          console.error('❌ Failed to create blob from canvas');
-          reject(new Error('Failed to create blob from canvas'));
-          return;
-        }
-        
-        console.log('📸 Blob created successfully:', (blob.size / 1024).toFixed(2), 'KB');
-        const blobUrl = URL.createObjectURL(blob);
-        console.log('📸 Blob URL created:', blobUrl);
-        resolve({ blob, blobUrl });
-      }, 'image/png', 1.0);
-    });
+    // Use toDataURL directly for better localhost compatibility
+    console.log('📸 Converting canvas to data URL for localhost compatibility...');
+    try {
+      const dataUrl = canvas.toDataURL('image/png', 1.0);
+      console.log('📸 Data URL created successfully, length:', dataUrl.length);
+      
+      // Convert data URL to blob for consistency
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      
+      console.log('📸 Blob created from data URL:', (blob.size / 1024).toFixed(2), 'KB');
+      console.log('📸 Blob URL created:', blobUrl);
+      
+      // Return both data URL and blob URL for maximum compatibility
+      return { 
+        blob, 
+        blobUrl,
+        dataUrl // Add data URL as fallback for localhost
+      };
+    } catch (error) {
+      console.error('❌ Data URL conversion failed:', error);
+      throw new Error(`Screenshot conversion failed: ${error.message}`);
+    }
     
   } catch (error) {
     console.error('❌ Screenshot generation failed:', error);
