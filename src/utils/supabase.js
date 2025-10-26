@@ -56,7 +56,8 @@ export const qbDataService = {
       let query = supabase
         .from('qb_passing_stats')
         .select('*')
-        .not('gs', 'is', null)  // CRITICAL: Only fetch records with games started data
+        .eq('pos', 'QB')         // Only fetch QB position records
+        .not('gs', 'is', null)   // CRITICAL: Only fetch records with games started data
         .gte('gs', 1)            // Only QBs who actually started games
         .order('rate', { ascending: false });
       
@@ -65,7 +66,7 @@ export const qbDataService = {
         query = query.eq('season', 2024);
       }
       
-      console.log('🔍 Query filters: gs IS NOT NULL AND gs >= 1');
+      console.log('🔍 Query filters: pos = QB AND gs IS NOT NULL AND gs >= 1');
       if (include2024Only) {
         console.log('🔍 Query filters: season = 2024');
       }
@@ -222,7 +223,8 @@ export const qbDataService = {
         .from('qb_passing_stats')
         .select('*')
         .eq('season', year)
-        .not('gs', 'is', null)  // Only fetch records with games started data
+        .eq('pos', 'QB')         // Only fetch QB position records
+        .not('gs', 'is', null)   // Only fetch records with games started data
         .gte('gs', 1)            // Only QBs who actually started games
         .order('rate', { ascending: false });
       

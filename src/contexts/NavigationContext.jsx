@@ -33,7 +33,7 @@ export const NavigationProvider = memo(({ children }) => {
   
   // Global settings state
   const [includePlayoffs, setIncludePlayoffs] = useState(false);
-  const [yearMode, setYearMode] = useState('2024');
+  const [yearMode, setYearMode] = useState('2025');
 
   // Preset change handler
   const handlePresetChange = useCallback((presetId) => {

@@ -759,8 +759,8 @@ const DynamicQBRankings = () => {
           }
           if (settingValues.length >= 2 && !isNaN(settingValues[1])) {
             // Convert old format to yearMode for backward compatibility
-            // Old: 0='all', 1='2024' -> New: default to 2024 for old links
-            result.yearMode = settingValues[1] === 1 ? '2024' : '2024';
+            // Old: 0='all', 1='2024' -> New: default to 2025 for old links
+            result.yearMode = settingValues[1] === 1 ? '2024' : '2025';
           }
         }
 
@@ -841,7 +841,7 @@ const DynamicQBRankings = () => {
           result.yearMode = (1932 + settingsObj.ym).toString();
         } else if (settingsObj.y24 !== undefined) {
           // Old format: convert boolean to yearMode for backward compatibility
-          result.yearMode = settingsObj.y24 === 1 ? '2024' : '2024';
+          result.yearMode = settingsObj.y24 === 1 ? '2024' : '2025';
         }
         
         return result;
@@ -1127,7 +1127,7 @@ const DynamicQBRankings = () => {
           onIncludePlayoffsChange(decodedSettings.includePlayoffs);
         }
         
-        // Apply year mode setting if present (with default to 2024)
+        // Apply year mode setting if present (with default to 2025)
         if (decodedSettings.yearMode !== undefined) {
           onYearModeChange(decodedSettings.yearMode);
         }

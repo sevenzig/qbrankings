@@ -8,8 +8,8 @@
  */
 const Z_SCORE_TIER_THRESHOLDS = {
   // Elite: z ≥ +1.35 standard deviations above mean
-  // CDF(1.35) = 0.9115 → 91.1st percentile (~top 9%)
-  elite: 91.1,
+  // CDF(1.35) = 0.9115 → 90th percentile (~top 10%)
+  elite: 90,
   
   // Excellent: z ≥ +0.75 standard deviations above mean  
   // CDF(0.75) = 0.7734 → 77.3rd percentile
@@ -109,7 +109,7 @@ export const getQEIColor = (qb, allQBsWithQEI = null) => {
   const qei = qb.qei || 0;
   
   // Use fixed z-score thresholds for color coding
-  if (qei >= 91.1) {
+  if (qei >= 90) {
     return 'bg-gradient-to-r from-yellow-400/30 to-orange-400/30 text-yellow-200'; // Elite (Gold)
   }
   if (qei >= 77.3) {
@@ -131,7 +131,7 @@ export const getQEITier = (qb, allQBsWithQEI = null) => {
   const qei = qb.qei || 0;
   
   // Use fixed z-score percentile thresholds (6-tier system, Average centered at median)
-  if (qei >= 91.1) return 'Elite';
+  if (qei >= 90) return 'Elite';
   if (qei >= 77.3) return 'Excellent';
   if (qei >= 59.9) return 'Good';
   if (qei >= 40.1) return 'Average';

@@ -31,8 +31,14 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
   
   yearsData.forEach(({ year, data }) => {
     data.forEach(qb => {
-      // Only process quarterbacks with valid data
+      // Only process quarterbacks with valid data - explicitly exclude HB, FB, WR
       if (qb.Pos !== 'QB' || !qb.Player || !qb.Team || qb.Team.length > 3) {
+        return;
+      }
+      
+      // Additional position filtering to exclude non-QB positions
+      const excludedPositions = ['HB', 'FB', 'WR'];
+      if (excludedPositions.includes(qb.Pos)) {
         return;
       }
       
@@ -226,8 +232,14 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
 
   playoffYearsData.forEach(({ year, data }) => {
     data.forEach(qb => {
-      // Only process quarterbacks with valid data
+      // Only process quarterbacks with valid data - explicitly exclude HB, FB, WR
       if (qb.Pos !== 'QB' || !qb.Player || !qb.Team || qb.Team.length > 3) {
+        return;
+      }
+      
+      // Additional position filtering to exclude non-QB positions
+      const excludedPositions = ['HB', 'FB', 'WR'];
+      if (excludedPositions.includes(qb.Pos)) {
         return;
       }
       

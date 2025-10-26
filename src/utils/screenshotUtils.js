@@ -261,7 +261,7 @@ function getQEIColorStyle(qb, allQBsWithBaseScores = null) {
   const qei = qb.qei || 0;
   
   // Use fixed z-score thresholds (6-tier system)
-  if (qei >= 91.1) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.3), rgba(251, 146, 60, 0.3)); color: #fef3c7;'; // Elite
+  if (qei >= 90) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.3), rgba(251, 146, 60, 0.3)); color: #fef3c7;'; // Elite
   if (qei >= 77.3) return 'background: linear-gradient(to right, rgba(209, 213, 219, 0.3), rgba(156, 163, 175, 0.3)); color: #e5e7eb;'; // Excellent
   if (qei >= 59.9) return 'background: linear-gradient(to right, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3)); color: #bbf7d0;'; // Good
   if (qei >= 40.1) return 'background: linear-gradient(to right, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.3)); color: #dbeafe;'; // Average
@@ -274,7 +274,7 @@ function getQEILabel(qb, allQBsWithBaseScores = null) {
   const qei = qb.qei || 0;
   
   // Use fixed z-score percentile thresholds (6-tier system, Average centered at median)
-  if (qei >= 91.1) return 'Elite';
+  if (qei >= 90) return 'Elite';
   if (qei >= 77.3) return 'Excellent';
   if (qei >= 59.9) return 'Good';
   if (qei >= 40.1) return 'Average';

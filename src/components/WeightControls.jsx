@@ -111,7 +111,7 @@ const WeightControls = memo(({
   onUpdateDurabilityWeight,
   onNormalizeDurabilityWeights,
   includePlayoffs,
-  yearMode = '2024'
+  yearMode = '2025'
 }) => {
   const include2024Only = yearMode === '2024' || yearMode === '2025';
   const is2025Mode = yearMode === '2025';

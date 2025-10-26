@@ -20,7 +20,7 @@ export const useSupabaseQBData = () => {
   const CACHE_DURATION = 15 * 60 * 1000;
   const CACHE_DURATION_2025 = 60 * 60 * 1000; // 1 hour for 2025 data
 
-  const shouldRefreshData = useCallback((yearMode = '2024') => {
+  const shouldRefreshData = useCallback((yearMode = '2025') => {
     // TEMPORARILY DISABLED CACHING FOR TESTING - Remove this after testing
     return true;
     
@@ -56,7 +56,18 @@ export const useSupabaseQBData = () => {
       
       // Check if we got any data
       if (!rawData || rawData.length === 0) {
-        throw new Error('No data returned from Supabase - database may be empty or query failed');
+        // For 2025, if no data exists yet, fall back to 2024 data
+        if (year === 2025) {
+          console.log('🔄 No 2025 data available yet, falling back to 2024 data...');
+          const fallbackData = await qbDataService.fetchQBDataByYear(2024);
+          if (!fallbackData || fallbackData.length === 0) {
+            throw new Error('No 2024 data available as fallback for 2025 mode');
+          }
+          rawData = fallbackData;
+          console.log(`📊 Using 2024 fallback data: ${rawData.length} records`);
+        } else {
+          throw new Error('No data returned from Supabase - database may be empty or query failed');
+        }
       }
       
       console.log('🔍 DEBUG - First raw record:', rawData[0]);
@@ -79,6 +90,19 @@ export const useSupabaseQBData = () => {
         // Extra safety: Skip records that don't match our year mode
         if (seasonYear !== year) {
           console.warn(`⚠️ Skipping ${playerName} ${seasonYear} - not ${year}`);
+          return;
+        }
+        
+        // Position filtering: explicitly exclude HB, FB, WR
+        const excludedPositions = ['HB', 'FB', 'WR'];
+        if (excludedPositions.includes(record.pos)) {
+          console.log(`🚫 FILTERED OUT ${playerName} (${record.pos}): Excluded position`);
+          return;
+        }
+        
+        // Additional check: only process QB position records
+        if (record.pos !== 'QB') {
+          console.log(`🚫 FILTERED OUT ${playerName} (${record.pos}): Not QB position`);
           return;
         }
         
@@ -319,7 +343,7 @@ export const useSupabaseQBData = () => {
       
       // Special handling for 2025 mode to prevent flat 50 scores
       if (yearMode === '2025') {
-        console.log('🔍 2025 Mode: Validating partial season data integrity');
+        console.log('🔍 2025 Mode: Validating data integrity');
         console.log(`🔍 2025 Mode: Starting with ${processedQBs.length} QBs before validation`);
         
         // Debug: Show sample QB data structure
@@ -332,50 +356,108 @@ export const useSupabaseQBData = () => {
           });
         }
         
-        const valid2025QBs = processedQBs.filter(qb => {
-          const has2025Data = qb.seasonData?.some(season => season.year === 2025);
-          if (!has2025Data) {
-            console.warn(`⚠️ ${qb.name} has no 2025 data - excluding from rankings`);
-            return false;
-          }
-          
-          // Additional validation for 2025 data quality - more lenient for partial season
-          const season2025 = qb.seasonData.find(season => season.year === 2025);
-          const hasValidStats = season2025 && (
-            (season2025.attempts > 0) || 
-            (season2025.gamesStarted > 0) ||
-            (season2025.passingYards > 0) ||
-            (season2025.completions > 0) ||
-            (season2025.passingTDs > 0)
-          );
-          
-          if (!hasValidStats) {
-            console.warn(`⚠️ ${qb.name} has invalid 2025 stats - excluding from rankings:`, {
-              attempts: season2025?.attempts || 0,
-              gamesStarted: season2025?.gamesStarted || 0,
-              passingYards: season2025?.passingYards || 0,
-              completions: season2025?.completions || 0,
-              passingTDs: season2025?.passingTDs || 0
-            });
-            return false;
-          }
-          
-          return true;
-        });
+        // Check if we're using 2024 fallback data
+        const isUsingFallback = processedQBs.some(qb => 
+          qb.seasonData?.some(season => season.year === 2024) && 
+          !qb.seasonData?.some(season => season.year === 2025)
+        );
         
-        if (valid2025QBs.length === 0) {
-          console.error('❌ No valid 2025 QBs found after data refresh');
-          setError('No valid 2025 quarterback data available');
-          setLoading(false);
-          return;
+        if (isUsingFallback) {
+          console.log('🔄 Using 2024 fallback data for 2025 mode - applying 2024 validation rules');
+          // Use 2024 validation rules when using fallback data
+          const validQBs = processedQBs.filter(qb => {
+            const has2024Data = qb.seasonData?.some(season => season.year === 2024);
+            if (!has2024Data) {
+              console.warn(`⚠️ ${qb.name} has no 2024 data - excluding from rankings`);
+              return false;
+            }
+            
+            const season2024 = qb.seasonData.find(season => season.year === 2024);
+            const hasValidStats = season2024 && (
+              (season2024.attempts > 0) || 
+              (season2024.gamesStarted > 0) ||
+              (season2024.passingYards > 0) ||
+              (season2024.completions > 0) ||
+              (season2024.passingTDs > 0)
+            );
+            
+            if (!hasValidStats) {
+              console.warn(`⚠️ ${qb.name} has invalid 2024 stats - excluding from rankings:`, {
+                attempts: season2024?.attempts || 0,
+                gamesStarted: season2024?.gamesStarted || 0,
+                passingYards: season2024?.passingYards || 0,
+                completions: season2024?.completions || 0,
+                passingTDs: season2024?.passingTDs || 0
+              });
+              return false;
+            }
+            
+            return true;
+          });
+          
+          if (validQBs.length === 0) {
+            console.error('❌ No valid 2024 QBs found for 2025 fallback mode');
+            setError('No valid quarterback data available for 2025 mode');
+            setLoading(false);
+            return;
+          }
+          
+          console.log(`✅ 2025 Mode (2024 fallback): ${validQBs.length} QBs passed validation`);
+          processedQBs = validQBs;
+        } else {
+          // Original 2025 validation logic
+          const valid2025QBs = processedQBs.filter(qb => {
+            const has2025Data = qb.seasonData?.some(season => season.year === 2025);
+            if (!has2025Data) {
+              console.warn(`⚠️ ${qb.name} has no 2025 data - excluding from rankings`);
+              return false;
+            }
+            
+            // Additional validation for 2025 data quality - more lenient for partial season
+            const season2025 = qb.seasonData.find(season => season.year === 2025);
+            const hasValidStats = season2025 && (
+              (season2025.attempts > 0) || 
+              (season2025.gamesStarted > 0) ||
+              (season2025.passingYards > 0) ||
+              (season2025.completions > 0) ||
+              (season2025.passingTDs > 0)
+            );
+            
+            if (!hasValidStats) {
+              console.warn(`⚠️ ${qb.name} has invalid 2025 stats - excluding from rankings:`, {
+                attempts: season2025?.attempts || 0,
+                gamesStarted: season2025?.gamesStarted || 0,
+                passingYards: season2025?.passingYards || 0,
+                completions: season2025?.completions || 0,
+                passingTDs: season2025?.passingTDs || 0
+              });
+              return false;
+            }
+            
+            return true;
+          });
+          
+          if (valid2025QBs.length === 0) {
+            console.error('❌ No valid 2025 QBs found after data refresh');
+            setError('No valid 2025 quarterback data available');
+            setLoading(false);
+            return;
+          }
+          
+          console.log(`✅ 2025 Mode: ${valid2025QBs.length} QBs passed validation`);
+          processedQBs = valid2025QBs;
         }
-        
-        console.log(`✅ 2025 Mode: ${valid2025QBs.length} QBs passed validation`);
-        processedQBs = valid2025QBs;
       }
       
       // Calculate QEI metrics for each QB - pass processedQBs as allQBData for z-score calculations
       const qbsWithMetrics = processedQBs.map(qb => {
+        // For 2025 mode using 2024 fallback data, use 2024 as the filter year
+        const isUsingFallback = yearMode === '2025' && processedQBs.some(qb => 
+          qb.seasonData?.some(season => season.year === 2024) && 
+          !qb.seasonData?.some(season => season.year === 2025)
+        );
+        const actualFilterYear = (yearMode === '2025' && isUsingFallback) ? 2024 : year;
+        
         const baseScores = calculateQBMetrics(
           qb,
           { offensiveLine: 55, weapons: 30, defense: 15 }, // supportWeights
@@ -383,7 +465,7 @@ export const useSupabaseQBData = () => {
           { regularSeason: 65, playoff: 35 }, // teamWeights
           { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, // clutchWeights
           true, // includePlayoffs
-          year, // filterYear - pass the specific year being viewed
+          actualFilterYear, // filterYear - use actual data year for calculations
           { anyA: 45, tdPct: 30, completionPct: 25 }, // efficiencyWeights
           { sackPct: 60, turnoverRate: 40 }, // protectionWeights
           { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, // volumeWeights
