@@ -993,7 +993,8 @@ const DynamicQBRankings = () => {
       const isSingleYear = true; // All modes are now single-year
       const screenshotResult = await captureTop10QBsScreenshot(rankedQBs, { 
         includePlayoffs, 
-        include2024Only: isSingleYear 
+        include2024Only: isSingleYear,
+        yearMode
       });
       
       console.log('📸 Screenshot result:', screenshotResult);

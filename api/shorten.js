@@ -10,14 +10,32 @@ let redis = null;
 async function getRedisClient() {
   if (!redis) {
     redis = createClient({
-      url: process.env.REDIS_URL
+      url: process.env.REDIS_URL,
+      socket: {
+        connectTimeout: 5000, // 5 second connection timeout
+        commandTimeout: 3000, // 3 second command timeout
+      }
     });
     
     redis.on('error', (err) => {
       console.error('Redis Client Error:', err);
     });
     
-    await redis.connect();
+    redis.on('connect', () => {
+      console.log('Redis connected successfully');
+    });
+    
+    redis.on('ready', () => {
+      console.log('Redis ready for commands');
+    });
+    
+    try {
+      await redis.connect();
+      console.log('Redis connection established');
+    } catch (error) {
+      console.error('Failed to connect to Redis:', error);
+      throw error;
+    }
   }
   
   return redis;
@@ -63,9 +81,12 @@ export async function POST(request) {
       return Response.json({ error: 'Invalid URL', receivedUrl: url }, { status: 400 });
     }
 
+    console.log('Attempting to connect to Redis...');
     const client = await getRedisClient();
+    console.log('Redis client obtained successfully');
 
     // Generate unique short ID
+    console.log('Generating unique short ID...');
     let shortId;
     let attempts = 0;
     do {
@@ -77,12 +98,17 @@ export async function POST(request) {
       }
     } while (await client.get(`short:${shortId}`));
 
+    console.log('Generated short ID:', shortId);
+
     // Store the mapping with 30 days expiration (2592000 seconds)
+    console.log('Storing URL mapping in Redis...');
     await client.setEx(`short:${shortId}`, 2592000, url);
+    console.log('URL mapping stored successfully');
 
     // Always use www.quarterbackranking.com for short URLs to match where the API is deployed
     const shortUrl = `https://www.quarterbackranking.com/s/${shortId}`;
     
+    console.log('Returning successful response');
     return Response.json({ 
       shortUrl, 
       originalUrl: url,

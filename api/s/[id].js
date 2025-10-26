@@ -10,14 +10,32 @@ let redis = null;
 async function getRedisClient() {
   if (!redis) {
     redis = createClient({
-      url: process.env.REDIS_URL
+      url: process.env.REDIS_URL,
+      socket: {
+        connectTimeout: 5000, // 5 second connection timeout
+        commandTimeout: 3000, // 3 second command timeout
+      }
     });
     
     redis.on('error', (err) => {
       console.error('Redis Client Error:', err);
     });
     
-    await redis.connect();
+    redis.on('connect', () => {
+      console.log('Redis connected successfully');
+    });
+    
+    redis.on('ready', () => {
+      console.log('Redis ready for commands');
+    });
+    
+    try {
+      await redis.connect();
+      console.log('Redis connection established');
+    } catch (error) {
+      console.error('Failed to connect to Redis:', error);
+      throw error;
+    }
   }
   
   return redis;

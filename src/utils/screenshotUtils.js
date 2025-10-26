@@ -68,7 +68,7 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
   console.log('📸 Canvas support:', !!document.createElement('canvas').getContext);
   console.log('📸 toBlob support:', !!HTMLCanvasElement.prototype.toBlob);
   
-  const { includePlayoffs = true, include2024Only = false } = options;
+  const { includePlayoffs = true, include2024Only = false, yearMode = '2024' } = options;
   
   // Get top 10 QBs
   const top10QBs = rankedQBs.slice(0, 10);
@@ -137,7 +137,7 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
       <!-- Header -->
       <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.15); background: rgba(255, 255, 255, 0.05);">
         <h3 style="font-size: 20px; font-weight: bold; color: white; margin: 0; display: flex; align-items: center; letter-spacing: 0.5px;">
-          🏆 QB Rankings (Top ${top10QBs.length})
+          🏆 QB Rankings ${yearMode}${includePlayoffs ? ' (Playoffs)' : ''} (Top ${top10QBs.length})
         </h3>
       </div>
       
