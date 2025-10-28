@@ -14,35 +14,39 @@ const TeamBreakdown = memo(({ qb, season }) => {
   }
 
   return (
-    <div className="mt-3 p-3 bg-blue-900/30 rounded-lg border border-blue-700/30">
-      <div className="text-sm font-semibold text-blue-200 mb-2">
+    <div className="mt-4 p-4 bg-glass-light rounded-lg border border-accent-400/30 backdrop-blur-lg">
+      <div className="text-base font-semibold text-accent-200 mb-3 tracking-tight">
         📊 {season.year} Team Breakdown
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {season.teamsPlayed.map((team, index) => {
           const teamInfo = getTeamInfo(team);
           const teamStats = season.teamStats?.[team] || {};
           const gamesStarted = season.gamesStartedPerTeam?.[index] || 0;
           
           return (
-            <div key={team} className="flex items-center justify-between bg-blue-800/20 rounded p-2">
-              <div className="flex items-center space-x-2">
+            <div key={team} className="flex items-center justify-between bg-glass-medium rounded-lg p-3 border border-glass-border">
+              <div className="flex items-center space-x-3">
                 {teamInfo.logo && (
                   <img 
                     src={teamInfo.logo} 
                     alt={teamInfo.name}
-                    className="w-5 h-5"
+                    className="w-6 h-6 lg:w-8 lg:h-8 rounded shadow-md"
+                    style={{
+                      filter: 'drop-shadow(0 0 0 1px white) drop-shadow(0 0 0 2px white)',
+                      objectFit: 'contain'
+                    }}
                   />
                 )}
-                <span className="text-blue-200 font-medium">{teamInfo.name}</span>
-                <span className="text-blue-300 text-xs">({gamesStarted} GS)</span>
+                <span className="text-white font-medium">{teamInfo.name}</span>
+                <span className="text-slate-300 text-sm font-light tabular-nums">({gamesStarted} GS)</span>
               </div>
-              <div className="text-right text-sm text-blue-200">
+              <div className="text-right text-sm text-slate-200">
                 {teamStats.wins !== undefined && teamStats.losses !== undefined && (
-                  <div>{teamStats.wins}-{teamStats.losses}</div>
+                  <div className="font-semibold tabular-nums">{teamStats.wins}-{teamStats.losses}</div>
                 )}
                 {teamStats.passingYards > 0 && (
-                  <div className="text-xs text-blue-300">
+                  <div className="text-xs text-slate-300 font-light tabular-nums">
                     {teamStats.passingYards.toLocaleString()} yds, {teamStats.passingTDs} TD
                   </div>
                 )}

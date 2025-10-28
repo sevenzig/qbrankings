@@ -129,26 +129,26 @@ const ShareModal = ({ isOpen, onClose, screenshotUrl, shareLink, shareType }) =>
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
         onClick={onClose}
       />
       
       {/* Modal */}
-      <div className="relative bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 rounded-2xl border border-blue-400/30 shadow-2xl max-w-4xl max-h-[90vh] overflow-hidden">
+      <div className="relative bg-glass-medium backdrop-blur-xl rounded-2xl border border-glass-border shadow-glass-lg max-w-4xl max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-blue-400/30">
+        <div className="flex items-center justify-between p-8 border-b border-glass-border">
           <div>
-            <h2 className="text-2xl font-bold text-white">📸 QB Rankings Shared!</h2>
-            <p className="text-blue-200 text-sm mt-1">
+            <h2 className="text-3xl font-bold text-white tracking-tight">📸 QB Rankings Shared!</h2>
+            <p className="text-slate-300 text-base mt-2 font-light">
               {shareType === 'quick' ? '🚀 Quick Share' : '📊 Full Detail Share'} - Link copied to clipboard
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-white hover:text-blue-200 transition-colors p-2 hover:bg-white/10 rounded-lg"
+            className="text-slate-300 hover:text-white transition-all duration-300 p-3 hover:bg-glass-light rounded-xl hover:shadow-glow-blue-sm"
             title="Close"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,20 +158,20 @@ const ShareModal = ({ isOpen, onClose, screenshotUrl, shareLink, shareType }) =>
         </div>
 
         {/* Content - Two Column Layout on Desktop */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)] custom-scrollbar">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+        <div className="p-8 overflow-y-auto max-h-[calc(90vh-200px)] custom-scrollbar">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10">
             {/* Left Column - Screenshot */}
             <div className="order-1">
               <div>
-                <h3 className="text-lg font-semibold text-white mb-3">📱 Preview</h3>
-                <div className="bg-white/5 rounded-xl p-4 border border-blue-400/20">
+                <h3 className="text-xl font-semibold text-white mb-4 tracking-tight">📱 Preview</h3>
+                <div className="bg-glass-light rounded-xl p-6 border border-glass-border">
                   {screenshotUrl ? (
                     <div>
-                      <div className="text-xs text-gray-400 mb-2">Debug: {screenshotUrl}</div>
+                      <div className="text-xs text-slate-500 mb-3 font-mono">Debug: {screenshotUrl}</div>
                       <img 
                         src={screenshotUrl} 
                         alt="QB Rankings Screenshot" 
-                        className="w-full h-auto rounded-lg shadow-lg border border-blue-400/30"
+                        className="w-full h-auto rounded-lg shadow-elevation-2 border border-glass-border"
                         style={{ maxHeight: '500px', objectFit: 'contain' }}
                         onLoad={(e) => {
                           console.log('📸 Image loaded successfully');
@@ -191,33 +191,33 @@ const ShareModal = ({ isOpen, onClose, screenshotUrl, shareLink, shareType }) =>
                       />
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center h-64 bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-600">
-                      <div className="text-center text-gray-400">
-                        <div className="text-4xl mb-2">📸</div>
-                        <div className="text-sm">Screenshot not available</div>
-                        <div className="text-xs mt-1">Preview will appear here</div>
+                    <div className="flex items-center justify-center h-64 bg-glass-medium rounded-lg border-2 border-dashed border-glass-border">
+                      <div className="text-center text-slate-400">
+                        <div className="text-4xl mb-3">📸</div>
+                        <div className="text-base font-medium">Screenshot not available</div>
+                        <div className="text-sm mt-2 font-light">Preview will appear here</div>
                       </div>
                     </div>
                   )}
                   
                   {/* Screenshot Options - Mobile Layout (stacked buttons) */}
                   {screenshotUrl && (
-                    <div className="mt-3 flex flex-wrap gap-2 lg:hidden">
+                    <div className="mt-4 flex flex-wrap gap-3 lg:hidden">
                       <button
                         onClick={downloadScreenshot}
-                        className="bg-green-500/20 hover:bg-green-500/30 px-3 py-2 rounded-lg font-medium transition-colors text-green-200 hover:text-white text-sm"
+                        className="bg-emerald-500/20 hover:bg-emerald-500/30 px-4 py-2 rounded-lg font-medium transition-all duration-300 text-emerald-200 hover:text-white text-sm hover:shadow-glow-blue-sm"
                       >
                         💾 Download
                       </button>
                       <button
                         onClick={copyImageToClipboard}
-                        className="bg-blue-500/20 hover:bg-blue-500/30 px-3 py-2 rounded-lg font-medium transition-colors text-blue-200 hover:text-white text-sm"
+                        className="bg-accent-500/20 hover:bg-accent-500/30 px-4 py-2 rounded-lg font-medium transition-all duration-300 text-accent-200 hover:text-white text-sm hover:shadow-glow-blue-sm"
                       >
                         📋 Copy Image
                       </button>
                       <button
                         onClick={openFullSize}
-                        className="bg-purple-500/20 hover:bg-purple-500/30 px-3 py-2 rounded-lg font-medium transition-colors text-purple-200 hover:text-white text-sm"
+                        className="bg-purple-500/20 hover:bg-purple-500/30 px-4 py-2 rounded-lg font-medium transition-all duration-300 text-purple-200 hover:text-white text-sm hover:shadow-glow-blue-sm"
                       >
                         🔍 View Full Size
                       </button>

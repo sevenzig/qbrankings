@@ -4,7 +4,17 @@ import { getTeamInfo } from '../constants/teamData.js';
 import GlobalSettings from './GlobalSettings.jsx';
 import TeamBreakdown from './TeamBreakdown.jsx';
 
-const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = false, yearMode, onYearModeChange }) => {
+const QBRankingsTable = memo(({ 
+  rankedQBs, 
+  includePlayoffs, 
+  include2024Only = false, 
+  yearMode, 
+  onYearModeChange,
+  // New props for filtering
+  showFilterControls = false,
+  filterSettings = null,
+  onFilterSettingsChange = () => {}
+}) => {
   // Extract all QBs with QEI scores for dynamic tier calculation
   const allQBsWithQEI = useMemo(() => rankedQBs, [rankedQBs]);
   // Helper function to get teams a QB played for in the selected season
@@ -98,37 +108,40 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
   }, [allQBsWithQEI]);
 
   const getRowClassName = useCallback((index) => {
-    const baseClasses = 'border-b border-white/10 hover:bg-white/5 transition-colors';
-    if (index === 0) return `${baseClasses} bg-gradient-to-r from-yellow-500/20 to-orange-500/20`;
-    if (index === 1) return `${baseClasses} bg-gradient-to-r from-gray-400/20 to-gray-500/20`;
-    if (index === 2) return `${baseClasses} bg-gradient-to-r from-amber-600/20 to-amber-700/20`;
-    if (index < 8) return `${baseClasses} bg-green-500/10`;
-    return `${baseClasses} bg-blue-500/5`;
+    const baseClasses = 'border-t border-slate-700/30 hover:bg-slate-700/20 transition-colors duration-150';
+    if (index === 0) return `${baseClasses} bg-gradient-to-r from-emerald-500/5 via-emerald-500/10 to-emerald-500/5`;
+    if (index === 1) return `${baseClasses} bg-gradient-to-r from-slate-500/5 via-slate-500/10 to-slate-500/5`;
+    if (index === 2) return `${baseClasses} bg-gradient-to-r from-amber-500/5 via-amber-500/10 to-amber-500/5`;
+    if (index < 8) return `${baseClasses} bg-slate-800/20`;
+    return `${baseClasses} bg-slate-800/40`;
   }, []);
 
   return (
-    <div className="bg-white/10 backdrop-blur-lg rounded-2xl overflow-hidden">
-      <div className="p-6 border-b border-white/20">
+    <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 backdrop-blur-xl rounded-3xl overflow-hidden border border-slate-700/50 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)]">
+      <div className="py-6 px-8 border-b border-slate-700/30 bg-gradient-to-r from-slate-800 to-slate-800/80">
         <div className="flex items-center justify-between">
-          <h3 className="text-xl font-bold text-white">🏆 QB Rankings ({rankedQBs.length} Active QBs)</h3>
+          <h3 className="text-lg font-black text-slate-50 tracking-tight">QB Rankings ({rankedQBs.length} Active QBs)</h3>
           <GlobalSettings
             yearMode={yearMode}
             onYearModeChange={onYearModeChange}
+            showFilterControls={showFilterControls}
+            filterSettings={filterSettings}
+            onFilterSettingsChange={onFilterSettingsChange}
           />
         </div>
       </div>
       
-      <div className="overflow-x-auto custom-scrollbar">
+      <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-white/5">
+          <thead className="bg-gradient-to-r from-slate-800 to-slate-800/80 sticky top-0 z-10">
             <tr>
-              <th className="px-4 py-3 text-left text-white font-bold">Rank</th>
-              <th className="px-4 py-3 text-left text-white font-bold">QB</th>
-              <th className="px-4 py-3 text-center text-white font-bold">Team</th>
-              <th className="px-4 py-3 text-center text-white font-bold">QEI</th>
-              <th className="px-4 py-3 text-center text-white font-bold">Team Record</th>
-              <th className="px-4 py-3 text-center text-white font-bold">Per-Game Averages</th>
-              <th className="px-4 py-3 text-center text-white font-bold">Seasons</th>
+              <th className="py-4 px-6 text-left text-xs font-bold text-slate-400 uppercase tracking-wider sticky left-0 bg-slate-800/95 backdrop-blur-sm z-10 border-r border-slate-700/30">Rank</th>
+              <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Team</th>
+              <th className="py-4 px-6 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">QB</th>
+              <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">QEI</th>
+              <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Team Record</th>
+              <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Per-Game Averages</th>
+              <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Seasons</th>
             </tr>
           </thead>
           <tbody>
@@ -140,65 +153,68 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
               return (
                 <>
                   <tr key={qb.id} className={getRowClassName(index)}>
-                    <td className="px-4 py-3">
-                      <span className="text-xl font-bold text-white">#{index + 1}</span>
+                    <td className="py-4 px-6 sticky left-0 bg-slate-800/95 backdrop-blur-sm z-10 border-r border-slate-700/30">
+                      <span className="text-base font-black text-slate-50 tabular-nums">#{index + 1}</span>
                     </td>
-                    <td className="px-4 py-3">
-                      <div>
-                        <div className="font-bold text-white">{qb.name}</div>
-                        <div className="text-xs text-blue-200">{qb.experience} seasons • Age {qb.age}</div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center flex-wrap">
+                    <td className="py-4 px-6 text-center">
+                      <div className="flex items-center justify-center gap-2">
                         {getQBTeams(qb, yearMode).map((teamData, teamIndex) => (
                           <div key={teamData.team} className="flex items-center">
                             {teamData.logo && (
                               <img 
                                 src={teamData.logo} 
                                 alt={teamData.team} 
-                                className="w-6 h-6" 
+                                className="w-12 h-12 lg:w-16 lg:h-16 rounded-lg p-1 shadow-lg" 
+                                style={{
+                                  filter: 'drop-shadow(0 0 0 2px white) drop-shadow(0 0 0 3px white)',
+                                  objectFit: 'contain'
+                                }}
                                 title={teamData.team}
                               />
                             )}
                             {teamIndex < getQBTeams(qb, yearMode).length - 1 && (
-                              <span className="text-white/50 mx-1">/</span>
+                              <span className="text-slate-400 mx-1">/</span>
                             )}
                           </div>
                         ))}
-                        {/* Show multi-team indicator if player played for multiple teams */}
                         {getQBTeams(qb, yearMode).length > 1 && (
-                          <div className="ml-2 text-xs text-blue-300" title={`Played for ${getQBTeams(qb, yearMode).length} teams`}>
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-slate-500/10 text-slate-500" title={`Played for ${getQBTeams(qb, yearMode).length} teams`}>
                             {getQBTeams(qb, yearMode).length}TM
                           </div>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className={`inline-block px-3 py-1 rounded-lg ${getQEIColor(qb, allQBsWithQEI)}`}>
-                        <span className="text-xl font-bold">{qb.qei.toFixed(2)}</span>
-                        <div className="text-xs opacity-75">
+                    <td className="py-4 px-6">
+                      <div>
+                        <div className="font-black text-slate-50 text-base">{qb.name}</div>
+                        <div className="text-sm text-slate-300 font-medium">{qb.experience} seasons • Age {qb.age}</div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-6 text-center">
+                      <div className={`inline-block px-4 py-2 rounded-lg ${getQEIColor(qb, allQBsWithQEI)}`}>
+                        <span className="text-2xl font-black tabular-nums">{qb.qei.toFixed(2)}</span>
+                        <div className="text-xs font-bold">
                           {getQEILabel(qb)}
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center text-blue-200">
-                      <div>{qb.combinedRecord}</div>
+                    <td className="py-4 px-6 text-center text-slate-200">
+                      <div className="font-bold tabular-nums">{qb.combinedRecord}</div>
                       {includePlayoffs && hasPlayoffRecord && (
-                        <div className="text-xs text-yellow-300 mt-1">
+                        <div className="text-xs text-amber-400 mt-1 font-bold">
                           Playoffs: {playoffRecord.wins}-{playoffRecord.losses}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center text-blue-200">
-                      <div>{qb.stats?.yardsPerGame?.toFixed(1) || '0.0'} yds/g</div>
-                      <div className="text-xs">{qb.stats?.tdsPerGame?.toFixed(2) || '0.00'} TD/g, {qb.stats?.turnoversPerGame?.toFixed(2) || '0.00'} TO/g</div>
+                    <td className="py-4 px-6 text-center text-slate-200">
+                      <div className="font-bold tabular-nums">{qb.stats?.yardsPerGame?.toFixed(1) || '0.0'} yds/g</div>
+                      <div className="text-sm text-slate-300 font-medium tabular-nums">{qb.stats?.tdsPerGame?.toFixed(2) || '0.00'} TD/g, {qb.stats?.turnoversPerGame?.toFixed(2) || '0.00'} TO/g</div>
                     </td>
-                    <td className="px-4 py-3 text-center text-white">
-                      <div>{qb.experience}</div>
-                      <div className="text-xs text-blue-200">{qb.stats?.gamesStarted || 0} starts</div>
+                    <td className="py-4 px-6 text-center text-slate-50">
+                      <div className="font-black tabular-nums">{qb.experience}</div>
+                      <div className="text-sm text-slate-300 font-medium tabular-nums">{qb.stats?.gamesStarted || 0} starts</div>
                       {includePlayoffs && playoffStarts > 0 && (
-                        <div className="text-xs text-yellow-300 mt-1">
+                        <div className="text-xs text-amber-400 mt-1 font-bold tabular-nums">
                           {playoffStarts} playoff starts
                         </div>
                       )}
@@ -206,8 +222,8 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
                   </tr>
                   {/* Team breakdown for multi-team seasons */}
                   {qb.seasonData && qb.seasonData.some(season => season.teamsPlayed && season.teamsPlayed.length > 1) && (
-                    <tr className="bg-blue-900/20">
-                      <td colSpan="6" className="px-4 py-3">
+                    <tr className="bg-slate-800/20">
+                      <td colSpan="7" className="py-4 px-6">
                         {qb.seasonData
                           .filter(season => season.teamsPlayed && season.teamsPlayed.length > 1)
                           .map(season => (

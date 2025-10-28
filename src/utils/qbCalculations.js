@@ -170,7 +170,7 @@ export const calculateHierarchicalScore = (componentScores, weights) => {
   return weightedSum / totalWeight;
 };
 
-export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 100, playoff: 0 }, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, includePlayoffs = false, filterYear = null, efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 }, protectionWeights = { sackPct: 60, turnoverRate: 40 }, volumeWeights = { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, durabilityWeights = { availability: 75, consistency: 25 }, allQBData = [], mainSupportWeight = 0) => {
+export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, weapons: 30, defense: 15 }, statsWeights = { efficiency: 45, protection: 25, volume: 30 }, teamWeights = { regularSeason: 100, playoff: 0 }, clutchWeights = { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, includePlayoffs = false, filterYear = null, efficiencyWeights = { anyA: 45, tdPct: 30, completionPct: 25 }, protectionWeights = { sackPct: 60, turnoverRate: 40 }, volumeWeights = { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, durabilityWeights = { availability: 75, consistency: 25 }, allQBData = [], mainSupportWeight = 0, teamSeasonRecordsBySeason = null) => {
   // Create season data structure for enhanced calculations
   const qbSeasonData = {
     years: {}
@@ -231,7 +231,7 @@ export const calculateQBMetrics = (qb, supportWeights = { offensiveLine: 55, wea
   // Calculate scores using hierarchical weight system with z-score based calculations
   // Pass filterYear directly to all scoring functions
   const supportScore = calculateSupportScore(qbSeasonData, supportWeights, filterYear, mainSupportWeight);
-  const teamScore = calculateTeamScore(qbSeasonData, teamWeights, includePlayoffs, filterYear, supportScore, allQBData);
+  const teamScore = calculateTeamScore(qbSeasonData, teamWeights, includePlayoffs, filterYear, supportScore, allQBData, teamSeasonRecordsBySeason);
   const statsScore = calculateStatsScore(qbSeasonData, statsWeights, includePlayoffs, filterYear, efficiencyWeights, protectionWeights, volumeWeights, allQBData);
   const clutchScore = calculateClutchScore(qbSeasonData, includePlayoffs, clutchWeights, filterYear, allQBData);
   const durabilityScore = calculateDurabilityScore(qbSeasonData, includePlayoffs, filterYear, durabilityWeights, allQBData);

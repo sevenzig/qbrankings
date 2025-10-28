@@ -1,5 +1,52 @@
 import html2canvas from 'html2canvas';
-import { getTeamInfo } from '../constants/teamData.js';
+import { getTeamInfo, PHILOSOPHY_PRESETS } from '../constants/teamData.js';
+
+/**
+ * Detects which preset matches the current weights or returns 'custom'
+ * @param {Object} weights - Current weight configuration
+ * @returns {string} - Preset name or 'custom'
+ */
+const detectPreset = (weights) => {
+  if (!weights) return 'custom';
+  
+  // Compare main category weights against all presets
+  for (const [presetName, preset] of Object.entries(PHILOSOPHY_PRESETS)) {
+    const { team, stats, clutch, durability, support } = preset;
+    
+    // Check if weights match exactly
+    if (
+      weights.team === team &&
+      weights.stats === stats &&
+      weights.clutch === clutch &&
+      weights.durability === durability &&
+      weights.support === support
+    ) {
+      return presetName;
+    }
+  }
+  
+  return 'custom';
+};
+
+/**
+ * Gets the display text for a preset
+ * @param {string} presetName - Name of the preset
+ * @returns {string} - Display text for the preset
+ */
+const getPresetDisplayText = (presetName) => {
+  if (presetName === 'custom') {
+    return 'Custom';
+  }
+  
+  const preset = PHILOSOPHY_PRESETS[presetName];
+  if (preset && preset.description) {
+    // Extract the main part of the description (before the dash)
+    const mainDescription = preset.description.split(' - ')[0];
+    return mainDescription;
+  }
+  
+  return presetName.charAt(0).toUpperCase() + presetName.slice(1);
+};
 
 /**
  * Preload team logo images to ensure they appear in screenshot
@@ -56,7 +103,7 @@ const preloadTeamLogos = async (qbs) => {
 /**
  * Takes a screenshot of the top 10 QBs table
  * @param {Array} rankedQBs - Array of ranked quarterback data
- * @param {Object} options - Screenshot options including includePlayoffs, include2024Only
+ * @param {Object} options - Screenshot options including includePlayoffs, include2024Only, currentPreset
  * @returns {Promise<Object>} - Promise that resolves to {blob, blobUrl}
  */
 export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
@@ -68,7 +115,7 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
   console.log('📸 Canvas support:', !!document.createElement('canvas').getContext);
   console.log('📸 toBlob support:', !!HTMLCanvasElement.prototype.toBlob);
   
-  const { includePlayoffs = true, include2024Only = false, yearMode = '2024' } = options;
+  const { includePlayoffs = true, include2024Only = false, yearMode = '2024', currentPreset = 'custom' } = options;
   
   // Get top 10 QBs
   const top10QBs = rankedQBs.slice(0, 10);
@@ -130,6 +177,9 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
   const qbRows = await Promise.all(qbRowsPromises);
   console.log('📸 Generated QB rows:', qbRows.length);
   
+  // Get preset display text
+  const presetDisplayText = getPresetDisplayText(currentPreset);
+  
   // Create the screenshot content
   console.log('📸 Creating screenshot HTML...');
   screenshotContainer.innerHTML = `
@@ -137,7 +187,7 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
       <!-- Header -->
       <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.15); background: rgba(255, 255, 255, 0.05);">
         <h3 style="font-size: 20px; font-weight: bold; color: white; margin: 0; display: flex; align-items: center; letter-spacing: 0.5px;">
-          🏆 QB Rankings ${yearMode}${includePlayoffs ? ' (Playoffs)' : ''} (Top ${top10QBs.length})
+          🏆 QB Rankings ${yearMode}${includePlayoffs ? ' (Playoffs)' : ''} - ${presetDisplayText}
         </h3>
       </div>
       
@@ -260,25 +310,26 @@ function getRowBackgroundStyle(index) {
 function getQEIColorStyle(qb, allQBsWithBaseScores = null) {
   const qei = qb.qei || 0;
   
-  // Use fixed z-score thresholds (6-tier system)
-  if (qei >= 90) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.3), rgba(251, 146, 60, 0.3)); color: #fef3c7;'; // Elite
-  if (qei >= 77.3) return 'background: linear-gradient(to right, rgba(209, 213, 219, 0.3), rgba(156, 163, 175, 0.3)); color: #e5e7eb;'; // Excellent
-  if (qei >= 59.9) return 'background: linear-gradient(to right, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3)); color: #bbf7d0;'; // Good
-  if (qei >= 40.1) return 'background: linear-gradient(to right, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.3)); color: #dbeafe;'; // Average
-  if (qei >= 22.7) return 'background: rgba(255, 255, 255, 0.15); color: #d1d5db;'; // Below Average
-  return 'background: rgba(255, 255, 255, 0.1); color: #9ca3af;'; // Poor
+  // Use updated tier thresholds with traditional colors
+  if (qei >= 89) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.4), rgba(251, 146, 60, 0.4)); color: #fef3c7; border: 1px solid rgba(251, 146, 60, 0.3);'; // Elite with orange enhancement (89th+)
+  if (qei >= 81) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.3), rgba(245, 158, 11, 0.3)); color: #fef3c7;'; // Elite - Gold (81-88th)
+  if (qei >= 73) return 'background: linear-gradient(to right, rgba(209, 213, 219, 0.3), rgba(156, 163, 175, 0.3)); color: #e5e7eb;'; // Excellent - Silver (73-80th)
+  if (qei >= 65) return 'background: linear-gradient(to right, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3)); color: #bbf7d0;'; // Good - Green (65-72nd)
+  if (qei >= 42) return 'background: linear-gradient(to right, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.3)); color: #dbeafe;'; // Average - Blue (42-64th)
+  if (qei >= 25) return 'background: rgba(255, 255, 255, 0.15); color: #d1d5db;'; // Below Average (25-41st)
+  return 'background: rgba(255, 255, 255, 0.1); color: #9ca3af;'; // Poor (<25th)
 }
 
 function getQEILabel(qb, allQBsWithBaseScores = null) {
   // Use the dynamic tier function from uiHelpers
   const qei = qb.qei || 0;
   
-  // Use fixed z-score percentile thresholds (6-tier system, Average centered at median)
-  if (qei >= 90) return 'Elite';
-  if (qei >= 77.3) return 'Excellent';
-  if (qei >= 59.9) return 'Good';
-  if (qei >= 40.1) return 'Average';
-  if (qei >= 22.7) return 'Below Avg';
+  // Use updated percentile thresholds
+  if (qei >= 81) return 'Elite';
+  if (qei >= 73) return 'Excellent';
+  if (qei >= 65) return 'Good';
+  if (qei >= 42) return 'Average';
+  if (qei >= 25) return 'Below Avg';
   return 'Poor';
 }
 
@@ -321,8 +372,8 @@ async function getTeamLogosHtml(qb) {
               ctx.drawImage(img, 0, 0, 64, 64);
               const dataUrl = canvas.toDataURL('image/png', 1.0);
               console.log('✅ Logo converted to base64 for', team.team);
-              // Larger logos for better visibility
-              resolve(`<img src="${dataUrl}" style="width: 32px; height: 32px; object-fit: contain; vertical-align: middle; border-radius: 4px;" alt="${team.team}" />`);
+              // Larger logos for better visibility with white outline filter
+              resolve(`<img src="${dataUrl}" style="width: 32px; height: 32px; object-fit: contain; vertical-align: middle; border-radius: 4px; filter: drop-shadow(0 0 0 1px white) drop-shadow(0 0 0 2px white); box-shadow: 0 2px 4px rgba(0,0,0,0.3);" alt="${team.team}" />`);
             } catch (canvasError) {
               console.warn('⚠️ Canvas conversion failed for', team.team, canvasError);
               // Fallback to team abbreviation on canvas error

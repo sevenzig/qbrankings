@@ -385,7 +385,7 @@ const SplitsComparison = memo(() => {
         )}
 
         {/* Configuration Panel */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 mb-8">
+        <div className="bg-glass-medium backdrop-blur-xl rounded-2xl p-6 mb-8 border border-glass-border">
           <h2 className="text-2xl font-bold text-white mb-6">⚙️ Configuration</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
@@ -415,7 +415,7 @@ const SplitsComparison = memo(() => {
               <select
                 value={selectedValue}
                 onChange={(e) => setSelectedValue(e.target.value)}
-                className="w-full px-3 py-2 bg-blue-900 text-blue-100 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-blue-200"
+                className="w-full px-3 py-2 bg-glass-light text-slate-200 border border-glass-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-400/40 placeholder-slate-400"
               >
                 <option className="bg-blue-900 text-blue-100" value="">Select Value</option>
                 {Object.entries(availableSplits).map(([splitType, splitData]) => {
@@ -440,7 +440,7 @@ const SplitsComparison = memo(() => {
                 value={minAttempts}
                 onChange={(e) => setMinAttempts(parseInt(e.target.value) || 0)}
                 min="0"
-                className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-white placeholder-blue-200"
+                className="w-full px-3 py-2 bg-glass-light border border-glass-border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-400/40 text-white placeholder-slate-400"
               />
             </div>
           </div>
@@ -461,7 +461,7 @@ const SplitsComparison = memo(() => {
         {comprehensiveData && (
           <div className="space-y-8">
             {/* Summary */}
-            <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6">
+            <div className="bg-glass-medium backdrop-blur-xl rounded-2xl p-6 border border-glass-border">
               <h2 className="text-2xl font-bold text-white mb-4">
                 📊 Comprehensive Data: {comprehensiveData.split_value}
               </h2>
@@ -486,7 +486,7 @@ const SplitsComparison = memo(() => {
             </div>
 
             {/* Comprehensive Table */}
-            <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6">
+            <div className="bg-glass-medium backdrop-blur-xl rounded-2xl p-6 border border-glass-border">
               <h3 className="text-xl font-bold text-white mb-4">
                 📋 All Statistics for {comprehensiveData.split_value} ({comprehensiveData.data.length} QBs)
               </h3>
@@ -523,11 +523,11 @@ const SplitsComparison = memo(() => {
                 >
                 <table className="w-full text-xs" style={{ minWidth: 'max-content' }}>
                   <thead>
-                    <tr className="border-b border-white/20">
+                    <tr className="border-b border-glass-border">
                       {getReorderedColumns(comprehensiveData.columns).map((column) => (
                         <th 
                           key={column.field} 
-                          className="text-center py-1 px-1 text-xs font-semibold text-blue-200 whitespace-nowrap cursor-pointer hover:bg-white/5 select-none transition-colors"
+                          className="text-center py-1 px-1 text-xs font-semibold text-slate-200 whitespace-nowrap cursor-pointer hover:bg-glass-light select-none transition-all duration-300"
                           onClick={() => handleSort(column.field)}
                         >
                           <div className="flex items-center justify-center space-x-1">
@@ -639,7 +639,7 @@ const SplitsComparison = memo(() => {
                       return (
                         <tr
                           key={`${qb.pfr_id}-${index}`}
-                          className="even:bg-blue-900/40 odd:bg-blue-900/60 border-b border-white/10 hover:bg-white/5 transition-colors"
+                          className="even:bg-glass-light odd:bg-glass-medium border-b border-glass-border hover:bg-glass-strong transition-all duration-300"
                         >
                           {getReorderedColumns(comprehensiveData.columns).map((column) => {
                             const value = qb[column.field];
@@ -653,7 +653,10 @@ const SplitsComparison = memo(() => {
                                       <img 
                                         src={teamInfo.logo} 
                                         alt={teamInfo.name}
-                                        className="w-4 h-4 object-contain"
+                                        className="w-4 h-4 lg:w-6 lg:h-6 object-contain rounded shadow-sm"
+                                        style={{
+                                          filter: 'drop-shadow(0 0 0 1px white) drop-shadow(0 0 0 2px white)'
+                                        }}
                                         onError={(e) => e.target.style.display = 'none'}
                                       />
                                     )}

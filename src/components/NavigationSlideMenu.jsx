@@ -10,10 +10,19 @@
 import React, { useState, useCallback, memo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Home, BarChart3, BookOpen } from 'lucide-react';
+import { useNavigation } from '../contexts/NavigationContext.jsx';
+import { PHILOSOPHY_PRESETS } from '../constants/teamData.js';
 
 const NavigationSlideMenu = memo(() => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  
+  // Get navigation context
+  const {
+    currentPreset,
+    onWeightsChange,
+    onPresetChange
+  } = useNavigation();
 
   const toggleMenu = useCallback(() => {
     setIsOpen(prev => !prev);
@@ -23,17 +32,33 @@ const NavigationSlideMenu = memo(() => {
     setIsOpen(false);
   }, []);
 
-
   const isActiveRoute = useCallback((path) => {
     return location.pathname === path;
   }, [location.pathname]);
+
+  // Apply preset function - simplified version that only handles main weights
+  // Sub-component weights will be handled by the main component when it detects preset change
+  const applyPreset = useCallback((presetName) => {
+    const preset = PHILOSOPHY_PRESETS[presetName];
+    if (!preset) return;
+    
+    // Extract only the main weight categories
+    const { description, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, efficiencyWeights, protectionWeights, volumeWeights, ...weightCategories } = preset;
+    
+    // Apply main weights through context
+    onWeightsChange(weightCategories);
+    onPresetChange(presetName);
+    
+    // Close menu after applying preset
+    closeMenu();
+  }, [onWeightsChange, onPresetChange, closeMenu]);
 
   return (
     <>
       {/* Hamburger Menu Button */}
       <button
         onClick={toggleMenu}
-        className="fixed top-4 right-4 z-50 bg-blue-600/20 hover:bg-blue-600/30 backdrop-blur-lg p-3 rounded-lg transition-colors text-white"
+        className="fixed top-4 right-4 z-50 bg-glass-medium hover:bg-glass-strong border border-glass-border backdrop-blur-lg p-3 rounded-lg transition-all duration-300 text-white hover:shadow-glow-blue-sm"
         aria-label="Open navigation menu"
       >
         <Menu size={24} />
@@ -49,17 +74,17 @@ const NavigationSlideMenu = memo(() => {
 
       {/* Slide Menu */}
       <div className={`
-        fixed top-0 right-0 h-full w-96 bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 
+        fixed top-0 right-0 h-full w-96 bg-glass-medium backdrop-blur-xl border-l border-glass-border
         transform transition-transform duration-300 ease-in-out z-50
         ${isOpen ? 'translate-x-0' : 'translate-x-full'}
-        shadow-2xl
+        shadow-glass-lg
       `}>
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
+        <div className="flex items-center justify-between p-6 border-b border-glass-border">
           <h2 className="text-xl font-bold text-white">Navigation</h2>
           <button
             onClick={closeMenu}
-            className="text-white/70 hover:text-white transition-colors"
+            className="text-slate-300 hover:text-white transition-all duration-300 hover:bg-glass-light p-2 rounded-lg"
             aria-label="Close menu"
           >
             <X size={24} />
@@ -78,10 +103,10 @@ const NavigationSlideMenu = memo(() => {
               <Link
                 to="/"
                 onClick={closeMenu}
-                className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ${
                   isActiveRoute('/') 
-                    ? 'bg-blue-500/30 text-white' 
-                    : 'text-blue-200 hover:bg-white/10 hover:text-white'
+                    ? 'bg-accent-500/30 text-white border border-accent-400/40' 
+                    : 'text-slate-200 hover:bg-glass-light hover:text-white border border-transparent hover:border-glass-border'
                 }`}
               >
                 <BarChart3 size={20} />
@@ -91,10 +116,10 @@ const NavigationSlideMenu = memo(() => {
               <Link
                 to="/splits-comparison"
                 onClick={closeMenu}
-                className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ${
                   isActiveRoute('/splits-comparison') 
-                    ? 'bg-orange-500/30 text-white' 
-                    : 'text-orange-200 hover:bg-white/10 hover:text-white'
+                    ? 'bg-amber-500/30 text-white border border-amber-400/40' 
+                    : 'text-slate-200 hover:bg-glass-light hover:text-white border border-transparent hover:border-glass-border'
                 }`}
               >
                 <BarChart3 size={20} />
@@ -104,10 +129,10 @@ const NavigationSlideMenu = memo(() => {
               <Link
                 to="/documentation"
                 onClick={closeMenu}
-                className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ${
                   isActiveRoute('/documentation') 
-                    ? 'bg-green-500/30 text-white' 
-                    : 'text-green-200 hover:bg-white/10 hover:text-white'
+                    ? 'bg-emerald-500/30 text-white border border-emerald-400/40' 
+                    : 'text-slate-200 hover:bg-glass-light hover:text-white border border-transparent hover:border-glass-border'
                 }`}
               >
                 <BookOpen size={20} />
@@ -117,11 +142,58 @@ const NavigationSlideMenu = memo(() => {
             </div>
           </div>
 
-
+          {/* QB Philosophy Presets */}
+          <div className="p-6 border-t border-glass-border">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <span className="text-2xl">🎯</span>
+              QB Philosophy Presets
+            </h3>
+            <div className="space-y-2">
+              {Object.entries(PHILOSOPHY_PRESETS).map(([presetKey, preset]) => (
+                <button
+                  key={presetKey}
+                  onClick={() => applyPreset(presetKey)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all duration-300 text-left ${
+                    currentPreset === presetKey 
+                      ? 'bg-accent-500/30 text-white border border-accent-400/50' 
+                      : 'text-slate-200 hover:bg-glass-light hover:text-white border border-transparent hover:border-glass-border'
+                  }`}
+                  title={preset.description}
+                >
+                  <span className="text-lg">
+                    {presetKey === 'default' ? '⚡' :
+                     presetKey === 'winner' ? '🏆' :
+                     presetKey === 'analyst' ? '📊' :
+                     presetKey === 'context' ? '🎯' :
+                     presetKey === 'volumeHero' ? '📈' :
+                     presetKey === 'efficiencyPurist' ? '⚡' :
+                     presetKey === 'balancedAttack' ? '⚖️' : '🎯'}
+                  </span>
+                  <div className="flex-1">
+                    <div className="font-medium">
+                      {presetKey === 'default' ? 'Pure QB Quality' :
+                       presetKey === 'winner' ? 'Winner Focus' :
+                       presetKey === 'analyst' ? 'Analyst View' :
+                       presetKey === 'context' ? 'Context Matters' :
+                       presetKey === 'volumeHero' ? 'Volume Hero' :
+                       presetKey === 'efficiencyPurist' ? 'Efficiency Purist' :
+                       presetKey === 'balancedAttack' ? 'Balanced Attack' : presetKey}
+                    </div>
+                    <div className="text-xs opacity-75 line-clamp-1">
+                      {preset.description.split(' - ')[1] || preset.description}
+                    </div>
+                  </div>
+                  {currentPreset === presetKey && (
+                    <div className="text-blue-300 text-sm">✓</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Footer */}
-          <div className="p-6 border-t border-white/10 mt-auto">
-            <div className="text-center text-blue-300 text-sm">
+          <div className="p-6 border-t border-glass-border mt-auto">
+            <div className="text-center text-slate-300 text-sm">
               <p>🚀 Dynamic Rankings</p>
               <p>📈 Per-Season Analysis</p>
               <p>🎛️ Customizable Weights</p>

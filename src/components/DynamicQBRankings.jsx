@@ -63,9 +63,9 @@ const DynamicQBRankings = () => {
   });
   const [showSupportDetails, setShowSupportDetails] = useState(false);
   const [statsWeights, setStatsWeights] = useState({
-    efficiency: 50,     // ANY/A, TD%, Completion% - Core of QB evaluation
-    protection: 20,      // Sack%, Turnover Rate - Decision-making focus
-    volume: 30          // Volume and production metrics - Secondary to efficiency
+    efficiency: 45,     // ANY/A, TD%, Completion% - Core of QB evaluation
+    protection: 30,     // Sack%, Turnover Rate - Decision-making focus
+    volume: 25          // Volume and production metrics
   });
   const [showStatsDetails, setShowStatsDetails] = useState(false);
   const [showEfficiencyDetails, setShowEfficiencyDetails] = useState(false);
@@ -74,20 +74,20 @@ const DynamicQBRankings = () => {
   
   // Sub-component weights for stats categories - NFL Scout Optimized
   const [efficiencyWeights, setEfficiencyWeights] = useState({
-    anyA: 50,           // Adjusted Net Yards per Attempt - Gold standard QB metric
-    tdPct: 35,          // Touchdown percentage - Ultimate production measure
-    completionPct: 15    // Completion percentage - Reduced due to modern NFL limitations
+    anyA: 45,           // Adjusted Net Yards per Attempt - Gold standard QB metric
+    tdPct: 35,          // Touchdown percentage - production efficiency
+    completionPct: 20    // Completion percentage - accuracy & decision making
   });
   const [protectionWeights, setProtectionWeights] = useState({
     sackPct: 25,        // Sack percentage - Reduced (heavily O-line dependent)
     turnoverRate: 75    // Turnover rate - Increased (pure QB decision-making)
   });
   const [volumeWeights, setVolumeWeights] = useState({
-    passYards: 30,      // Passing yards - Increased (shows arm talent and accuracy)
-    passTDs: 30,         // Passing touchdowns - Increased (ultimate success measure)
-    rushYards: 15,       // Rushing yards - Reduced (secondary for QB evaluation)
-    rushTDs: 20,         // Rushing touchdowns - Maintained (goal line value)
-    totalAttempts: 5     // Total attempts - Reduced (attempts don't measure quality)
+    passYards: 40,      // Passing yard production
+    passTDs: 30,        // Passing touchdown production
+    rushYards: 10,      // Rushing yards
+    rushTDs: 15,        // Rushing touchdowns
+    totalAttempts: 5    // Total workload
   });
   const [teamWeights, setTeamWeights] = useState({
     regularSeason: 100,  // Regular season win percentage - set to 100%
@@ -107,6 +107,12 @@ const DynamicQBRankings = () => {
     consistency: 50           // Multi-year consistency bonus
   });
   const [showDurabilityDetails, setShowDurabilityDetails] = useState(false);
+
+  // Filter settings state
+  const [filterSettings, setFilterSettings] = useState({
+    minAttempts: 15,
+    minGames: 2
+  });
 
   // Accordion state
   const [isCustomizeAccordionOpen, setIsCustomizeAccordionOpen] = useState(false);
@@ -921,6 +927,24 @@ const DynamicQBRankings = () => {
     return result;
   }, [weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, yearMode, currentPreset]);
 
+  // Apply QB filter based on attempts and games started
+  const applyQBFilter = useCallback((qbs, settings, year) => {
+    if (!settings) return qbs;
+    
+    return qbs.filter(qb => {
+      const yearSeason = qb.seasonData?.find(season => season.year === parseInt(year));
+      if (!yearSeason) return false;
+      
+      const totalAttempts = yearSeason.attempts || 0;
+      const gamesStarted = yearSeason.gamesStarted || 0;
+      
+      const passesAttempts = totalAttempts >= settings.minAttempts;
+      const passesGames = gamesStarted >= settings.minGames;
+      
+      return passesAttempts && passesGames;
+    });
+  }, []);
+
   // Calculate QEI with current weights and dynamic component calculations
   const rankedQBs = useMemo(() => {
     if (!qbData || qbData.length === 0) return [];
@@ -987,10 +1011,14 @@ const DynamicQBRankings = () => {
       })
       .sort((a, b) => b.qei - a.qei);
       
-    console.log(`✅ Rankings calculated: Top QB is ${finalRankings[0]?.name} with ${finalRankings[0]?.qei?.toFixed(1)} QEI`);
+    // Apply user-defined filtering
+    const filteredRankings = applyQBFilter(finalRankings, filterSettings, yearMode);
     
-    return finalRankings;
-  }, [qbData, weights, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, yearMode, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights]);
+    console.log(`✅ Rankings calculated: ${finalRankings.length} total QBs, ${filteredRankings.length} after filtering`);
+    console.log(`🔍 Filter applied: min ${filterSettings.minAttempts} attempts, min ${filterSettings.minGames} games`);
+    
+    return filteredRankings;
+  }, [qbData, weights, supportWeights, statsWeights, teamWeights, clutchWeights, includePlayoffs, yearMode, efficiencyWeights, protectionWeights, volumeWeights, durabilityWeights, filterSettings, applyQBFilter]);
 
   const totalWeight = useMemo(() => 
     Object.values(weights).reduce((a, b) => a + b, 0), 
@@ -1060,7 +1088,8 @@ const DynamicQBRankings = () => {
       const screenshotResult = await captureTop10QBsScreenshot(rankedQBs, { 
         includePlayoffs, 
         include2024Only: isSingleYear,
-        yearMode
+        yearMode,
+        currentPreset
       });
       
       console.log('📸 Screenshot result:', screenshotResult);
@@ -1222,9 +1251,9 @@ const DynamicQBRankings = () => {
             });
             
             setStatsWeights({
-              efficiency: 34,
-              protection: 33,
-              volume: 33
+              efficiency: 45,
+              protection: 30,
+              volume: 25
             });
             
             setTeamWeights({
@@ -1260,6 +1289,47 @@ const DynamicQBRankings = () => {
     setPrevIncludePlayoffs(includePlayoffs);
   }, [includePlayoffs]);
 
+  // Handle preset changes - apply sub-component weights when preset changes
+  useEffect(() => {
+    if (currentPreset && currentPreset !== 'custom' && PHILOSOPHY_PRESETS[currentPreset]) {
+      console.log(`🎯 Applying preset: ${currentPreset}`);
+      const preset = PHILOSOPHY_PRESETS[currentPreset];
+      
+      // Apply sub-component weights if they exist in the preset
+      if (preset.supportWeights) {
+        setSupportWeights(preset.supportWeights);
+      }
+      
+      if (preset.statsWeights) {
+        setStatsWeights(preset.statsWeights);
+      }
+      
+      if (preset.teamWeights) {
+        setTeamWeights(preset.teamWeights);
+      }
+      
+      if (preset.clutchWeights) {
+        setClutchWeights(preset.clutchWeights);
+      }
+      
+      if (preset.durabilityWeights) {
+        setDurabilityWeights(preset.durabilityWeights);
+      }
+      
+      if (preset.efficiencyWeights) {
+        setEfficiencyWeights(preset.efficiencyWeights);
+      }
+      
+      if (preset.protectionWeights) {
+        setProtectionWeights(preset.protectionWeights);
+      }
+      
+      if (preset.volumeWeights) {
+        setVolumeWeights(preset.volumeWeights);
+      }
+    }
+  }, [currentPreset]);
+
   // Handle year mode changes - both weight adjustments and data fetching
   useEffect(() => {
     console.log(`🔄 Year mode changed to: ${yearMode}`);
@@ -1291,17 +1361,17 @@ const DynamicQBRankings = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-8 flex items-center justify-center">
         <div className="text-center text-white">
-          <div className="text-6xl mb-6">🏈</div>
-          <h2 className="text-3xl font-bold mb-4">Loading NFL Quarterbacks...</h2>
-          <div className="space-y-2 text-blue-200">
-            <p>📊 Loading quarterback data</p>
-            <p>📈 Parsing {yearMode} season statistics</p>
-            <p>🔢 Calculating QEI performance metrics</p>
-            <p>🏆 Ranking elite quarterbacks</p>
+          <div className="text-6xl mb-8 animate-pulse">🏈</div>
+          <h2 className="text-4xl font-semibold mb-6 tracking-tight">Loading NFL Quarterbacks...</h2>
+          <div className="space-y-3 text-slate-300 font-light">
+            <p className="text-lg">📊 Loading quarterback data</p>
+            <p className="text-lg">📈 Parsing {yearMode} season statistics</p>
+            <p className="text-lg">🔢 Calculating QEI performance metrics</p>
+            <p className="text-lg">🏆 Ranking elite quarterbacks</p>
           </div>
-          <div className="mt-6 text-yellow-300">
+          <div className="mt-8 text-amber-400 font-medium">
             ⏳ Processing data...
           </div>
         </div>
@@ -1311,14 +1381,14 @@ const DynamicQBRankings = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-900 via-red-800 to-red-700 p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-8 flex items-center justify-center">
         <div className="text-center text-white">
-          <div className="text-6xl mb-4">❌</div>
-          <h2 className="text-2xl font-bold mb-2">Failed to Load QB Data</h2>
-          <p className="text-red-200 mb-4">Error: {error}</p>
+          <div className="text-6xl mb-6">❌</div>
+          <h2 className="text-3xl font-semibold mb-4 tracking-tight">Failed to Load QB Data</h2>
+          <p className="text-slate-300 mb-6 font-light">Error: {error}</p>
           <button 
             onClick={() => window.location.reload()}
-            className="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-lg font-bold transition-colors"
+            className="bg-glass-medium hover:bg-glass-strong backdrop-blur-lg border border-glass-border px-8 py-4 rounded-xl font-medium transition-all duration-300 hover:shadow-glow-blue-sm"
           >
             🔄 Try Again
           </button>
@@ -1328,12 +1398,12 @@ const DynamicQBRankings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">🏆 QB Rankings</h1>
-          <p className="text-blue-200">
+        <div className="text-center mb-12">
+          <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">🏆 QB Rankings</h1>
+          <p className="text-slate-300 text-lg font-light">
             {yearMode} NFL season analysis • Single-season quarterback rankings • Dynamic QEI
           </p>
         </div>
@@ -1346,29 +1416,29 @@ const DynamicQBRankings = () => {
 
 
         {/* Customize Your QB Philosophy - Accordion */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl mb-8">
+        <div className="bg-glass-medium backdrop-blur-xl rounded-2xl mb-12 border border-glass-border shadow-glass-sm">
           {/* Accordion Header */}
           <div 
-            className="p-6 cursor-pointer hover:bg-white/5 transition-colors select-none"
+            className="p-8 cursor-pointer hover:bg-glass-light transition-all duration-300 select-none"
             onClick={() => setIsCustomizeAccordionOpen(!isCustomizeAccordionOpen)}
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <h3 className="text-xl font-bold text-white">🎯 Customize Your QB Philosophy</h3>
-                <p className="text-blue-200 text-sm mt-1">
+                <h3 className="text-2xl font-semibold text-white tracking-tight">🎯 Customize Your QB Philosophy</h3>
+                <p className="text-slate-300 text-base mt-2 font-light">
                   Advanced settings to fine-tune weightings and components
                 </p>
               </div>
-              <div className="ml-6 flex items-center justify-center">
+              <div className="ml-8 flex items-center justify-center">
                 <div className={`
-                  w-8 h-8 rounded-full bg-white/10 border border-white/20 
+                  w-10 h-10 rounded-full bg-glass-light border border-glass-border 
                   flex items-center justify-center
                   transition-all duration-300 ease-in-out
-                  hover:bg-white/20 hover:border-white/30
-                  ${isCustomizeAccordionOpen ? 'rotate-180 bg-blue-500/30 border-blue-400/50' : 'rotate-0'}
+                  hover:bg-glass-medium hover:border-accent-300/50 hover:shadow-glow-blue-sm
+                  ${isCustomizeAccordionOpen ? 'rotate-180 bg-accent-500/20 border-accent-400/50 shadow-glow-blue-sm' : 'rotate-0'}
                 `}>
                   <svg 
-                    className="w-4 h-4 text-white transition-colors duration-300" 
+                    className="w-5 h-5 text-white transition-colors duration-300" 
                     fill="none" 
                     stroke="currentColor" 
                     viewBox="0 0 24 24"
@@ -1387,8 +1457,8 @@ const DynamicQBRankings = () => {
 
           {/* Accordion Content */}
           {isCustomizeAccordionOpen && (
-            <div className="border-t border-white/10">
-              <div className="p-6">
+            <div className="border-t border-glass-border">
+              <div className="p-8">
                 <WeightControls
                   weights={weights}
                   onUpdateWeight={updateWeight}
@@ -1429,34 +1499,19 @@ const DynamicQBRankings = () => {
         </div>
 
         {/* Share Button Section */}
-        <div className="text-center mb-8 text-blue-300">
-          <div className="flex flex-wrap justify-center gap-3 mb-2">
-            <button 
-              id="share-button-top"
-              onClick={() => {
-                console.log('🔗 Quick Share button clicked!');
-                handleShare('quick');
-              }}
-              className="bg-blue-500/20 hover:bg-blue-500/30 px-6 py-3 rounded-lg font-bold transition-colors text-white"
-              disabled={isQuickShareLoading || isFullShareLoading}
-            >
-              {isQuickShareLoading ? '⏳ Generating...' : '🔗 Quick Share'}
-            </button>
+        <div className="text-center mb-12 text-slate-300">
+          <div className="flex flex-wrap justify-center gap-4 mb-4">
             <button 
               onClick={() => {
-                console.log('📋 Full Detail Share button clicked!');
+                console.log('📋 Share Your Custom QB Rankings button clicked!');
                 handleShare('full');
               }}
-              className="bg-purple-500/20 hover:bg-purple-500/30 px-6 py-3 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
+              className="bg-accent-500/30 hover:bg-accent-500/40 backdrop-blur-lg border border-accent-400/50 px-8 py-4 rounded-xl font-medium transition-all duration-300 text-white hover:shadow-glow-blue-sm"
               disabled={isQuickShareLoading || isFullShareLoading}
             >
-              {isFullShareLoading ? '⏳ Generating...' : '📋 Full Detail Share'}
+              {isFullShareLoading ? '⏳ Generating...' : '📋 Share Your Custom QB Rankings'}
             </button>
           </div>
-          <p className="text-xs text-blue-400">
-            🚀 <strong>Quick Share</strong>: Super short URLs (main weights only) • 
-            📊 <strong>Full Detail</strong>: All sub-component weights included
-          </p>
         </div>
 
         {/* Live Rankings Table */}
@@ -1466,64 +1521,52 @@ const DynamicQBRankings = () => {
           include2024Only={true}
           yearMode={yearMode}
           onYearModeChange={onYearModeChange}
+          showFilterControls={true}
+          filterSettings={filterSettings}
+          onFilterSettingsChange={setFilterSettings}
         />
 
         {/* Footer */}
-        <div className="text-center mt-8 text-blue-300">
-          <p>🚀 Dynamic Rankings • 📈 Per-Season Analysis • 🎛️ Customizable Weights</p>
+        <div className="text-center mt-12 text-slate-300">
+          <p className="text-lg font-light">🚀 Dynamic Rankings • 📈 Per-Season Analysis • 🎛️ Customizable Weights</p>
           {lastFetch && (
-            <p className="text-sm mt-2">
+            <p className="text-sm mt-4 text-slate-400">
               Last updated: {new Date(lastFetch).toLocaleTimeString()} 
               {shouldRefreshData() ? ' (Data may be stale)' : ' (Fresh data)'}
             </p>
           )}
-          <div className="mt-4 space-y-2">
-            <div className="flex flex-wrap justify-center gap-3 mb-2">
-              <button 
-                id="share-button"
-                onClick={() => {
-                  console.log('🔗 Bottom Quick Share button clicked!');
-                  handleShare('quick');
-                }}
-                className="bg-blue-500/20 hover:bg-blue-500/30 px-5 py-2 rounded-lg font-bold transition-colors"
-                disabled={isQuickShareLoading || isFullShareLoading}
-              >
-                {isQuickShareLoading ? '⏳ Generating...' : '🔗 Quick Share'}
-              </button>
+          <div className="mt-8 space-y-4">
+            <div className="flex flex-wrap justify-center gap-4 mb-4">
               <button 
                 onClick={() => {
-                  console.log('📋 Bottom Full Detail Share button clicked!');
+                  console.log('📋 Bottom Share Your Custom QB Rankings button clicked!');
                   handleShare('full');
                 }}
-                className="bg-purple-500/20 hover:bg-purple-500/30 px-5 py-2 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
+                className="bg-accent-500/30 hover:bg-accent-500/40 backdrop-blur-lg border border-accent-400/50 px-6 py-3 rounded-lg font-medium transition-all duration-300 text-white hover:shadow-glow-blue-sm"
                 disabled={isQuickShareLoading || isFullShareLoading}
               >
-                {isFullShareLoading ? '⏳ Generating...' : '📋 Full Detail Share'}
+                {isFullShareLoading ? '⏳ Generating...' : '📋 Share Your Custom QB Rankings'}
               </button>
             </div>
-            <p className="text-xs text-blue-400">
-              🚀 <strong>Quick Share</strong>: Ultra-short URLs perfect for chat apps 
-              <br />📊 <strong>Full Detail</strong>: Includes all sub-component weight customizations
-            </p>
-            <div className="mt-4 pt-4 border-t border-white/10">
-              <div className="flex flex-wrap justify-center gap-3 mb-2">
+            <div className="mt-8 pt-6 border-t border-glass-border">
+              <div className="flex flex-wrap justify-center gap-4 mb-4">
                 <Link 
                   to="/documentation"
-                  className="bg-purple-500/20 hover:bg-purple-500/30 px-6 py-2 rounded-lg font-bold transition-colors text-purple-200 hover:text-white"
+                  className="bg-accent-500/20 hover:bg-accent-500/30 backdrop-blur-lg border border-accent-400/30 px-8 py-3 rounded-lg font-medium transition-all duration-300 text-accent-200 hover:text-white hover:shadow-glow-blue-sm"
                 >
                   📚 View Scoring Methodology & Documentation
                 </Link>
                 <Link 
                   to="/splits-comparison"
-                  className="bg-orange-500/20 hover:bg-orange-500/30 px-6 py-2 rounded-lg font-bold transition-colors text-orange-200 hover:text-white"
+                  className="bg-amber-500/20 hover:bg-amber-500/30 backdrop-blur-lg border border-amber-400/30 px-8 py-3 rounded-lg font-medium transition-all duration-300 text-amber-200 hover:text-white hover:shadow-glow-blue-sm"
                 >
                   📊 Splits Comparison Tool
                 </Link>
               </div>
-              <p className="text-xs text-purple-300 mt-2">
+              <p className="text-sm text-accent-300 mt-3 font-light">
                 Learn how our QB evaluation system works - from team success to clutch performance
               </p>
-              <p className="text-xs text-orange-300 mt-1">
+              <p className="text-sm text-amber-300 mt-2 font-light">
                 Compare any statistic from qb_splits or qb_splits_advanced tables
               </p>
             </div>
@@ -1535,7 +1578,7 @@ const DynamicQBRankings = () => {
       {showScrollTop && (
         <button
           onClick={scrollToTop}
-          className="fixed bottom-6 right-6 bg-blue-500/20 hover:bg-blue-500/30 backdrop-blur-lg text-white p-3 rounded-full shadow-lg transition-all duration-300 z-50 border border-blue-400/30"
+          className="fixed bottom-8 right-8 bg-glass-medium hover:bg-glass-strong backdrop-blur-xl text-white p-4 rounded-full shadow-glass-sm transition-all duration-300 z-50 border border-glass-border hover:shadow-glow-blue-sm"
           title="Scroll to top"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

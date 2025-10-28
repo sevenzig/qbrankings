@@ -62,37 +62,16 @@ export const PHILOSOPHY_PRESETS = {
   default: {
     team: 0, stats: 100, clutch: 0, durability: 0, support: 0,
     description: "Pure QB Quality Focus - Statistical evaluation isolating individual quarterback talent",
-    // Sub-component weights for QB quality evaluation (NFL Scout Optimized)
-    supportWeights: {
-      offensiveLine: 34,  // Not used in default (support: 0)
-      weapons: 33,
-      defense: 33
-    },
     statsWeights: {
-      efficiency: 55,      // Increased - efficiency is the core of QB evaluation
-      protection: 15,     // Reduced - still important for decision-making
-      volume: 30          // Increased - production matters for QB evaluation
-    },
-    teamWeights: {
-      regularSeason: 60,  // Not used in default (team: 0)
-      offenseDVOA: 40,
-      playoff: 0
-    },
-    clutchWeights: {
-      gameWinningDrives: 25,  // Not used in default (clutch: 0)
-      fourthQuarterComebacks: 25,
-      clutchRate: 25,
-      playoffBonus: 25
-    },
-    durabilityWeights: {
-      availability: 60,   // Not used in default (durability: 0)
-      consistency: 40
+      efficiency: 45,      // Efficiency core, aligned with default UI
+      protection: 30,      // Decision making and ball security
+      volume: 25          // Production matters but secondary
     },
     // Efficiency weights optimized for pure QB evaluation
     efficiencyWeights: {
-      anyA: 50,           // Increased - ANY/A is the gold standard QB metric
-      tdPct: 35,          // Increased - TDs are the ultimate production measure
-      completionPct: 15    // Reduced - completion% has limitations in modern NFL
+      anyA: 45,           // ANY/A primary efficiency metric
+      tdPct: 35,          // TD% strong efficiency signal
+      completionPct: 20   // Accuracy matters
     },
     // Protection weights focused on QB decision-making
     protectionWeights: {
@@ -101,11 +80,11 @@ export const PHILOSOPHY_PRESETS = {
     },
     // Volume weights balanced for production evaluation
     volumeWeights: {
-      passYards: 30,      // Increased - passing yards show arm talent and accuracy
-      passTDs: 35,         // Increased - TDs are the ultimate measure of success
-      rushYards: 15,       // Reduced - rushing is secondary for QB evaluation
-      rushTDs: 15,         // Reduced - passing TDs more valuable than rushing
-      totalAttempts: 5     // Reduced - attempts don't measure quality
+      passYards: 40,      // Passing yard production
+      passTDs: 30,        // Passing touchdown production
+      rushYards: 10,      // Rushing yard production
+      rushTDs: 15,        // Rushing TDs
+      totalAttempts: 5    // Total workload
     }
   },
   
@@ -156,97 +135,83 @@ export const PHILOSOPHY_PRESETS = {
     }
   },
   
-  analyst: {
-    team: 15, stats: 70, clutch: 0, durability: 10, support: 5,
-    description: "Numbers don't lie - advanced metrics with volume recognition",
-    // Sub-component weights for analyst preset
-    supportWeights: {
-      offensiveLine: 40,    // Slightly higher - analysts understand O-line impact
-      weapons: 35,
-      defense: 25
-    },
+  
+  
+  volumeHero: {
+    team: 0, stats: 100, clutch: 0, durability: 0, support: 0,
+    description: "📊 Volume Hero - Stat padding reigns supreme, filling up the stat sheet is everything",
     statsWeights: {
-      efficiency: 45,       // Reduced to make room for volume
-      protection: 30,
-      volume: 25            // Increased - volume is crucial for elite evaluation
-    },
-    teamWeights: {
-      regularSeason: 15,    // Reduced - analysts focus on process over results
-      offenseDVOA: 85,      // Increased - advanced metrics are everything
-      playoff: 0
-    },
-    clutchWeights: {
-      gameWinningDrives: 25,
-      fourthQuarterComebacks: 25,
-      clutchRate: 25,
-      playoffBonus: 25
-    },
-    durabilityWeights: {
-      availability: 25,     // Reduced - analysts value consistency over availability
-      consistency: 75       // Increased - long-term performance patterns matter
+      efficiency: 10,       // De-emphasized - efficiency doesn't matter for stat padding
+      protection: 5,        // Minimal - turnovers are just stats
+      volume: 85            // Maximized - volume is everything
     },
     efficiencyWeights: {
-      anyA: 55,             // Increased - ANY/A is the holy grail for analysts
-      tdPct: 30,            // Reduced to emphasize ANY/A
-      completionPct: 15     // Maintained - completion% has limitations
+      anyA: 30,             // Reduced - ANY/A efficiency doesn't matter for volume
+      tdPct: 40,            // Increased - TDs are volume stats
+      completionPct: 30     // Maintained - completions are volume
     },
     protectionWeights: {
-      sackPct: 30,          // Reduced - analysts know this is mostly O-line
-      turnoverRate: 70      // Increased - QB decision-making is everything
+      sackPct: 20,          // Reduced - sacks don't help volume
+      turnoverRate: 80      // Increased - turnovers hurt volume
     },
     volumeWeights: {
-      passYards: 35,        // Increased - volume matters for greatness
-      passTDs: 35,          // Increased - production matters
-      rushYards: 10,        // Reduced - analysts focus on passing
-      rushTDs: 10,          // Reduced - passing is more predictive
-      totalAttempts: 10     // Reduced - efficiency over volume attempts
+      passYards: 35,        // Increased - passing yards are king for volume
+      passTDs: 40,          // Increased - TDs are the ultimate volume stat
+      rushYards: 15,        // Maintained - rushing yards add to total volume
+      rushTDs: 5,           // Reduced - passing TDs more valuable
+      totalAttempts: 5      // Reduced - attempts don't measure volume quality
     }
   },
   
-  context: {
-    team: 20, stats: 45, clutch: 0, durability: 10, support: 25,
-    description: "Context matters - situational excellence with pressure recognition",
-    // Sub-component weights for context preset
-    supportWeights: {
-      offensiveLine: 45,    // Increased - O-line is crucial for context evaluation
-      weapons: 30,          // Reduced to emphasize O-line importance
-      defense: 25           // Maintained - defensive context matters
-    },
+  efficiencyPurist: {
+    team: 0, stats: 100, clutch: 0, durability: 0, support: 0,
+    description: "⚡ Efficiency Purist - Minimize mistakes, maximize per-play value",
     statsWeights: {
-      efficiency: 30,       // Reduced - efficiency less reliable in bad situations
-      protection: 45,       // Increased - decision-making under pressure is key
-      volume: 25            // Maintained - volume shows workload in tough spots
-    },
-    teamWeights: {
-      regularSeason: 40,    // Reduced - context matters more than raw wins
-      offenseDVOA: 60,      // Increased - advanced metrics show true impact
-      playoff: 0
-    },
-    clutchWeights: {
-      gameWinningDrives: 25,
-      fourthQuarterComebacks: 25,
-      clutchRate: 25,
-      playoffBonus: 25
-    },
-    durabilityWeights: {
-      availability: 60,     // Increased - staying healthy in tough situations
-      consistency: 40       // Reduced - context can explain inconsistency
+      efficiency: 70,       // Heavily emphasized - ANY/A, TD%, Comp% are king
+      protection: 25,       // Important - ball security matters
+      volume: 5             // Minimal - efficiency > volume
     },
     efficiencyWeights: {
-      anyA: 35,             // Reduced - ANY/A can be misleading in bad situations
-      tdPct: 25,            // Maintained - TDs still matter
-      completionPct: 40     // Increased - completion% crucial under pressure
+      anyA: 60,             // Increased - ANY/A is the gold standard efficiency metric
+      tdPct: 30,            // Increased - TD% shows scoring efficiency
+      completionPct: 10     // Reduced - completion% has limitations in modern NFL
     },
     protectionWeights: {
-      sackPct: 40,          // Reduced slightly - still context-dependent
-      turnoverRate: 60      // Increased - protecting ball under pressure is key
+      sackPct: 20,          // Reduced - somewhat QB-dependent
+      turnoverRate: 80      // Increased - critical for efficiency, protecting the ball
     },
     volumeWeights: {
-      passYards: 20,        // Reduced - yards less meaningful in tough spots
-      passTDs: 25,          // Increased - TDs matter more than yards
-      rushYards: 30,        // Increased - rushing crucial when passing is tough
-      rushTDs: 20,          // Maintained - goal line rushing matters
-      totalAttempts: 5      // Reduced - attempts don't show context value
+      passYards: 20,        // Reduced - efficiency over raw yards
+      passTDs: 30,          // Maintained - TDs still matter for efficiency
+      rushYards: 10,        // Reduced - rushing efficiency less important
+      rushTDs: 10,          // Reduced - passing efficiency more valuable
+      totalAttempts: 30     // Increased - attempts show efficiency at scale
+    }
+  },
+  
+  balancedAttack: {
+    team: 0, stats: 100, clutch: 0, durability: 0, support: 0,
+    description: "⚖️ Balanced Attack - Complete QB evaluation across all statistical categories",
+    statsWeights: {
+      efficiency: 40,        // Important but not dominant
+      protection: 30,       // Decision-making matters
+      volume: 30            // Production matters
+    },
+    efficiencyWeights: {
+      anyA: 45,             // Balanced - ANY/A is important but not dominant
+      tdPct: 35,            // Balanced - TD% matters for scoring
+      completionPct: 20     // Balanced - completion% has value
+    },
+    protectionWeights: {
+      sackPct: 40,          // Balanced - sack avoidance matters
+      turnoverRate: 60      // Balanced - ball security is crucial
+    },
+    volumeWeights: {
+      passYards: 30,        // Balanced - passing yards show production
+      passTDs: 35,          // Balanced - TDs are ultimate success measure
+      rushYards: 15,        // Balanced - rushing adds value
+      rushTDs: 15,          // Balanced - rushing TDs matter
+      totalAttempts: 5      // Reduced - attempts don't measure quality
     }
   }
 };

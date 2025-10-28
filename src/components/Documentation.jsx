@@ -50,34 +50,34 @@ const Documentation = memo(() => {
         </div>
 
         {/* Navigation */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 mb-8">
+        <div className="bg-glass-medium backdrop-blur-xl rounded-xl p-6 mb-8 border border-glass-border">
           <h2 className="text-2xl font-bold text-white mb-4">📋 Documentation Sections</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <a href="#statistical-methodology" className="bg-white/5 hover:bg-white/10 p-4 rounded-lg transition-colors">
+            <a href="#statistical-methodology" className="bg-glass-light hover:bg-glass-medium p-4 rounded-lg transition-all duration-300 border border-glass-border">
               <h3 className="text-lg font-bold text-cyan-300 mb-2">📈 Statistical Methodology</h3>
               <p className="text-sm text-blue-200">Z-scores, standard deviation, and percentile-based scoring</p>
             </a>
-            <a href="#quarterback-scoring" className="bg-white/5 hover:bg-white/10 p-4 rounded-lg transition-colors">
+            <a href="#quarterback-scoring" className="bg-glass-light hover:bg-glass-medium p-4 rounded-lg transition-all duration-300 border border-glass-border">
               <h3 className="text-lg font-bold text-green-300 mb-2">📊 Overall System</h3>
               <p className="text-sm text-blue-200">Complete QB evaluation methodology and QEI calculation</p>
             </a>
-            <a href="#statistical-performance" className="bg-white/5 hover:bg-white/10 p-4 rounded-lg transition-colors">
+            <a href="#statistical-performance" className="bg-glass-light hover:bg-glass-medium p-4 rounded-lg transition-all duration-300 border border-glass-border">
               <h3 className="text-lg font-bold text-blue-300 mb-2">📉 Statistical Performance</h3>
               <p className="text-sm text-blue-200">Efficiency, volume, and risk management metrics</p>
             </a>
-            <a href="#team-scoring" className="bg-white/5 hover:bg-white/10 p-4 rounded-lg transition-colors">
+            <a href="#team-scoring" className="bg-glass-light hover:bg-glass-medium p-4 rounded-lg transition-all duration-300 border border-glass-border">
               <h3 className="text-lg font-bold text-yellow-300 mb-2">🏆 Team Success</h3>
               <p className="text-sm text-blue-200">Win percentage, playoff achievements, and availability</p>
             </a>
-            <a href="#supporting-cast" className="bg-white/5 hover:bg-white/10 p-4 rounded-lg transition-colors">
+            <a href="#supporting-cast" className="bg-glass-light hover:bg-glass-medium p-4 rounded-lg transition-all duration-300 border border-glass-border">
               <h3 className="text-lg font-bold text-purple-300 mb-2">🏟️ Supporting Cast</h3>
               <p className="text-sm text-blue-200">Context-aware evaluation of organizational support</p>
             </a>
-            <a href="#durability-scoring" className="bg-white/5 hover:bg-white/10 p-4 rounded-lg transition-colors">
+            <a href="#durability-scoring" className="bg-glass-light hover:bg-glass-medium p-4 rounded-lg transition-all duration-300 border border-glass-border">
               <h3 className="text-lg font-bold text-orange-300 mb-2">⚡ Durability</h3>
               <p className="text-sm text-blue-200">Availability and consistency (Work in Progress)</p>
             </a>
-            <a href="#clutch-scoring" className="bg-white/5 hover:bg-white/10 p-4 rounded-lg transition-colors">
+            <a href="#clutch-scoring" className="bg-glass-light hover:bg-glass-medium p-4 rounded-lg transition-all duration-300 border border-glass-border">
               <h3 className="text-lg font-bold text-red-300 mb-2">💎 Clutch Performance</h3>
               <p className="text-sm text-blue-200">Critical situations and late-game heroics (Work in Progress)</p>
             </a>
@@ -88,7 +88,7 @@ const Documentation = memo(() => {
         <div className="space-y-12">
           
           {/* Statistical Methodology */}
-          <section id="statistical-methodology" className="bg-white/10 backdrop-blur-lg rounded-xl p-6">
+          <section id="statistical-methodology" className="bg-glass-medium backdrop-blur-xl rounded-xl p-6 border border-glass-border">
             <h2 className="text-3xl font-bold text-cyan-300 mb-6 flex items-center">
               📈 Statistical Scoring Methodology
             </h2>
@@ -168,7 +168,7 @@ const Documentation = memo(() => {
           </section>
           
           {/* Quarterback Scoring System */}
-          <section id="quarterback-scoring" className="bg-white/10 backdrop-blur-lg rounded-xl p-6">
+          <section id="quarterback-scoring" className="bg-glass-medium backdrop-blur-xl rounded-xl p-6 border border-glass-border">
             <h2 className="text-3xl font-bold text-green-300 mb-6 flex items-center">
               📊 Quarterback Excellence Index (QEI) System
             </h2>
@@ -242,7 +242,7 @@ const Documentation = memo(() => {
           </section>
 
           {/* Statistical Performance */}
-          <section id="statistical-performance" className="bg-white/10 backdrop-blur-lg rounded-xl p-6">
+          <section id="statistical-performance" className="bg-glass-medium backdrop-blur-xl rounded-xl p-6 border border-glass-border">
             <h2 className="text-3xl font-bold text-blue-300 mb-6 flex items-center">
               📉 Statistical Performance Analysis
             </h2>
@@ -306,7 +306,7 @@ const Documentation = memo(() => {
           </section>
 
           {/* Team Scoring System */}
-          <section id="team-scoring" className="bg-white/10 backdrop-blur-lg rounded-xl p-6">
+          <section id="team-scoring" className="bg-glass-medium backdrop-blur-xl rounded-xl p-6 border border-glass-border">
             <h2 className="text-3xl font-bold text-yellow-300 mb-6 flex items-center">
               🏆 Team Success Scoring
             </h2>
@@ -382,7 +382,7 @@ const Documentation = memo(() => {
           </section>
 
           {/* Supporting Cast */}
-          <section id="supporting-cast" className="bg-white/10 backdrop-blur-lg rounded-xl p-6">
+          <section id="supporting-cast" className="bg-glass-medium backdrop-blur-xl rounded-xl p-6 border border-glass-border">
             <h2 className="text-3xl font-bold text-purple-300 mb-6 flex items-center">
               🏟️ Supporting Cast Quality Assessment
             </h2>
@@ -456,7 +456,7 @@ const Documentation = memo(() => {
           </section>
 
           {/* Durability */}
-          <section id="durability-scoring" className="bg-white/10 backdrop-blur-lg rounded-xl p-6">
+          <section id="durability-scoring" className="bg-glass-medium backdrop-blur-xl rounded-xl p-6 border border-glass-border">
             <h2 className="text-3xl font-bold text-orange-300 mb-6 flex items-center">
               ⚡ Durability & Availability
             </h2>
@@ -543,7 +543,7 @@ const Documentation = memo(() => {
           </section>
 
           {/* Clutch Performance */}
-          <section id="clutch-scoring" className="bg-white/10 backdrop-blur-lg rounded-xl p-6">
+          <section id="clutch-scoring" className="bg-glass-medium backdrop-blur-xl rounded-xl p-6 border border-glass-border">
             <h2 className="text-3xl font-bold text-red-300 mb-6 flex items-center">
               💎 Clutch Performance Under Pressure
             </h2>
@@ -653,7 +653,7 @@ const Documentation = memo(() => {
         </div>
 
         {/* Footer */}
-        <div className="text-center mt-12 py-8 border-t border-white/10">
+        <div className="text-center mt-12 py-8 border-t border-glass-border">
           <Link
             to="/"
             className="bg-blue-500/20 hover:bg-blue-500/30 px-6 py-3 rounded-lg text-blue-200 hover:text-white transition-colors font-medium"
@@ -695,7 +695,7 @@ const Documentation = memo(() => {
             
             <div className="p-6 space-y-6">
               {/* Z-Score Formula */}
-              <div className="bg-white/10 p-4 rounded-lg">
+              <div className="bg-glass-light p-4 rounded-lg border border-glass-border">
                 <h3 className="text-xl font-bold text-cyan-300 mb-3">Z-Score Formula</h3>
                 <div className="bg-black/30 p-4 rounded font-mono text-cyan-200 text-center text-lg mb-3">
                   z = (X - μ) / σ
@@ -712,7 +712,7 @@ const Documentation = memo(() => {
               </div>
 
               {/* Standard Deviation Calculation */}
-              <div className="bg-white/10 p-4 rounded-lg">
+              <div className="bg-glass-light p-4 rounded-lg border border-glass-border">
                 <h3 className="text-xl font-bold text-cyan-300 mb-3">Standard Deviation Calculation</h3>
                 <div className="bg-black/30 p-4 rounded font-mono text-cyan-200 text-sm mb-3">
                   <div className="text-center mb-2">σ = √(Σ(Xi - μ)² / N)</div>
@@ -725,7 +725,7 @@ const Documentation = memo(() => {
               </div>
 
               {/* Percentile Conversion */}
-              <div className="bg-white/10 p-4 rounded-lg">
+              <div className="bg-glass-light p-4 rounded-lg border border-glass-border">
                 <h3 className="text-xl font-bold text-cyan-300 mb-3">Percentile Conversion (CDF)</h3>
                 <div className="bg-black/30 p-4 rounded font-mono text-cyan-200 text-sm mb-3">
                   <div className="text-center">Percentile = 50 × (1 + erf(z / √2))</div>
@@ -763,7 +763,7 @@ const Documentation = memo(() => {
               </div>
 
               {/* Outlier Capping */}
-              <div className="bg-white/10 p-4 rounded-lg">
+              <div className="bg-glass-light p-4 rounded-lg border border-glass-border">
                 <h3 className="text-xl font-bold text-cyan-300 mb-3">Outlier Protection (±3σ Cap)</h3>
                 <p className="text-sm text-blue-200 mb-3">
                   We cap z-scores at ±3 standard deviations to prevent extreme outliers from distorting the rankings. 
@@ -779,7 +779,7 @@ const Documentation = memo(() => {
               </div>
 
               {/* Hierarchical Z-Score Process */}
-              <div className="bg-white/10 p-4 rounded-lg">
+              <div className="bg-glass-light p-4 rounded-lg border border-glass-border">
                 <h3 className="text-xl font-bold text-cyan-300 mb-3">Hierarchical Z-Score Process</h3>
                 <p className="text-sm text-blue-200 mb-3">
                   The system uses a <strong>three-stage hierarchical approach</strong>: Category scoring, z-score conversion, 
@@ -811,7 +811,7 @@ const Documentation = memo(() => {
               </div>
 
               {/* Example Calculation */}
-              <div className="bg-white/10 p-4 rounded-lg">
+              <div className="bg-glass-light p-4 rounded-lg border border-glass-border">
                 <h3 className="text-xl font-bold text-cyan-300 mb-3">Example Calculation</h3>
                 <div className="space-y-3 text-sm text-blue-200">
                   <div className="bg-black/30 p-3 rounded">

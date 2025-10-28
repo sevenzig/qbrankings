@@ -393,7 +393,8 @@ export const calculateTeamScore = (
   includePlayoffs = false, // Force disable playoffs globally
   filterYear = null, // CHANGED: from include2024Only boolean to filterYear number
   supportScore = 50, // Default to average support if not provided
-  allQBData = [] // Population data for z-score calculations
+  allQBData = [], // Population data for z-score calculations
+  teamSeasonRecordsBySeason = null // Optional map: { [season]: { [TEAM]: { totalWins, totalLosses, totalTies, totalGames, winPct } } }
 ) => {
   // Debug logging for when playoffs are disabled
   const debugMode = !includePlayoffs;
@@ -431,10 +432,30 @@ export const calculateTeamScore = (
     const weight = regularSeasonYearWeights[year] || 0;
     if (weight === 0 || !data.QBrec) return;
     
-    // Parse regular season QB record (format: "14-3-0")
-    const [wins, losses, ties = 0] = data.QBrec.split('-').map(Number);
-    const totalGames = wins + losses + ties;
-    const regularSeasonWinPct = calculateReliabilityAdjustedWinPct(wins, totalGames);
+    // Determine win/loss/tie using team aggregate if provided
+    let wins, losses, ties, totalGames, regularSeasonWinPct;
+    const team = data.Team || data.team;
+
+    const teamMapForYear = teamSeasonRecordsBySeason && teamSeasonRecordsBySeason[parseInt(year)];
+    const teamAggregate = teamMapForYear && teamMapForYear[(team || '').toUpperCase()];
+
+    if (teamAggregate && teamAggregate.totalGames > 0) {
+      wins = teamAggregate.totalWins || 0;
+      losses = teamAggregate.totalLosses || 0;
+      ties = teamAggregate.totalTies || 0;
+      totalGames = teamAggregate.totalGames;
+      regularSeasonWinPct = (typeof teamAggregate.winPct === 'number')
+        ? teamAggregate.winPct
+        : calculateReliabilityAdjustedWinPct(wins, totalGames);
+    } else {
+      // Fallback to QB-level record (format: "14-3-0")
+      const [w, l, t = 0] = (data.QBrec || '0-0-0').split('-').map(Number);
+      wins = w || 0;
+      losses = l || 0;
+      ties = t || 0;
+      totalGames = wins + losses + ties;
+      regularSeasonWinPct = calculateReliabilityAdjustedWinPct(wins, totalGames);
+    }
     
     // MINIMUM GAMES THRESHOLD: For single-year mode, require at least 2 starts (1 for 2025 and pre-1967); for multi-year, require 10 starts
     const gamesStarted = parseInt(data.GS) || 0;
@@ -453,8 +474,7 @@ export const calculateTeamScore = (
       return;
     }
     
-    // Get team for this season
-    const team = data.Team || data.team;
+    // team already determined above
     const teamsPlayed = data.teamsPlayed || [];
     const gamesStartedPerTeam = data.gamesStartedPerTeam || [];
     

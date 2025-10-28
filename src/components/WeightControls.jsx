@@ -7,9 +7,9 @@ const CompactWeightComponent = memo(({ component, value, onChange, className, de
   const isDisabled = disabled || (!includePlayoffs && (component === 'playoff' || component === 'playoffBonus'));
   
   return (
-    <div className="bg-white/5 rounded-lg p-2">
-      <div className="flex justify-between items-center mb-1">
-        <label className="text-white font-medium text-xs">
+    <div className="bg-glass-light rounded-lg p-3 border border-glass-border">
+      <div className="flex justify-between items-center mb-2">
+        <label className="text-white font-medium text-sm">
           {component === 'offensiveLine' ? 'O-Line' :
            component === 'gameWinningDrives' ? 'GWD' :
            component === 'fourthQuarterComebacks' ? '4QC' :
@@ -32,11 +32,11 @@ const CompactWeightComponent = memo(({ component, value, onChange, className, de
            component === 'playoff' ? 'Playoffs' :
            component}
         </label>
-        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${className}`}>
+        <span className={`px-2 py-1 rounded-md text-sm font-semibold tabular-nums ${className}`}>
           {value}%
         </span>
       </div>
-      <div className="flex gap-1 items-center">
+      <div className="flex gap-2 items-center">
         <input
           type="range"
           min={min}
@@ -44,11 +44,16 @@ const CompactWeightComponent = memo(({ component, value, onChange, className, de
           value={value}
           onChange={(e) => onChange(component, e.target.value)}
           disabled={isDisabled}
-          className={`flex-1 h-2 rounded-lg ${
+          className={`flex-1 h-2 rounded-lg transition-all duration-300 ${
             isDisabled 
-              ? 'bg-gray-400 cursor-not-allowed opacity-50' 
-              : 'bg-gray-200 cursor-pointer'
+              ? 'bg-slate-600 cursor-not-allowed opacity-50' 
+              : 'bg-glass-medium cursor-pointer hover:bg-glass-strong focus:shadow-glow-blue-sm'
           }`}
+          style={{
+            background: isDisabled 
+              ? 'linear-gradient(to right, #475569 0%, #475569 100%)' 
+              : `linear-gradient(to right, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.3) ${value}%, rgba(255, 255, 255, 0.1) ${value}%, rgba(255, 255, 255, 0.1) 100%)`
+          }}
         />
         <input
           type="number"
@@ -57,20 +62,20 @@ const CompactWeightComponent = memo(({ component, value, onChange, className, de
           value={value}
           onChange={(e) => onChange(component, e.target.value)}
           disabled={isDisabled}
-          className={`w-12 px-1 py-0.5 border border-white/20 rounded text-xs text-center ${
+          className={`w-14 px-2 py-1 border border-glass-border rounded-md text-sm text-center font-mono tabular-nums transition-all duration-300 ${
             isDisabled 
-              ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
-              : 'bg-white/10 text-white'
+              ? 'bg-slate-600/20 text-slate-400 cursor-not-allowed' 
+              : 'bg-glass-medium text-white hover:bg-glass-strong focus:shadow-glow-blue-sm'
           }`}
         />
       </div>
       {description && (
-        <div className="text-xs text-blue-200 mt-1 opacity-75">
+        <div className="text-xs text-slate-300 mt-2 opacity-75 font-light">
           {description}
         </div>
       )}
       {!includePlayoffs && (component === 'playoff' || component === 'playoffBonus') && (
-        <div className="text-xs text-orange-300 mt-1 text-center">
+        <div className="text-xs text-amber-300 mt-2 text-center font-medium">
           ⚠️ Disabled (Playoffs off)
         </div>
       )}
@@ -114,7 +119,7 @@ const WeightControls = memo(({
   yearMode = '2025'
 }) => {
   const include2024Only = yearMode === '2024' || yearMode === '2025';
-  const is2025Mode = yearMode === '2025';
+  const is2025Mode = yearMode === '2025' || yearMode === 2025;
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
 
   const weightDescriptions = {
@@ -130,14 +135,14 @@ const WeightControls = memo(({
       {/* Main Weight Sliders - Different layouts for mobile vs desktop */}
       
       {/* Mobile Layout: Compact stacked with inline sub-components */}
-      <div className="md:hidden space-y-2">
+      <div className="md:hidden space-y-3">
         {Object.entries(weights).map(([category, value]) => (
           <div key={category} className="w-full">
             {/* Compact top-level component */}
-            <div className="bg-white/10 rounded-lg p-2 border border-white/20">
-              <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-2">
-                  <label className="text-white font-medium text-sm">
+            <div className="bg-glass-medium rounded-lg p-4 border border-glass-border backdrop-blur-lg">
+              <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center gap-3">
+                  <label className="text-white font-semibold text-base">
                     {category === 'team' ? '🏆 Team' :
                      category === 'stats' ? '📊 Stats' :
                      category === 'clutch' ? '💎 Clutch' :
@@ -152,17 +157,17 @@ const WeightControls = memo(({
                       if (category === 'durability') onShowDetails.durability();
                       if (category === 'support') onShowDetails.support();
                     }}
-                    className="flex items-center justify-center w-6 h-6 text-sm text-blue-300 hover:text-blue-100 transition-colors bg-white/10 hover:bg-white/20 rounded"
+                    className="flex items-center justify-center w-7 h-7 text-sm text-accent-300 hover:text-white transition-all duration-300 bg-glass-light hover:bg-glass-strong rounded-lg hover:shadow-glow-blue-sm"
                     disabled={category === 'clutch'}
                   >
                     {showDetails[category] ? '▼' : '▶'}
                   </button>
                 </div>
-                <span className="bg-blue-500/30 text-blue-100 px-2 py-1 rounded text-sm font-medium">
+                <span className="bg-accent-500/30 text-white px-3 py-1.5 rounded-lg text-sm font-semibold tabular-nums">
                   {value}%
                 </span>
               </div>
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-3 items-center">
                 <input
                   type="range"
                   min="0"
@@ -170,11 +175,16 @@ const WeightControls = memo(({
                   value={value}
                   onChange={(e) => onUpdateWeight(category, e.target.value)}
                   disabled={category === 'clutch' || (is2025Mode && (category === 'support' || category === 'durability'))}
-                  className={`flex-1 h-2 rounded-lg cursor-pointer ${
+                  className={`flex-1 h-3 rounded-lg cursor-pointer transition-all duration-300 ${
                     (category === 'clutch' || (is2025Mode && (category === 'support' || category === 'durability')))
-                      ? 'bg-gray-400 cursor-not-allowed opacity-50' 
-                      : 'bg-gray-200'
+                      ? 'bg-slate-600 cursor-not-allowed opacity-50' 
+                      : 'bg-glass-medium hover:bg-glass-strong focus:shadow-glow-blue-sm'
                   }`}
+                  style={{
+                    background: (category === 'clutch' || (is2025Mode && (category === 'support' || category === 'durability')))
+                      ? 'linear-gradient(to right, #475569 0%, #475569 100%)'
+                      : `linear-gradient(to right, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.3) ${value}%, rgba(255, 255, 255, 0.1) ${value}%, rgba(255, 255, 255, 0.1) 100%)`
+                  }}
                 />
                 <input
                   type="number"
@@ -183,25 +193,25 @@ const WeightControls = memo(({
                   value={value}
                   onChange={(e) => onUpdateWeight(category, e.target.value)}
                   disabled={category === 'clutch' || (is2025Mode && (category === 'support' || category === 'durability'))}
-                  className={`w-12 px-1 py-1 border border-white/20 rounded text-sm text-center ${
+                  className={`w-16 px-3 py-2 border border-glass-border rounded-lg text-sm text-center font-mono tabular-nums transition-all duration-300 ${
                     (category === 'clutch' || (is2025Mode && (category === 'support' || category === 'durability')))
-                      ? 'bg-gray-400/20 text-gray-400 cursor-not-allowed' 
-                      : 'bg-white/10 text-white'
+                      ? 'bg-slate-600/20 text-slate-400 cursor-not-allowed' 
+                      : 'bg-glass-medium text-white hover:bg-glass-strong focus:shadow-glow-blue-sm'
                   }`}
                 />
               </div>
               {category === 'clutch' && (
-                <div className="text-xs text-gray-400 mt-1 text-center">
+                <div className="text-sm text-slate-400 mt-3 text-center font-light">
                   Situational performance in clutch moments
                 </div>
               )}
               {is2025Mode && category === 'support' && (
-                <div className="text-xs text-orange-300 mt-1 text-center">
+                <div className="text-sm text-amber-300 mt-3 text-center font-medium">
                   ⚠️ Disabled (No DVOA data for 2025)
                 </div>
               )}
               {is2025Mode && category === 'durability' && (
-                <div className="text-xs text-orange-300 mt-1 text-center">
+                <div className="text-sm text-amber-300 mt-3 text-center font-medium">
                   ⚠️ Disabled (Single season mode)
                 </div>
               )}
@@ -209,27 +219,27 @@ const WeightControls = memo(({
 
             {/* Mobile sub-components - directly under each slider */}
             {category === 'support' && showDetails.support && (
-              <div className="mt-3 bg-white/5 rounded-lg p-3 border border-purple-500/30" onClick={(e) => e.stopPropagation()}>
-                <h5 className="text-purple-200 font-medium mb-2 text-sm">🏟️ Support Components</h5>
-                <div className="space-y-2">
+              <div className="mt-4 bg-glass-light rounded-lg p-4 border border-accent-400/30 backdrop-blur-lg" onClick={(e) => e.stopPropagation()}>
+                <h5 className="text-accent-200 font-semibold mb-3 text-base">🏟️ Support Components</h5>
+                <div className="space-y-3">
                   {Object.entries(supportWeights).map(([component, value]) => (
                     <CompactWeightComponent
                       key={component}
                       component={component}
                       value={value}
                       onChange={onUpdateSupportWeight}
-                      className="bg-purple-500/30 text-purple-100"
+                      className="bg-accent-500/30 text-white"
                       includePlayoffs={includePlayoffs}
                     />
                   ))}
-                  <div className="text-center pt-1">
-                    <span className={`text-xs ${Object.values(supportWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
+                  <div className="text-center pt-2">
+                    <span className={`text-sm font-medium ${Object.values(supportWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-emerald-400' : 'text-accent-400'}`}>
                       Total: {Object.values(supportWeights).reduce((sum, val) => sum + val, 0)}%
                     </span>
                     {Object.values(supportWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
                       <button
                         onClick={onNormalizeSupportWeights}
-                        className="ml-2 bg-purple-500/20 hover:bg-purple-500/30 px-3 py-2 rounded text-purple-200 text-sm font-medium"
+                        className="ml-3 bg-accent-500/20 hover:bg-accent-500/30 px-4 py-2 rounded-lg text-accent-200 text-sm font-medium transition-all duration-300 hover:shadow-glow-blue-sm"
                         title="Normalize"
                       >
                         ⚖️ Normalize
@@ -241,28 +251,28 @@ const WeightControls = memo(({
             )}
 
             {category === 'team' && showDetails.team && (
-              <div className="mt-3 bg-white/5 rounded-lg p-3 border border-yellow-500/30" onClick={(e) => e.stopPropagation()}>
-                <h5 className="text-yellow-200 font-medium mb-2 text-sm">🏆 Team Components</h5>
-                <div className="space-y-2">
+              <div className="mt-4 bg-glass-light rounded-lg p-4 border border-amber-400/30 backdrop-blur-lg" onClick={(e) => e.stopPropagation()}>
+                <h5 className="text-amber-200 font-semibold mb-3 text-base">🏆 Team Components</h5>
+                <div className="space-y-3">
                   {Object.entries(teamWeights).map(([component, value]) => (
                     <CompactWeightComponent
                       key={component}
                       component={component}
                       value={value}
                       onChange={onUpdateTeamWeight}
-                      className={`${((!includePlayoffs && component === 'playoff') || component === 'offenseDVOA') ? 'bg-gray-500/30 text-gray-400' : 'bg-yellow-500/30 text-yellow-100'}`}
+                      className={`${((!includePlayoffs && component === 'playoff') || component === 'offenseDVOA') ? 'bg-slate-500/30 text-slate-400' : 'bg-amber-500/30 text-amber-100'}`}
                       disabled={(!includePlayoffs && component === 'playoff') || component === 'offenseDVOA'}
                       includePlayoffs={includePlayoffs}
                     />
                   ))}
-                  <div className="text-center pt-1">
-                    <span className={`text-xs ${Object.values(teamWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-green-400' : 'text-blue-400'}`}>
+                  <div className="text-center pt-2">
+                    <span className={`text-sm font-medium ${Object.values(teamWeights).reduce((sum, val) => sum + val, 0) === 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
                       Total: {Object.values(teamWeights).reduce((sum, val) => sum + val, 0)}%
                     </span>
                     {Object.values(teamWeights).reduce((sum, val) => sum + val, 0) !== 100 && (
                       <button
                         onClick={onNormalizeTeamWeights}
-                        className="ml-2 bg-yellow-500/20 hover:bg-yellow-500/30 px-3 py-2 rounded text-yellow-200 text-sm font-medium"
+                        className="ml-3 bg-amber-500/20 hover:bg-amber-500/30 px-4 py-2 rounded-lg text-amber-200 text-sm font-medium transition-all duration-300 hover:shadow-glow-blue-sm"
                         title="Normalize"
                       >
                         ⚖️ Normalize
@@ -274,11 +284,11 @@ const WeightControls = memo(({
             )}
 
             {category === 'clutch' && showDetails.clutch && (
-              <div className="mt-3 bg-gray-500/10 rounded-lg p-3 border border-gray-500/30" onClick={(e) => e.stopPropagation()}>
-                <h5 className="text-gray-400 font-medium mb-2 text-sm">💎 Clutch Components</h5>
-                <div className="text-gray-300 text-sm space-y-2">
-                  <div className="font-medium text-white mb-2">Clutch Performance Categories:</div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+              <div className="mt-4 bg-glass-light rounded-lg p-4 border border-slate-400/30 backdrop-blur-lg" onClick={(e) => e.stopPropagation()}>
+                <h5 className="text-slate-300 font-semibold mb-3 text-base">💎 Clutch Components</h5>
+                <div className="text-slate-300 text-sm space-y-3">
+                  <div className="font-semibold text-white mb-3">Clutch Performance Categories:</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm font-light">
                     <div>• 3rd Down Success</div>
                     <div>• 4th Down Success</div>
                     <div>• Red Zone Performance</div>
@@ -287,7 +297,7 @@ const WeightControls = memo(({
                     <div>• November Performance</div>
                     <div>• December/January Performance</div>
                   </div>
-                  <div className="text-gray-400 text-xs mt-2">
+                  <div className="text-slate-400 text-sm mt-3 font-light">
                     Metrics: ANY/A, TD rate, sack rate, turnover rate
                   </div>
                 </div>
@@ -295,13 +305,13 @@ const WeightControls = memo(({
             )}
 
             {category === 'stats' && showDetails.stats && (
-              <div className="mt-3 bg-white/5 rounded-lg p-2 border border-green-500/30" onClick={(e) => e.stopPropagation()}>
+              <div className="mt-3 bg-slate-900/70 rounded-lg p-3 border border-green-500/30" onClick={(e) => e.stopPropagation()}>
                 <h5 className="text-green-200 font-medium mb-2 text-sm">📊 Stats Components</h5>
                 <div className="space-y-1">
                   {Object.entries(statsWeights).map(([component, value]) => (
                     <div key={component} className="space-y-1">
                       {/* Compact main component with expand button */}
-                      <div className="bg-white/5 rounded p-1.5">
+                      <div className="bg-slate-800/60 rounded p-1.5">
                         <div className="flex justify-between items-center mb-1">
                           <div className="flex items-center gap-2">
                             <label className="text-white font-medium text-xs">
@@ -315,7 +325,7 @@ const WeightControls = memo(({
                                 if (component === 'protection') onShowDetails.protection();
                                 if (component === 'volume') onShowDetails.volume();
                               }}
-                              className="flex items-center justify-center w-6 h-6 text-sm text-green-300 hover:text-green-100 transition-colors bg-white/10 hover:bg-white/20 rounded"
+                              className="flex items-center justify-center w-6 h-6 text-sm text-green-300 hover:text-green-100 transition-all duration-300 bg-slate-700/50 hover:bg-slate-700/70 rounded"
                             >
                               {(component === 'efficiency' && showDetails.efficiency) ||
                                (component === 'protection' && showDetails.protection) ||
@@ -341,14 +351,14 @@ const WeightControls = memo(({
                             max="100"
                             value={value}
                             onChange={(e) => onUpdateStatsWeight(component, e.target.value)}
-                            className="w-10 px-1 py-0.5 border border-white/20 rounded text-xs text-center bg-white/10 text-white"
+                            className="w-10 px-1 py-0.5 border border-glass-border rounded text-xs text-center bg-slate-800/70 text-white"
                           />
                         </div>
                       </div>
                       
                       {/* Efficiency sub-components */}
                       {component === 'efficiency' && showDetails.efficiency && (
-                        <div className="ml-2 bg-white/3 rounded p-1.5 border border-green-400/20">
+                        <div className="ml-2 bg-slate-800/50 rounded p-1.5 border border-green-400/20">
                           <h6 className="text-green-300 font-medium mb-1 text-xs">📈 Efficiency Details</h6>
                           <div className="space-y-1">
                             {Object.entries(efficiencyWeights).map(([subComponent, subValue]) => (
@@ -367,7 +377,7 @@ const WeightControls = memo(({
                       
                       {/* Protection sub-components */}
                       {component === 'protection' && showDetails.protection && (
-                        <div className="ml-2 bg-white/3 rounded p-1.5 border border-green-400/20">
+                        <div className="ml-2 bg-slate-800/50 rounded p-1.5 border border-green-400/20">
                           <h6 className="text-green-300 font-medium mb-1 text-xs">🛡️ Protection Details</h6>
                           <div className="space-y-1">
                             {Object.entries(protectionWeights).map(([subComponent, subValue]) => (
@@ -386,7 +396,7 @@ const WeightControls = memo(({
                       
                       {/* Volume sub-components */}
                       {component === 'volume' && showDetails.volume && (
-                        <div className="ml-2 bg-white/3 rounded p-1.5 border border-green-400/20">
+                        <div className="ml-2 bg-slate-800/50 rounded p-1.5 border border-green-400/20">
                           <h6 className="text-green-300 font-medium mb-1 text-xs">📊 Volume Details</h6>
                           <div className="space-y-1">
                             {Object.entries(volumeWeights).map(([subComponent, subValue]) => (

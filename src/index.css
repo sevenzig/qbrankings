@@ -1,41 +1,69 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* CSS Custom Properties for Glassmorphic Design */
+:root {
+  --glass-light: rgba(255, 255, 255, 0.05);
+  --glass-medium: rgba(255, 255, 255, 0.08);
+  --glass-strong: rgba(255, 255, 255, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --surface-base: rgba(15, 23, 42, 1);
+  --surface-elevated: rgba(30, 41, 59, 0.8);
+  --accent-glow: rgba(59, 130, 246, 0.3);
+  --shadow-direction: -1px 1px 3px rgba(0, 0, 0, 0.1);
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-quick: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* Fix webkit text-size-adjust parsing error */
 html {
   -webkit-text-size-adjust: 100%;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'Noto Sans', sans-serif;
 }
 
-/* COMPREHENSIVE SCROLLBAR OVERRIDE - FORCES TRADITIONAL ALWAYS-VISIBLE SCROLLBARS */
+/* SOFTEN ALL TAILWIND BORDER UTILITIES GLOBALLY ON DARK BASE */
 @layer base {
-  /* Root-level scrollbar configuration - applies to html and body */
+  /* Override all border utilities to be whisper-thin */
+  .border, .border-t, .border-b, .border-l, .border-r,
+  .border-x, .border-y {
+    --tw-border-opacity: .06;
+    border-color: rgb(148 163 184 / var(--tw-border-opacity)) !important; /* slate-400 @ 6% */
+  }
+
+  /* Keep our named token equally subtle */
+  .border-glass-border {
+    --tw-border-opacity: .06;
+    border-color: rgb(148 163 184 / var(--tw-border-opacity)) !important;
+  }
+}
+
+/* REFINED SCROLLBAR STYLING - NEUTRAL PALETTE */
+@layer base {
+  /* Root-level scrollbar configuration */
   html, body {
-    /* Force traditional scrollbars that reserve space */
     scrollbar-width: auto;
-    scrollbar-color: #4b5563 #f3f4f6;
+    scrollbar-color: rgba(100, 116, 139, 0.6) rgba(30, 41, 59, 0.3);
     scrollbar-gutter: stable both-edges;
-    
-    /* Disable overlay scrollbars completely */
     -webkit-overflow-scrolling: auto;
     overflow: auto;
-    
-    /* Force scrollbars to always be visible */
     overflow-y: scroll;
     overflow-x: auto;
   }
 
-  /* Global scrollbar styling for ALL elements */
+  /* Global scrollbar styling */
   * {
     scrollbar-width: auto;
-    scrollbar-color: #4b5563 #f3f4f6;
+    scrollbar-color: rgba(100, 116, 139, 0.6) rgba(30, 41, 59, 0.3);
     scrollbar-gutter: stable both-edges;
   }
 
-  /* WEBKIT BROWSERS (Chrome, Safari, Edge) - COMPLETE OVERRIDE */
+  /* WEBKIT BROWSERS - SOFT NEUTRAL STYLING */
   ::-webkit-scrollbar {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     -webkit-appearance: none;
     appearance: none;
     display: block;
@@ -45,132 +73,52 @@ html {
   }
 
   ::-webkit-scrollbar-track {
-    background: #f3f4f6;
-    border-radius: 6px;
-    border: 1px solid #e5e7eb;
-    box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.1);
+    background: rgba(30, 41, 59, 0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(51, 65, 85, 0.1);
+    box-shadow: inset 0 0 1px rgba(0, 0, 0, 0.05);
     display: block;
     visibility: visible;
     opacity: 1;
-    margin: 2px;
+    margin: 1px;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #4b5563;
-    border-radius: 6px;
-    border: 1px solid #f3f4f6;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
-    min-height: 30px;
-    min-width: 12px;
+    background: rgba(100, 116, 139, 0.4);
+    border-radius: 8px;
+    border: 1px solid rgba(51, 65, 85, 0.2);
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.1);
+    min-height: 20px;
+    min-width: 10px;
     display: block;
     visibility: visible;
     opacity: 1;
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
+    transition: var(--transition-quick);
   }
 
   ::-webkit-scrollbar-corner {
-    background: #f3f4f6;
-    border-radius: 6px;
-    border: 1px solid #e5e7eb;
+    background: rgba(30, 41, 59, 0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(51, 65, 85, 0.1);
     display: block;
     visibility: visible;
     opacity: 1;
   }
 
-  /* HORIZONTAL SCROLLBAR SPECIFIC STYLING */
-  ::-webkit-scrollbar:horizontal {
-    height: 12px;
-    width: auto;
-    display: block;
-    visibility: visible;
-    opacity: 1;
-  }
-
-  ::-webkit-scrollbar:vertical {
-    width: 12px;
-    height: auto;
-    display: block;
-    visibility: visible;
-    opacity: 1;
-  }
-
-  /* HORIZONTAL SCROLLBAR TRACK AND THUMB */
-  ::-webkit-scrollbar-track:horizontal {
-    background: #f3f4f6;
-    border-radius: 6px;
-    border: 1px solid #e5e7eb;
-    box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.1);
-    display: block;
-    visibility: visible;
-    opacity: 1;
-    margin: 2px;
-  }
-
-  ::-webkit-scrollbar-thumb:horizontal {
-    background: #4b5563;
-    border-radius: 6px;
-    border: 1px solid #f3f4f6;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
-    min-width: 30px;
-    min-height: 12px;
-    display: block;
-    visibility: visible;
-    opacity: 1;
-    width: auto;
-    height: 12px;
-  }
-
-  /* VERTICAL SCROLLBAR TRACK AND THUMB */
-  ::-webkit-scrollbar-track:vertical {
-    background: #f3f4f6;
-    border-radius: 6px;
-    border: 1px solid #e5e7eb;
-    box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.1);
-    display: block;
-    visibility: visible;
-    opacity: 1;
-    margin: 2px;
-  }
-
-  ::-webkit-scrollbar-thumb:vertical {
-    background: #4b5563;
-    border-radius: 6px;
-    border: 1px solid #f3f4f6;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
-    min-height: 30px;
-    min-width: 12px;
-    display: block;
-    visibility: visible;
-    opacity: 1;
-    width: 12px;
-    height: auto;
-  }
-
-  /* HOVER STATES - MAINTAIN VISIBILITY */
+  /* HOVER STATES - SOFT GLOW */
   ::-webkit-scrollbar-thumb:hover {
-    background: #374151;
-    width: 12px;
-    height: 12px;
-    min-width: 12px;
-    min-height: 12px;
-    display: block;
-    visibility: visible;
-    opacity: 1;
+    background: rgba(100, 116, 139, 0.6);
+    box-shadow: 0 0 4px rgba(59, 130, 246, 0.2);
   }
 
   ::-webkit-scrollbar-thumb:active {
-    background: #1f2937;
-    width: 12px;
-    height: 12px;
-    min-width: 12px;
-    min-height: 12px;
-    display: block;
-    visibility: visible;
-    opacity: 1;
+    background: rgba(100, 116, 139, 0.8);
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.3);
   }
 
-  /* FORCE OVERFLOW CLASSES TO USE TRADITIONAL SCROLLBARS */
+  /* OVERFLOW CLASSES */
   .overflow-auto,
   .overflow-x-auto,
   .overflow-y-auto,
@@ -178,69 +126,39 @@ html {
   .overflow-x-scroll,
   .overflow-y-scroll {
     scrollbar-width: auto;
-    scrollbar-color: #4b5563 #f3f4f6;
+    scrollbar-color: rgba(100, 116, 139, 0.6) rgba(30, 41, 59, 0.3);
     scrollbar-gutter: stable both-edges;
     -webkit-overflow-scrolling: auto;
   }
 
-  /* SPECIFIC OVERFLOW CLASS STYLING */
   .overflow-x-auto,
   .overflow-x-scroll {
     overflow-x: scroll;
-    padding-bottom: 12px;
-    margin-bottom: -12px;
+    padding-bottom: 10px;
+    margin-bottom: -10px;
     scrollbar-gutter: stable both-edges;
   }
 
   .overflow-y-auto,
   .overflow-y-scroll {
     overflow-y: scroll;
-    padding-right: 12px;
-    margin-right: -12px;
+    padding-right: 10px;
+    margin-right: -10px;
     scrollbar-gutter: stable both-edges;
   }
 
-  /* CUSTOM SCROLLBAR CLASS FOR SPECIFIC ELEMENTS */
   .custom-scrollbar {
     scrollbar-width: auto;
-    scrollbar-color: #4b5563 #f3f4f6;
+    scrollbar-color: rgba(100, 116, 139, 0.6) rgba(30, 41, 59, 0.3);
     scrollbar-gutter: stable both-edges;
     -webkit-overflow-scrolling: auto;
     overflow: scroll;
-  }
-
-  /* FIREFOX SPECIFIC STYLING */
-  @supports (scrollbar-color: red blue) {
-    * {
-      scrollbar-width: auto;
-      scrollbar-color: #4b5563 #f3f4f6;
-    }
-  }
-
-  /* SAFARI SPECIFIC OVERRIDES */
-  @supports (-webkit-appearance: none) {
-    html, body {
-      -webkit-overflow-scrolling: auto;
-    }
-    
-    * {
-      -webkit-overflow-scrolling: auto;
-    }
-  }
-
-  /* EDGE/CHROMIUM SPECIFIC OVERRIDES */
-  @supports (scrollbar-gutter: stable) {
-    html, body {
-      scrollbar-gutter: stable both-edges;
-    }
-    
-    * {
-      scrollbar-gutter: stable both-edges;
-    }
   }
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'Noto Sans', sans-serif;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+  min-height: 100vh;
 }
