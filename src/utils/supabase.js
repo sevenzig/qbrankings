@@ -205,6 +205,85 @@ export const qbDataService = {
   },
 
   /**
+   * Fetch QB data from all available years
+   * @returns {Promise<Array>} Array of QB data from all years
+   */
+  async fetchQBDataFromAllYears() {
+    try {
+      if (!supabase) {
+        console.warn('⚠️ Supabase not available - returning empty array');
+        return [];
+      }
+
+      console.log('🔄 Fetching QB data from all available years...');
+      
+      // Fetch passing stats from all years
+      const { data: passingData, error: passingError } = await supabase
+        .from('qb_passing_stats')
+        .select('*')
+        .eq('pos', 'QB')         // Only fetch QB position records
+        .not('gs', 'is', null)   // Only fetch records with games started data
+        .gte('gs', 1)            // Only QBs who actually started games
+        .order('season', { ascending: false })
+        .order('rate', { ascending: false });
+      
+      if (passingError) {
+        console.error('❌ Supabase query error:', passingError);
+        throw new Error(`Failed to fetch QB data: ${passingError.message}`);
+      }
+      
+      console.log(`📊 Raw Supabase data count: ${passingData?.length || 0}`);
+      
+      // Get unique years from the data
+      const uniqueYears = [...new Set(passingData?.map(r => r.season) || [])];
+      console.log(`📅 Available years: ${uniqueYears.join(', ')}`);
+      
+      // Fetch rushing stats from all years
+      const { data: rushingData, error: rushingError } = await supabase
+        .from('qb_splits')
+        .select('pfr_id, player_name, season, rush_att, rush_yds, rush_td, fmb, fl')
+        .eq('split', 'League')
+        .eq('value', 'NFL')
+        .order('season', { ascending: false });
+      
+      if (rushingError) {
+        console.warn('⚠️ Could not fetch rushing data:', rushingError);
+      }
+      
+      // Create a map of rushing data by pfr_id and season for quick lookup
+      const rushingMap = {};
+      if (rushingData) {
+        rushingData.forEach(rush => {
+          const key = `${rush.pfr_id}_${rush.season}`;
+          rushingMap[key] = rush;
+        });
+      }
+      
+      // Combine passing and rushing data
+      const combinedData = passingData?.map(passing => {
+        const rushKey = `${passing.pfr_id}_${passing.season}`;
+        const rushing = rushingMap[rushKey] || {};
+        
+        return {
+          ...passing,
+          rush_att: rushing.rush_att || 0,
+          rush_yds: rushing.rush_yds || 0,
+          rush_td: rushing.rush_td || 0,
+          fmb: rushing.fmb || 0,
+          fl: rushing.fl || 0
+        };
+      }) || [];
+      
+      console.log(`📊 Combined data count: ${combinedData.length}`);
+      return combinedData;
+      
+    } catch (error) {
+      console.error('❌ Error fetching QB data from all years:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Fetch QB data by specific year
    * @param {number} year - The year to fetch data for
    * @returns {Promise<Array>} Array of QB data for the specified year
@@ -237,54 +316,128 @@ export const qbDataService = {
         throw new Error(`Failed to fetch ${year} QB data: ${passingError.message}`);
       }
       
-      // Fetch rushing stats from qb_splits (League/NFL split contains all rushing data)
-      const { data: rushingData, error: rushingError } = await supabase
+      // Fetch rushing stats AND win/loss data from qb_splits (League/NFL split contains all data)
+      // IMPORTANT: qb_splits has CORRECT win/loss data, qb_passing_stats.qb_rec is often WRONG
+      const { data: splitsData, error: splitsError } = await supabase
         .from('qb_splits')
-        .select('pfr_id, player_name, season, rush_att, rush_yds, rush_td, fmb, fl')
+        .select('pfr_id, player_name, season, w, l, t, rush_att, rush_yds, rush_td, fmb, fl')
         .eq('season', year)
         .eq('split', 'League')
         .eq('value', 'NFL');
       
-      if (rushingError) {
-        console.warn('⚠️ Could not fetch rushing data:', rushingError);
+      if (splitsError) {
+        console.error('❌ Could not fetch splits data:', splitsError);
+      } else {
+        console.log(`📊 Fetched ${splitsData?.length || 0} records from qb_splits for ${year}`);
+        
+        // Debug: Show splits data for problematic players
+        if (year === 2017 && splitsData) {
+          const problematicPlayers = ['Russell Wilson', 'Kirk Cousins', 'Jared Goff'];
+          splitsData.forEach(record => {
+            if (problematicPlayers.includes(record.player_name)) {
+              console.log(`🔍 qb_splits data for ${record.player_name} ${year}:`, {
+                pfr_id: record.pfr_id,
+                w: record.w,
+                l: record.l,
+                t: record.t
+              });
+            }
+          });
+        }
       }
       
-      // Create a map of rushing data by pfr_id for quick lookup
-      const rushingMap = {};
-      if (rushingData) {
-        rushingData.forEach(record => {
-          rushingMap[record.pfr_id] = record;
+      // Create a map of splits data by pfr_id for quick lookup
+      const splitsMap = {};
+      if (splitsData) {
+        splitsData.forEach(record => {
+          splitsMap[record.pfr_id] = record;
         });
+        console.log(`📋 Created splits map with ${Object.keys(splitsMap).length} entries`);
       }
       
       // Transform and merge the data
       const transformedData = passingData.map(record => {
-        const rushingStats = rushingMap[record.pfr_id];
-        return {
-          ...record,
-          player_name: record.player_name,
-          team: record.team, // Use team directly from qb_passing_stats
-          team_name: record.team, // Use team code as team name for now
-          // Map field names to match expected format
-          passer_rating: record.rate,
-          games_started: record.gs,
-          completions: record.cmp,
-          attempts: record.att,
-          completion_pct: record.cmp_pct,
-          pass_yards: record.yds,
-          pass_tds: record.td,
-          interceptions: record.int,
-          sacks: record.sk,
-          sack_yards: record.sk_yds,
-          fourth_quarter_comebacks: record.four_qc,
-          game_winning_drives: record.gwd,
-          // Add rushing data from qb_splits
-          rush_att: rushingStats?.rush_att || 0,
-          rush_yds: rushingStats?.rush_yds || 0,
-          rush_td: rushingStats?.rush_td || 0,
-          fumbles: rushingStats?.fmb || 0,
-          fumbles_lost: rushingStats?.fl || 0
-        };
+        const splitsStats = splitsMap[record.pfr_id];
+        
+        // Debug logging for problematic players
+        if (year === 2017 && ['Russell Wilson', 'Kirk Cousins', 'Jared Goff'].includes(record.player_name)) {
+          console.log(`🔍 Processing ${record.player_name}:`, {
+            pfr_id: record.pfr_id,
+            db_qb_rec: record.qb_rec,
+            has_splits: !!splitsStats,
+            splits_w: splitsStats?.w,
+            splits_l: splitsStats?.l
+          });
+        }
+        
+        // Use wins/losses from qb_splits if available (more accurate), otherwise fall back to qb_rec parsing
+        let correctWins = 0, correctLosses = 0;
+        if (splitsStats && (splitsStats.w !== null || splitsStats.l !== null)) {
+          correctWins = splitsStats.w || 0;
+          correctLosses = splitsStats.l || 0;
+          // Reconstruct correct qb_rec from splits data
+          const correctQbRec = `${correctWins}-${correctLosses}-${splitsStats.t || 0}`;
+          
+          // Log correction if different from database value
+          if (record.qb_rec && record.qb_rec !== correctQbRec) {
+            console.warn(`🔧 CORRECTED ${record.player_name} ${year}: DB had "${record.qb_rec}", using splits "${correctQbRec}"`);
+          } else if (year === 2017 && ['Russell Wilson', 'Kirk Cousins', 'Jared Goff'].includes(record.player_name)) {
+            console.log(`✅ ${record.player_name} ${year}: Using splits "${correctQbRec}"`);
+          }
+          
+          return {
+            ...record,
+            player_name: record.player_name,
+            team: record.team,
+            team_name: record.team,
+            passer_rating: record.rate,
+            games_started: record.gs,
+            completions: record.cmp,
+            attempts: record.att,
+            completion_pct: record.cmp_pct,
+            pass_yards: record.yds,
+            pass_tds: record.td,
+            interceptions: record.int,
+            sacks: record.sk,
+            sack_yards: record.sk_yds,
+            fourth_quarter_comebacks: record.four_qc,
+            game_winning_drives: record.gwd,
+            // Use CORRECTED qb_rec from splits
+            qb_rec: correctQbRec,
+            // Add rushing data from qb_splits
+            rush_att: splitsStats?.rush_att || 0,
+            rush_yds: splitsStats?.rush_yds || 0,
+            rush_td: splitsStats?.rush_td || 0,
+            fumbles: splitsStats?.fmb || 0,
+            fumbles_lost: splitsStats?.fl || 0
+          };
+        } else {
+          // No splits data available, use original qb_rec
+          return {
+            ...record,
+            player_name: record.player_name,
+            team: record.team,
+            team_name: record.team,
+            passer_rating: record.rate,
+            games_started: record.gs,
+            completions: record.cmp,
+            attempts: record.att,
+            completion_pct: record.cmp_pct,
+            pass_yards: record.yds,
+            pass_tds: record.td,
+            interceptions: record.int,
+            sacks: record.sk,
+            sack_yards: record.sk_yds,
+            fourth_quarter_comebacks: record.four_qc,
+            game_winning_drives: record.gwd,
+            // Add rushing data from qb_splits
+            rush_att: splitsStats?.rush_att || 0,
+            rush_yds: splitsStats?.rush_yds || 0,
+            rush_td: splitsStats?.rush_td || 0,
+            fumbles: splitsStats?.fmb || 0,
+            fumbles_lost: splitsStats?.fl || 0
+          };
+        }
       });
       
       console.log(`✅ Successfully fetched ${transformedData.length} QB records for ${year} with rushing data`);

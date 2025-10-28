@@ -7,17 +7,26 @@ import TeamBreakdown from './TeamBreakdown.jsx';
 const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = false, yearMode, onYearModeChange }) => {
   // Extract all QBs with QEI scores for dynamic tier calculation
   const allQBsWithQEI = useMemo(() => rankedQBs, [rankedQBs]);
-  // Helper function to get all unique teams a QB played for
-  const getQBTeams = useCallback((qb) => {
+  // Helper function to get teams a QB played for in the selected season
+  const getQBTeams = useCallback((qb, yearMode) => {
     if (!qb.seasonData || qb.seasonData.length === 0) {
       return [{ team: qb.team, logo: qb.teamLogo }];
     }
     
-    // Get unique teams from season data
+    // Parse yearMode to numeric value
+    const targetYear = parseInt(yearMode);
+    
+    // Filter to only the selected year's seasons
+    const seasonsForYear = qb.seasonData.filter(season => season.year === targetYear);
+    
+    // If no data for the selected year, fall back to most recent season
+    const seasonsToProcess = seasonsForYear.length > 0 ? seasonsForYear : [qb.seasonData[0]];
+    
+    // Get unique teams from the filtered season data
     const uniqueTeams = [];
     const seenTeams = new Set();
     
-    qb.seasonData.forEach(season => {
+    seasonsToProcess.forEach(season => {
       // First check if this season has a teamsPlayed array (for multi-team seasons)
       if (season.teamsPlayed && season.teamsPlayed.length > 0) {
         season.teamsPlayed.forEach(team => {
@@ -142,7 +151,7 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center flex-wrap">
-                        {getQBTeams(qb).map((teamData, teamIndex) => (
+                        {getQBTeams(qb, yearMode).map((teamData, teamIndex) => (
                           <div key={teamData.team} className="flex items-center">
                             {teamData.logo && (
                               <img 
@@ -152,15 +161,15 @@ const QBRankingsTable = memo(({ rankedQBs, includePlayoffs, include2024Only = fa
                                 title={teamData.team}
                               />
                             )}
-                            {teamIndex < getQBTeams(qb).length - 1 && (
+                            {teamIndex < getQBTeams(qb, yearMode).length - 1 && (
                               <span className="text-white/50 mx-1">/</span>
                             )}
                           </div>
                         ))}
                         {/* Show multi-team indicator if player played for multiple teams */}
-                        {getQBTeams(qb).length > 1 && (
-                          <div className="ml-2 text-xs text-blue-300" title={`Played for ${getQBTeams(qb).length} teams`}>
-                            {getQBTeams(qb).length}TM
+                        {getQBTeams(qb, yearMode).length > 1 && (
+                          <div className="ml-2 text-xs text-blue-300" title={`Played for ${getQBTeams(qb, yearMode).length} teams`}>
+                            {getQBTeams(qb, yearMode).length}TM
                           </div>
                         )}
                       </div>

@@ -21,7 +21,8 @@ export const parseQBRecord = (qbRecord) => {
 export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQbs2024, playoffQbs2023, playoffQbs2022, qbs2025 = [], playoffQbs2025 = []) => {
   const playerData = {};
   
-  // Process each year of data
+  // Process each year of data - LEGACY CSV FUNCTION
+  // This function is deprecated and only used for CSV data processing
   const yearsData = [
     { year: 2025, data: qbs2025 },
     { year: 2024, data: qbs2024 },
@@ -322,6 +323,327 @@ export const combinePlayerDataAcrossYears = (qbs2024, qbs2023, qbs2022, playoffQ
   return playerData;
 };
 
+/**
+ * Process QB data from Supabase - supports any year dynamically
+ * @param {Array} rawData - Raw data from Supabase
+ * @param {number|null} filterYear - Year to filter by (null for all years)
+ * @returns {Array} Processed QB data
+ */
+export const processSupabaseQBData = (rawData, filterYear = null) => {
+  const modeLabel = filterYear ? `${filterYear}` : 'all-years';
+  console.log(`🔍 DEBUG processSupabaseQBData - Processing ${rawData.length} records in ${modeLabel} mode`);
+  
+  // STEP 1: Deduplicate records by pfr_id + season + team combination
+  // This prevents database duplicates from causing double-counting
+  const deduplicatedData = [];
+  const seenKeys = new Set();
+  const duplicateLog = {};
+  
+  rawData.forEach(record => {
+    const playerName = record.player_name || 'Unknown Player';
+    const seasonYear = parseInt(record.season) || 0;
+    const team = record.team || 'UNK';
+    const pfrId = record.pfr_id || '';
+    
+    // Create unique key: pfr_id + season + team
+    // IMPORTANT: Use lowercase pfr_id to handle case-insensitive duplicates (e.g., "goffja00" vs "GoffJa00")
+    const uniqueKey = `${pfrId.toLowerCase()}_${seasonYear}_${team}`;
+    
+    if (seenKeys.has(uniqueKey)) {
+      // Duplicate detected - log it
+      if (!duplicateLog[playerName]) {
+        duplicateLog[playerName] = [];
+      }
+      duplicateLog[playerName].push({
+        year: seasonYear,
+        team: team,
+        gs: record.gs,
+        qb_rec: record.qb_rec
+      });
+      console.warn(`⚠️ DUPLICATE DETECTED: ${playerName} ${seasonYear} ${team} - skipping duplicate record`);
+      return; // Skip this duplicate
+    }
+    
+    seenKeys.add(uniqueKey);
+    deduplicatedData.push(record);
+  });
+  
+  // Log summary of duplicates found
+  if (Object.keys(duplicateLog).length > 0) {
+    console.warn(`🚨 Found duplicates for ${Object.keys(duplicateLog).length} players:`);
+    Object.entries(duplicateLog).forEach(([player, dups]) => {
+      console.warn(`   ${player}: ${dups.length} duplicate(s) across years ${[...new Set(dups.map(d => d.year))].join(', ')}`);
+    });
+  }
+  
+  console.log(`✅ Deduplicated: ${rawData.length} → ${deduplicatedData.length} records`);
+  
+  const playerData = {};
+  
+  // STEP 2: Process deduplicated records
+  deduplicatedData.forEach(record => {
+    const playerName = record.player_name || 'Unknown Player';
+    const seasonYear = parseInt(record.season) || 0;
+    const gamesStarted = parseInt(record.gs) || 0;
+    
+    // Skip invalid records
+    if (!playerName || seasonYear === 0 || gamesStarted === 0) {
+      return;
+    }
+    
+    // Initialize player data if first time seeing this player
+    if (!playerData[playerName]) {
+      playerData[playerName] = {
+        seasons: [],
+        career: {
+          seasons: 0,
+          gamesStarted: 0,
+          games: 0,
+          wins: 0,
+          losses: 0,
+          winPercentage: 0,
+          passingYards: 0,
+          passingTDs: 0,
+          interceptions: 0,
+          fumbles: 0,
+          completions: 0,
+          attempts: 0,
+          avgPasserRating: 0,
+          totalPasserRatingPoints: 0,
+          rushingYards: 0,
+          rushingTDs: 0,
+          fumblesLost: 0
+        }
+      };
+    }
+    
+    // Parse QB record (e.g., "15-2-0" or "15-2")
+    let wins = 0, losses = 0;
+    if (record.qb_rec) {
+      const recordParts = record.qb_rec.split('-');
+      wins = parseInt(recordParts[0]) || 0;
+      losses = parseInt(recordParts[1]) || 0;
+      
+      // Diagnostic logging for specific problematic players
+      if ((playerName === 'Russell Wilson' || playerName === 'Kirk Cousins' || playerName === 'Jared Goff') && seasonYear === 2017) {
+        console.warn(`🔍 DATABASE qb_rec for ${playerName} ${seasonYear}:`, {
+          qb_rec: record.qb_rec,
+          parsed_wins: wins,
+          parsed_losses: losses,
+          gs: gamesStarted,
+          team: record.team,
+          pfr_id: record.pfr_id
+        });
+      }
+    }
+    
+    // Check if we already have data for this year (to handle multi-team seasons)
+    const existingSeasonIndex = playerData[playerName].seasons.findIndex(s => s.year === seasonYear);
+    
+    if (existingSeasonIndex >= 0) {
+      // Update existing season data (multi-team season)
+      // Note: Career totals should NOT be updated here - they were already added when the season was first created
+      const existingSeason = playerData[playerName].seasons[existingSeasonIndex];
+      
+      console.log(`🔄 Multi-team season: ${playerName} ${seasonYear} - adding ${record.team} (${gamesStarted} GS, ${wins}-${losses})`);
+      
+      existingSeason.gamesStarted += gamesStarted;
+      existingSeason.wins += wins;
+      existingSeason.losses += losses;
+      
+      // Update other season stats
+      existingSeason.passingYards += parseInt(record.yds) || 0;
+      existingSeason.passingTDs += parseInt(record.td) || 0;
+      existingSeason.interceptions += parseInt(record.int) || 0;
+      existingSeason.completions += parseInt(record.cmp) || 0;
+      existingSeason.attempts += parseInt(record.att) || 0;
+      
+      // Track teams played
+      if (!existingSeason.teamsPlayed.includes(record.team)) {
+        existingSeason.teamsPlayed.push(record.team);
+        existingSeason.gamesStartedPerTeam.push(gamesStarted);
+      }
+      
+      // Store team-specific stats
+      existingSeason.teamStats[record.team] = {
+        gamesStarted: gamesStarted,
+        wins: wins,
+        losses: losses,
+        passingYards: parseInt(record.yds) || 0,
+        passingTDs: parseInt(record.td) || 0,
+        interceptions: parseInt(record.int) || 0,
+        completions: parseInt(record.cmp) || 0,
+        attempts: parseInt(record.att) || 0,
+        passerRating: parseFloat(record.rate) || 0,
+        gameWinningDrives: parseInt(record.gwd || record.GWD || record.game_winning_drives) || 0,
+        fourthQuarterComebacks: parseInt(record.four_qc || record['4QC'] || record.fourth_quarter_comebacks) || 0
+      };
+      
+      // Recalculate win percentage
+      const totalGames = existingSeason.wins + existingSeason.losses;
+      existingSeason.winPercentage = totalGames > 0 ? existingSeason.wins / totalGames : 0;
+      
+    } else {
+      // Create new season data
+      const seasonData = {
+        year: seasonYear,
+        team: record.team || 'UNK',
+        gamesStarted: gamesStarted,
+        wins: wins,
+        losses: losses,
+        winPercentage: (wins + losses) > 0 ? wins / (wins + losses) : 0,
+        passingYards: parseInt(record.yds) || 0,
+        passingTDs: parseInt(record.td) || 0,
+        interceptions: parseInt(record.int) || 0,
+        completions: parseInt(record.cmp) || 0,
+        attempts: parseInt(record.att) || 0,
+        passerRating: parseFloat(record.rate) || 0,
+        gameWinningDrives: parseInt(record.gwd || record.GWD || record.game_winning_drives) || 0,
+        fourthQuarterComebacks: parseInt(record.four_qc || record['4QC'] || record.fourth_quarter_comebacks) || 0,
+        age: parseInt(record.age) || 0,
+        teamsPlayed: [record.team || 'UNK'],
+        gamesStartedPerTeam: [gamesStarted],
+        teamStats: {
+          [record.team || 'UNK']: {
+            gamesStarted: gamesStarted,
+            wins: wins,
+            losses: losses,
+            passingYards: parseInt(record.yds) || 0,
+            passingTDs: parseInt(record.td) || 0,
+            interceptions: parseInt(record.int) || 0,
+            completions: parseInt(record.cmp) || 0,
+            attempts: parseInt(record.att) || 0,
+            passerRating: parseFloat(record.rate) || 0,
+            gameWinningDrives: parseInt(record.gwd || record.GWD || record.game_winning_drives) || 0,
+            fourthQuarterComebacks: parseInt(record.four_qc || record['4QC'] || record.fourth_quarter_comebacks) || 0
+          }
+        }
+      };
+      
+      playerData[playerName].seasons.push(seasonData);
+      playerData[playerName].career.seasons += 1;
+      playerData[playerName].career.gamesStarted += gamesStarted;
+      playerData[playerName].career.wins += wins;
+      playerData[playerName].career.losses += losses;
+      playerData[playerName].career.passingYards += parseInt(record.yds) || 0;
+      playerData[playerName].career.passingTDs += parseInt(record.td) || 0;
+      playerData[playerName].career.interceptions += parseInt(record.int) || 0;
+      playerData[playerName].career.completions += parseInt(record.cmp) || 0;
+      playerData[playerName].career.attempts += parseInt(record.att) || 0;
+    }
+    
+    // Update career win percentage
+    const totalCareerGames = playerData[playerName].career.wins + playerData[playerName].career.losses;
+    playerData[playerName].career.winPercentage = totalCareerGames > 0 ? 
+      playerData[playerName].career.wins / totalCareerGames : 0;
+  });
+  
+  // Sort seasons by year (most recent first)
+  Object.values(playerData).forEach(player => {
+    player.seasons.sort((a, b) => b.year - a.year);
+  });
+  
+  // Convert to array format and apply filtering
+  const processedQBs = Object.entries(playerData)
+    .filter(([playerName, data]) => {
+      if (filterYear) {
+        // For single-year mode: Require meaningful playing time in that specific year
+        const hasYearActivity = data.seasons.some(season => season.year === filterYear);
+        const totalYearGames = data.seasons
+          .filter(season => season.year === filterYear)
+          .reduce((sum, season) => sum + (season.gamesStarted || 0), 0);
+        
+        // Adjust threshold based on year (2025 has fewer games, pre-1967 had shorter seasons)
+        const minGames = (() => {
+          if (filterYear === 2025) return 1;  // Partial season
+          if (filterYear < 1967) return 1;   // Pre-merger era (shorter seasons)
+          return 2;                           // Modern era (1967+)
+        })();
+        const passes = hasYearActivity && totalYearGames >= minGames;
+        
+        if (!passes) {
+          console.log(`🚫 FILTERED OUT ${playerName}: ${filterYear} games=${totalYearGames}, hasActivity=${hasYearActivity}, minRequired=${minGames}`);
+        } else {
+          console.log(`✅ PASSED ${playerName}: ${filterYear} games=${totalYearGames} (min: ${minGames})`);
+        }
+        
+        return passes;
+      } else {
+        // For multi-year mode: Career-based filtering with comprehensive historical support
+        const totalGames = data.career.gamesStarted;
+        
+        // Check for different activity periods
+        const hasRecentActivity = data.seasons.some(season => season.year >= 2023);
+        const hasModernActivity = data.seasons.some(season => season.year >= 2008 && season.year < 2023);
+        const hasHistoricalSignificance = data.seasons.some(season => {
+          const year = season.year;
+          const games = season.gamesStarted || 0;
+          // Pre-1967 players need fewer games due to shorter seasons
+          return year < 1967 && games >= 5;
+        });
+        
+        // More inclusive filtering: require sufficient career games AND any meaningful activity period
+        const passes = totalGames >= 15 && (hasRecentActivity || hasModernActivity || hasHistoricalSignificance);
+        
+        if (!passes) {
+          console.log(`🚫 FILTERED OUT ${playerName}: career games=${totalGames}, recentActivity=${hasRecentActivity}, modernActivity=${hasModernActivity}, historicalSignificance=${hasHistoricalSignificance}, seasons=${data.career.seasons}`);
+        } else {
+          console.log(`✅ PASSED ${playerName}: career games=${totalGames}, recentActivity=${hasRecentActivity}, modernActivity=${hasModernActivity}, historicalSignificance=${hasHistoricalSignificance}, seasons=${data.career.seasons}`);
+        }
+        
+        return passes;
+      }
+    })
+    .map(([playerName, data], index) => {
+      // For single-year mode, use the team from the selected season
+      // For multi-year mode, use the most recent season
+      const targetSeason = filterYear 
+        ? data.seasons.find(season => season.year === filterYear) || data.seasons[0]
+        : data.seasons[0];
+      
+      const teamInfo = getTeamInfo(targetSeason.team);
+      
+      const qbObject = {
+        id: `qb-${index + 1}`,
+        name: playerName,
+        team: targetSeason.team,
+        teamId: teamInfo.id,
+        teamName: teamInfo.name,
+        teamLogo: teamInfo.logo,
+        jerseyNumber: '',
+        experience: data.career.seasons,
+        age: targetSeason.age,
+        wins: filterYear ? targetSeason.wins : data.career.wins,
+        losses: filterYear ? targetSeason.losses : data.career.losses,
+        winPercentage: filterYear ? targetSeason.winPercentage : data.career.winPercentage,
+        combinedRecord: filterYear 
+          ? `${targetSeason.wins}-${targetSeason.losses} (${targetSeason.winPercentage.toFixed(3)})`
+          : `${data.career.wins}-${data.career.losses} (${data.career.winPercentage.toFixed(3)})`,
+        stats: {
+          gamesStarted: data.career.gamesStarted,
+          games: data.career.gamesStarted,
+          yardsPerGame: data.career.gamesStarted > 0 ? 
+            (data.career.passingYards + (data.career.rushingYards || 0)) / data.career.gamesStarted : 0,
+          tdsPerGame: data.career.gamesStarted > 0 ? 
+            (data.career.passingTDs + (data.career.rushingTDs || 0)) / data.career.gamesStarted : 0,
+          turnoversPerGame: data.career.gamesStarted > 0 ? 
+            (data.career.interceptions + (data.career.fumbles || 0)) / data.career.gamesStarted : 0,
+          totalYards: data.career.passingYards + (data.career.rushingYards || 0),
+          totalTDs: data.career.passingTDs + (data.career.rushingTDs || 0),
+          totalTurnovers: data.career.interceptions + (data.career.fumbles || 0),
+          passerRating: data.career.avgPasserRating
+        },
+        seasonData: data.seasons,
+        stats2024: `3-Year Avg: ${((data.career.passingYards + (data.career.rushingYards || 0)) / Math.max(1, data.career.gamesStarted)).toFixed(1)} yds/g`
+      };
+      
+      return qbObject;
+    });
+  
+  console.log(`📊 After filtering: ${processedQBs.length} QBs passed threshold requirements`);
+  return processedQBs;
+};
+
 export const processQBData = (combinedQBData, filterYear = null) => {
   const modeLabel = filterYear ? `${filterYear}` : 'all-years';
   console.log(`🔍 DEBUG processQBData - Processing ${Object.keys(combinedQBData).length} players in ${modeLabel} mode`);
@@ -354,11 +676,12 @@ export const processQBData = (combinedQBData, filterYear = null) => {
         
         return passes;
       } else {
-        // For multi-year mode: Career-based filtering with historical support
+        // For multi-year mode: Career-based filtering with comprehensive historical support
         const totalGames = data.career.gamesStarted;
         
-        // Check for recent activity (2023+) OR historical significance (pre-1967 with sufficient games)
+        // Check for different activity periods
         const hasRecentActivity = data.seasons.some(season => season.year >= 2023);
+        const hasModernActivity = data.seasons.some(season => season.year >= 2008 && season.year < 2023);
         const hasHistoricalSignificance = data.seasons.some(season => {
           const year = season.year;
           const games = season.gamesStarted || 0;
@@ -366,16 +689,16 @@ export const processQBData = (combinedQBData, filterYear = null) => {
           return year < 1967 && games >= 5;
         });
         
-        // Require either recent activity OR historical significance
-        const passes = totalGames >= 15 && (hasRecentActivity || hasHistoricalSignificance);
+        // More inclusive filtering: require sufficient career games AND any meaningful activity period
+        const passes = totalGames >= 15 && (hasRecentActivity || hasModernActivity || hasHistoricalSignificance);
         
         if (!passes) {
-          console.log(`🚫 FILTERED OUT ${playerName}: career games=${totalGames}, recentActivity=${hasRecentActivity}, historicalSignificance=${hasHistoricalSignificance}, seasons=${data.career.seasons}`);
+          console.log(`🚫 FILTERED OUT ${playerName}: career games=${totalGames}, recentActivity=${hasRecentActivity}, modernActivity=${hasModernActivity}, historicalSignificance=${hasHistoricalSignificance}, seasons=${data.career.seasons}`);
         } else {
-          console.log(`✅ PASSED ${playerName}: career games=${totalGames}, recentActivity=${hasRecentActivity}, historicalSignificance=${hasHistoricalSignificance}, seasons=${data.career.seasons}`);
+          console.log(`✅ PASSED ${playerName}: career games=${totalGames}, recentActivity=${hasRecentActivity}, modernActivity=${hasModernActivity}, historicalSignificance=${hasHistoricalSignificance}, seasons=${data.career.seasons}`);
         }
         
-        return passes; // At least 15 career starts and (recent activity OR historical significance)
+        return passes; // At least 15 career starts and (recent activity OR modern activity OR historical significance)
       }
     })
     .map(([playerName, data], index) => {
@@ -391,7 +714,7 @@ export const processQBData = (combinedQBData, filterYear = null) => {
         teamLogo: teamInfo.logo,
         jerseyNumber: '',
         experience: data.career.seasons,
-        age: mostRecentSeason.age,
+        age: targetSeason.age,
         wins: data.career.wins,
         losses: data.career.losses,
         winPercentage: data.career.winPercentage,

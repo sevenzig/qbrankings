@@ -4,11 +4,10 @@ import { qbDataService, handleSupabaseError } from '../utils/supabase.js';
 import { calculateQBMetrics } from '../utils/qbCalculations.js';
 import { 
   transformSeasonSummaryToCSV, 
-  validateDataStructure,
   logTransformationStats,
   getSeasonDataForCalculations
 } from '../utils/supabaseDataTransformer.js';
-import { combinePlayerDataAcrossYears, processQBData } from '../utils/dataProcessor.js';
+import { combinePlayerDataAcrossYears, processQBData, processSupabaseQBData } from '../utils/dataProcessor.js';
 
 export const useSupabaseQBData = () => {
   const [qbData, setQbData] = useState([]);
@@ -40,18 +39,17 @@ export const useSupabaseQBData = () => {
       // Parse year mode to numeric value
       const year = parseInt(yearMode);
       
-      // Fetch data from Supabase for specific year
+      // Fetch data for the specific year only (more efficient than fetching all years)
+      console.log(`📊 Fetching data for ${year} season only...`);
       const rawData = await qbDataService.fetchQBDataByYear(year);
       
-      console.log(`📊 Supabase returned ${rawData ? rawData.length : 0} records`);
+      console.log(`📊 Supabase returned ${rawData ? rawData.length : 0} records for ${year}`);
       
       // Debug: Check what years are in the data
       if (rawData && rawData.length > 0) {
         const uniqueYears = [...new Set(rawData.map(r => r.season))];
         console.log(`📅 Years in data: ${uniqueYears.join(', ')}`);
-        if (uniqueYears.some(y => y !== year)) {
-          console.error(`❌ ERROR: ${year} mode but got data from years: ${uniqueYears.join(', ')}`);
-        }
+        console.log(`ℹ️ INFO: Loaded ${rawData.length} QB records for ${year} season`);
       }
       
       // Check if we got any data
@@ -73,11 +71,10 @@ export const useSupabaseQBData = () => {
       console.log('🔍 DEBUG - First raw record:', rawData[0]);
       console.log('🔍 DEBUG - Available fields:', Object.keys(rawData[0] || {}));
       
-      // Validate data structure
-      if (!validateDataStructure(rawData)) {
-        throw new Error('Invalid data structure received from Supabase');
-      }
+      // Data structure validation is now handled by processSupabaseQBData function
       
+      // OLD PROCESSING LOGIC - COMMENTED OUT (using new processSupabaseQBData instead)
+      /*
       // Group data by player name to create combined player data structure
       const playerData = {};
       
@@ -316,19 +313,13 @@ export const useSupabaseQBData = () => {
           losses: samplePlayer.career.losses
         });
       }
+      */
       
-      // Process QB data to create the final structure with stats property
+      // Process QB data using the new Supabase-specific pipeline
       // Pass the specific year for filtering
-      let processedQBs = processQBData(playerData, year);
+      let processedQBs = processSupabaseQBData(rawData, year);
       
-      // Additional filtering: only include QBs who have started games in this year
-      processedQBs = processedQBs.filter(qb => {
-        // Check if QB has any season data for this year with games started > 0
-        const hasYearGames = qb.seasonData?.some(season => 
-          season.year === year && season.gamesStarted > 0
-        );
-        return hasYearGames;
-      });
+      // The new processSupabaseQBData function already handles year filtering
       console.log(`📊 ${year} Filter: ${processedQBs.length} QBs have played in ${year} season`);
       
       if (processedQBs.length === 0) {

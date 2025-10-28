@@ -584,6 +584,60 @@ const DynamicQBRankings = () => {
     return "Custom settings";
   }, [currentPreset]);
 
+  // Update social media meta tags with screenshot
+  const updateSocialMetaTags = useCallback((shareUrl, screenshotDataUrl, shareType) => {
+    if (!screenshotDataUrl) return;
+    
+    console.log('📸 Updating social meta tags with screenshot');
+    
+    // Create a temporary image element to get dimensions
+    const img = new Image();
+    img.onload = () => {
+      const width = img.naturalWidth;
+      const height = img.naturalHeight;
+      
+      console.log('📸 Screenshot dimensions:', width, 'x', height);
+      
+      // Update Open Graph meta tags
+      updateMetaTag('og:url', shareUrl);
+      updateMetaTag('og:title', `NFL QB Rankings - ${shareType === 'quick' ? 'Quick View' : 'Full Analysis'} | Top 10 Quarterbacks`);
+      updateMetaTag('og:description', `Check out my QB rankings! ${shareType === 'quick' ? '🚀 Quick view' : '📊 Full analysis'} of the top 10 quarterbacks.`);
+      updateMetaTag('og:image', screenshotDataUrl);
+      updateMetaTag('og:image:width', width.toString());
+      updateMetaTag('og:image:height', height.toString());
+      
+      // Update Twitter Card meta tags
+      updateMetaTag('twitter:url', shareUrl);
+      updateMetaTag('twitter:title', `NFL QB Rankings - ${shareType === 'quick' ? 'Quick View' : 'Full Analysis'} | Top 10 Quarterbacks`);
+      updateMetaTag('twitter:description', `Check out my QB rankings! ${shareType === 'quick' ? '🚀 Quick view' : '📊 Full analysis'} of the top 10 quarterbacks.`);
+      updateMetaTag('twitter:image', screenshotDataUrl);
+      
+      console.log('📸 Social meta tags updated successfully');
+    };
+    img.src = screenshotDataUrl;
+  }, []);
+
+  // Helper function to update meta tags
+  const updateMetaTag = (property, content) => {
+    // Try to find existing meta tag
+    let metaTag = document.querySelector(`meta[property="${property}"]`) || 
+                  document.querySelector(`meta[name="${property}"]`);
+    
+    if (metaTag) {
+      metaTag.setAttribute('content', content);
+    } else {
+      // Create new meta tag
+      metaTag = document.createElement('meta');
+      if (property.startsWith('og:')) {
+        metaTag.setAttribute('property', property);
+      } else {
+        metaTag.setAttribute('name', property);
+      }
+      metaTag.setAttribute('content', content);
+      document.head.appendChild(metaTag);
+    }
+  };
+
   // URL sharing functions - COMPACT: Much shorter URLs focusing on essentials
   const encodeSettings = (weights, supportWeights, statsWeights, teamWeights, clutchWeights, durabilityWeights, includePlayoffs, yearMode, fullDetail = false) => {
     // Convert yearMode to numeric: 0='1932', 1='1933', ..., 93='2025'
@@ -1017,6 +1071,9 @@ const DynamicQBRankings = () => {
         window.screenshotDataUrl = dataUrl;
         console.log('📸 Data URL stored for fallback');
       }
+      
+      // Update meta tags for social sharing with the screenshot
+      updateSocialMetaTags(linkResult.url, dataUrl, shareType);
       
       setShareModalScreenshotUrl(blobUrl);
       setShareModalLink(linkResult.url);

@@ -98,6 +98,28 @@ const ShareModal = ({ isOpen, onClose, screenshotUrl, shareLink, shareType }) =>
     window.open(url, '_blank', 'width=550,height=420');
   }, [shareLink, shareType]);
 
+  const shareToTwitterWithImage = useCallback(() => {
+    // Copy the image to clipboard first, then open Twitter
+    if (screenshotUrl) {
+      copyImageToClipboard().then(() => {
+        // Show a better message to the user
+        const message = `📸 Screenshot copied to clipboard!\n\nNext steps:\n1. Click "OK" to open Twitter\n2. Paste the image (Ctrl+V or Cmd+V)\n3. The text and link are already filled in\n\nThis will create a rich post with your QB rankings!`;
+        alert(message);
+        
+        // Then open Twitter
+        const text = `Check out my QB rankings! ${shareType === 'quick' ? '🚀 Quick view' : '📊 Full analysis'} of the top 10 quarterbacks.`;
+        const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareLink)}`;
+        window.open(url, '_blank', 'width=550,height=420');
+      }).catch(() => {
+        // Fallback to regular sharing if clipboard fails
+        console.warn('Failed to copy image to clipboard, falling back to regular sharing');
+        shareToTwitter();
+      });
+    } else {
+      shareToTwitter();
+    }
+  }, [screenshotUrl, shareType, shareLink, copyImageToClipboard, shareToTwitter]);
+
   const shareToBluesky = useCallback(() => {
     const text = `Check out my QB rankings! ${shareType === 'quick' ? '🚀 Quick view' : '📊 Full analysis'} of the top 10 quarterbacks.\n\n${shareLink}`;
     const url = `https://bsky.app/intent/compose?text=${encodeURIComponent(text)}`;
@@ -285,7 +307,7 @@ const ShareModal = ({ isOpen, onClose, screenshotUrl, shareLink, shareType }) =>
                 <div className="bg-white/5 rounded-xl p-4 border border-blue-400/20">
                   <div className="space-y-3">
                     <button
-                      onClick={shareToTwitter}
+                      onClick={shareToTwitterWithImage}
                       className="w-full flex items-center gap-3 bg-blue-500/20 hover:bg-blue-500/30 px-4 py-3 rounded-lg font-medium transition-colors text-blue-200 hover:text-white text-sm"
                     >
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
