@@ -6,7 +6,7 @@ import {
   calculateDurabilityScore,
   calculateSupportScore
 } from '../components/scoringCategories/index.js';
-import { zScoreToPercentile } from './zScoreCalculations.js';
+import { zScoreToPercentile, calculateVariance } from './zScoreCalculations.js';
 
 // Helper function to normalize weights within a group
 const normalizeWeights = (weights) => {
@@ -35,31 +35,31 @@ const calculateSupportAdjustedScore = (rawScore, supportQuality, allQBBaseScores
   return rawScore;
 };
 
-// Helper: Validate 2025 player data to prevent flat 50 scores
-const validate2025PlayerData = (qb) => {
-  const has2025Season = qb.seasonData?.some(season => season.year === 2025);
-  if (!has2025Season) {
-    console.warn(`⚠️ ${qb.name} has no 2025 season data`);
+// Helper: Validate player data for a specific year to prevent flat 50 scores
+const validatePlayerDataForYear = (qb, year) => {
+  const hasSeasonData = qb.seasonData?.some(season => season.year === year);
+  if (!hasSeasonData) {
+    console.warn(`⚠️ ${qb.name} has no ${year} season data`);
     return false;
   }
   
-  const season2025 = qb.seasonData.find(season => season.year === 2025);
-  if (!season2025) {
-    console.warn(`⚠️ ${qb.name} 2025 season data is null/undefined`);
+  const seasonData = qb.seasonData.find(season => season.year === year);
+  if (!seasonData) {
+    console.warn(`⚠️ ${qb.name} ${year} season data is null/undefined`);
     return false;
   }
   
-  const hasValidStats = season2025 && (
-    (season2025.attempts > 0) || 
-    (season2025.gamesStarted > 0) ||
-    (season2025.passingYards > 0)
+  const hasValidStats = seasonData && (
+    (seasonData.attempts > 0) || 
+    (seasonData.gamesStarted > 0) ||
+    (seasonData.passingYards > 0)
   );
   
   if (!hasValidStats) {
-    console.warn(`⚠️ ${qb.name} has invalid 2025 stats:`, {
-      attempts: season2025.attempts,
-      gamesStarted: season2025.gamesStarted,
-      passingYards: season2025.passingYards
+    console.warn(`⚠️ ${qb.name} has invalid ${year} stats:`, {
+      attempts: seasonData.attempts,
+      gamesStarted: seasonData.gamesStarted,
+      passingYards: seasonData.passingYards
     });
     return false;
   }
@@ -331,8 +331,116 @@ function slidingLogPenalty(gamesStarted, threshold, maxPenalty = 1.2) {
   return Math.max(minPenaltyFactor, penaltyFactor);
 }
 
-// Main QEI calculation with FLATTENED weighting to preserve variance
-export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, allQBBaseScores = [], filterYear = null, allQBsRawQei = null) => {
+/**
+ * Calculate raw z-scores and variance normalization factors for all QBs
+ * This is Pass 1 of the two-pass variance normalization system
+ * 
+ * The two-pass system ensures that user-defined category weights (Team, Stats, etc.)
+ * contribute exactly their specified percentage to final scores, regardless of
+ * the natural variance of each category.
+ * 
+ * Pass 1 (this function): Calculate raw z-scores for all QBs and measure variance
+ * Pass 2 (in data hook): Normalize z-scores and calculate final QEI
+ * 
+ * @param {Array} allQBData - Array of all QB objects with season data
+ * @param {boolean} includePlayoffs - Whether to include playoff data
+ * @param {number|null} filterYear - Specific year to filter, or null for all years
+ * @param {Object} supportWeights - Weights for support category components
+ * @param {Object} statsWeights - Weights for stats category components
+ * @param {Object} teamWeights - Weights for team category components
+ * @param {Object} clutchWeights - Weights for clutch category components
+ * @param {Object} efficiencyWeights - Weights for efficiency sub-components
+ * @param {Object} protectionWeights - Weights for protection sub-components
+ * @param {Object} volumeWeights - Weights for volume sub-components
+ * @param {Object} durabilityWeights - Weights for durability components
+ * @param {number} mainSupportWeight - Main support weight from top-level
+ * @returns {Object} { qbRawScores: Map, categoryVariances: Object }
+ */
+export const calculatePopulationScoresAndVariances = (
+  allQBData,
+  includePlayoffs,
+  filterYear,
+  supportWeights,
+  statsWeights,
+  teamWeights,
+  clutchWeights,
+  efficiencyWeights,
+  protectionWeights,
+  volumeWeights,
+  durabilityWeights,
+  mainSupportWeight
+) => {
+  // Map to store raw z-scores for each QB (keyed by QB name)
+  const qbRawScores = new Map();
+  
+  // Arrays to collect z-scores by category for variance calculation
+  const categoryZScores = {
+    team: [],
+    stats: [],
+    clutch: [],
+    durability: [],
+    support: []
+  };
+  
+  // Calculate raw z-scores for all QBs
+  allQBData.forEach(qb => {
+    const rawScores = calculateQBMetrics(
+      qb,
+      supportWeights,
+      statsWeights,
+      teamWeights,
+      clutchWeights,
+      includePlayoffs,
+      filterYear,
+      efficiencyWeights,
+      protectionWeights,
+      volumeWeights,
+      durabilityWeights,
+      allQBData,
+      mainSupportWeight
+    );
+    
+    // Store raw scores for this QB
+    qbRawScores.set(qb.name, rawScores);
+    
+    // Collect z-scores for variance calculation
+    Object.keys(rawScores).forEach(category => {
+      const score = rawScores[category];
+      if (isFinite(score) && !isNaN(score)) {
+        categoryZScores[category].push(score);
+      }
+    });
+  });
+  
+  // Calculate variance for each category
+  const categoryVariances = {};
+  Object.keys(categoryZScores).forEach(category => {
+    categoryVariances[category] = calculateVariance(categoryZScores[category]);
+  });
+  
+  // Log variance information for debugging
+  console.log('📊 Category Z-Score Variances (Pre-Normalization):', {
+    team: categoryVariances.team?.toFixed(4),
+    stats: categoryVariances.stats?.toFixed(4),
+    clutch: categoryVariances.clutch?.toFixed(4),
+    durability: categoryVariances.durability?.toFixed(4),
+    support: categoryVariances.support?.toFixed(4)
+  });
+  
+  // Log scaling factors that will be applied
+  console.log('📐 Variance Normalization Scaling Factors:', {
+    team: (Math.sqrt(1.0 / categoryVariances.team)).toFixed(4),
+    stats: (Math.sqrt(1.0 / categoryVariances.stats)).toFixed(4),
+    clutch: (Math.sqrt(1.0 / categoryVariances.clutch)).toFixed(4),
+    durability: (Math.sqrt(1.0 / categoryVariances.durability)).toFixed(4),
+    support: (Math.sqrt(1.0 / categoryVariances.support)).toFixed(4)
+  });
+  
+  return { qbRawScores, categoryVariances };
+};
+
+// Main QEI calculation with variance-normalized scores
+export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, allQBBaseScores = [], filterYear = null, allQBsRawQei = null, isNormalized = false) => {
   // Apply season-specific game start penalties
   const isSingleYear = filterYear !== null && typeof filterYear === 'number';
   const penalties = applyGameStartPenalties(qb, isSingleYear);
@@ -343,13 +451,17 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
   const isKeyQB = qbName.includes('Hurts') || qbName.includes('Burrow') || qbName.includes('Jackson') || qbName.includes('Allen');
   
   if (isKeyQB) {
-    console.log(`🔍 QEI FLATTENED Z-SCORE CALCULATION ${qbName}: baseScores (composite z-scores):`, {
+    const scoreType = isNormalized ? 'VARIANCE-NORMALIZED' : 'RAW';
+    console.log(`🔍 QEI ${scoreType} Z-SCORE CALCULATION ${qbName}: baseScores (composite z-scores):`, {
       team: baseScores.team?.toFixed(3),
       stats: baseScores.stats?.toFixed(3),
       clutch: baseScores.clutch?.toFixed(3),
       durability: baseScores.durability?.toFixed(3),
       support: baseScores.support?.toFixed(3)
     });
+    if (isNormalized) {
+      console.log(`✅ Using VARIANCE-NORMALIZED z-scores for ${qbName} - all categories have equal variance`);
+    }
   }
   
   // INVERT support z-score: Higher support (good cast) becomes negative contribution
@@ -425,21 +537,25 @@ export const calculateQEI = (baseScores, qb, weights, includePlayoffs = true, al
   
   // DEBUG: Show the hierarchical z-score calculation for key QBs
   if (isKeyQB) {
-    console.log(`🧮 HIERARCHICAL Z-SCORE CALC ${qbName}:`);
+    const normalizationNote = isNormalized ? ' (VARIANCE-NORMALIZED)' : '';
+    console.log(`🧮 HIERARCHICAL Z-SCORE CALC ${qbName}${normalizationNote}:`);
     console.log(`   Z-Scores: Team(${contextualScores.team.toFixed(3)}) Stats(${contextualScores.stats.toFixed(3)}) Clutch(${contextualScores.clutch.toFixed(3)}) Durability(${contextualScores.durability.toFixed(3)}) Support(${contextualScores.support.toFixed(3)})`);
     console.log(`   Weights: Team(${topLevelWeights.team}) Stats(${topLevelWeights.stats}) Clutch(${topLevelWeights.clutch}) Durability(${topLevelWeights.durability}) Support(${topLevelWeights.support})`);
+    if (isNormalized && qb.categoryVariances) {
+      console.log(`   Category Variances: Team(${qb.categoryVariances.team?.toFixed(4)}) Stats(${qb.categoryVariances.stats?.toFixed(4)}) Clutch(${qb.categoryVariances.clutch?.toFixed(4)}) Durability(${qb.categoryVariances.durability?.toFixed(4)}) Support(${qb.categoryVariances.support?.toFixed(4)})`);
+    }
     console.log(`   Composite Z-Score: ${compositeZScore.toFixed(3)}`);
   }
   
-  // Special validation and debug logging for 2025 players to diagnose flat 50 scores
-  if (filterYear === 2025) {
-    // Validate 2025 player data before calculation
-    if (!validate2025PlayerData(qb)) {
-      console.error(`❌ ${qbName} failed 2025 data validation - returning 0 QEI`);
+  // Special validation and debug logging for specific year players to diagnose flat 50 scores
+  if (filterYear === 2025 || filterYear === 2024) {
+    // Validate player data for the filter year before calculation
+    if (!validatePlayerDataForYear(qb, filterYear)) {
+      console.error(`❌ ${qbName} failed ${filterYear} data validation - returning 0 QEI`);
       return 0;
     }
     
-    console.log(`🔍 2025 QEI CALCULATION ${qbName}:`, {
+    console.log(`🔍 ${filterYear} QEI CALCULATION ${qbName}:`, {
       baseScores: {
         team: baseScores.team?.toFixed(3),
         stats: baseScores.stats?.toFixed(3),

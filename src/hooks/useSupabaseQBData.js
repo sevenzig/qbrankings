@@ -1,19 +1,24 @@
 // Custom hook for Supabase QB data fetching and management
 import { useState, useEffect, useCallback } from 'react';
 import { qbDataService, handleSupabaseError } from '../utils/supabase.js';
-import { calculateQBMetrics } from '../utils/qbCalculations.js';
+import { calculateQBMetrics, calculatePopulationScoresAndVariances } from '../utils/qbCalculations.js';
 import { 
   transformSeasonSummaryToCSV, 
   logTransformationStats,
   getSeasonDataForCalculations
 } from '../utils/supabaseDataTransformer.js';
 import { combinePlayerDataAcrossYears, processQBData, processSupabaseQBData } from '../utils/dataProcessor.js';
+import { normalizeAllCategoryScores, calculateVariance } from '../utils/zScoreCalculations.js';
 
 export const useSupabaseQBData = () => {
   const [qbData, setQbData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastFetch, setLastFetch] = useState(null);
+  
+  // Variance normalization cache for performance
+  const [cachedVariances, setCachedVariances] = useState(null);
+  const [varianceCacheKey, setVarianceCacheKey] = useState(null);
 
   // Cache duration: 15 minutes for regular data, 60 minutes for 2025 to prevent flat 50 scores
   const CACHE_DURATION = 15 * 60 * 1000;
@@ -32,6 +37,10 @@ export const useSupabaseQBData = () => {
     try {
       setLoading(true);
       setError(null);
+      
+      // Clear variance cache when fetching new data
+      setCachedVariances(null);
+      setVarianceCacheKey(null);
       
       const yearModeLabel = `${yearMode}`;
       console.log(`🔄 Loading QB data from Supabase... (Mode: ${yearModeLabel})`);
@@ -440,33 +449,95 @@ export const useSupabaseQBData = () => {
         }
       }
       
-      // Calculate QEI metrics for each QB - pass processedQBs as allQBData for z-score calculations
-      const qbsWithMetrics = processedQBs.map(qb => {
-        // For 2025 mode using 2024 fallback data, use 2024 as the filter year
-        const isUsingFallback = yearMode === '2025' && processedQBs.some(qb => 
-          qb.seasonData?.some(season => season.year === 2024) && 
-          !qb.seasonData?.some(season => season.year === 2025)
-        );
-        const actualFilterYear = (yearMode === '2025' && isUsingFallback) ? 2024 : year;
+      // TWO-PASS VARIANCE NORMALIZATION SYSTEM
+      // This ensures user weights work exactly as intended (35% = 35% influence)
+      
+      // Determine filter year for calculations
+      const isUsingFallback = yearMode === '2025' && processedQBs.some(qb => 
+        qb.seasonData?.some(season => season.year === 2024) && 
+        !qb.seasonData?.some(season => season.year === 2025)
+      );
+      const actualFilterYear = (yearMode === '2025' && isUsingFallback) ? 2024 : year;
+      
+      // Generate cache key based on population characteristics
+      const cacheKey = `${yearMode}_${processedQBs.length}_${actualFilterYear}`;
+      
+      // Check if we can reuse cached variances for performance
+      let categoryVariances;
+      let qbRawScores;
+      
+      if (cachedVariances && varianceCacheKey === cacheKey) {
+        console.log('♻️ Using cached category variances for performance');
+        categoryVariances = cachedVariances;
         
-        const baseScores = calculateQBMetrics(
-          qb,
-          { offensiveLine: 55, weapons: 30, defense: 15 }, // supportWeights
-          { efficiency: 45, protection: 25, volume: 30 }, // statsWeights
-          { regularSeason: 65, playoff: 35 }, // teamWeights
-          { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 }, // clutchWeights
+        // Still need to calculate raw scores for this population
+        const result = calculatePopulationScoresAndVariances(
+          processedQBs,
           true, // includePlayoffs
-          actualFilterYear, // filterYear - use actual data year for calculations
-          { anyA: 45, tdPct: 30, completionPct: 25 }, // efficiencyWeights
-          { sackPct: 60, turnoverRate: 40 }, // protectionWeights
-          { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 }, // volumeWeights
-          { availability: 75, consistency: 25 }, // durabilityWeights
-          processedQBs, // allQBData for z-score calculations
-          0 // mainSupportWeight
+          actualFilterYear,
+          { offensiveLine: 55, weapons: 30, defense: 15 },
+          { efficiency: 45, protection: 25, volume: 30 },
+          { regularSeason: 65, playoff: 35 },
+          { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 },
+          { anyA: 45, tdPct: 30, completionPct: 25 },
+          { sackPct: 60, turnoverRate: 40 },
+          { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 },
+          { availability: 75, consistency: 25 },
+          0
         );
+        qbRawScores = result.qbRawScores;
+      } else {
+        console.log('🔄 Calculating fresh category variances (Pass 1 of 2-pass system)');
+        
+        // PASS 1: Calculate raw z-scores and category variances
+        const result = calculatePopulationScoresAndVariances(
+          processedQBs,
+          true, // includePlayoffs
+          actualFilterYear,
+          { offensiveLine: 55, weapons: 30, defense: 15 },
+          { efficiency: 45, protection: 25, volume: 30 },
+          { regularSeason: 65, playoff: 35 },
+          { gameWinningDrives: 40, fourthQuarterComebacks: 25, clutchRate: 15, playoffBonus: 20 },
+          { anyA: 45, tdPct: 30, completionPct: 25 },
+          { sackPct: 60, turnoverRate: 40 },
+          { passYards: 25, passTDs: 25, rushYards: 20, rushTDs: 15, totalAttempts: 15 },
+          { availability: 75, consistency: 25 },
+          0
+        );
+        
+        qbRawScores = result.qbRawScores;
+        categoryVariances = result.categoryVariances;
+        
+        // Cache the variances for subsequent weight changes
+        setCachedVariances(categoryVariances);
+        setVarianceCacheKey(cacheKey);
+      }
+      
+      // PASS 2: Normalize scores and attach to QB objects
+      console.log('✅ Applying variance normalization (Pass 2 of 2-pass system)');
+      const qbsWithMetrics = processedQBs.map(qb => {
+        const rawScores = qbRawScores.get(qb.name);
+        
+        if (!rawScores) {
+          console.warn(`⚠️ No raw scores found for ${qb.name}`);
+          return {
+            ...qb,
+            baseScores: { team: 0, stats: 0, clutch: 0, durability: 0, support: 0 },
+            rawScores: { team: 0, stats: 0, clutch: 0, durability: 0, support: 0 },
+            categoryVariances: categoryVariances,
+            actualFilterYear: actualFilterYear // Add actual filter year for validation
+          };
+        }
+        
+        // Normalize scores to equal variance (target variance = 1.0)
+        const normalizedScores = normalizeAllCategoryScores(rawScores, categoryVariances, 1.0);
+        
         return {
           ...qb,
-          baseScores
+          baseScores: normalizedScores,      // Variance-normalized scores for QEI calculation
+          rawScores: rawScores,              // Keep raw scores for debugging
+          categoryVariances: categoryVariances, // Attach for reference
+          actualFilterYear: actualFilterYear // Add actual filter year for validation
         };
       });
 
@@ -497,6 +568,10 @@ export const useSupabaseQBData = () => {
     try {
       setLoading(true);
       setError(null);
+      
+      // Clear variance cache when fetching new year data
+      setCachedVariances(null);
+      setVarianceCacheKey(null);
       
       console.log(`🔄 Loading QB data for ${year} from Supabase...`);
       

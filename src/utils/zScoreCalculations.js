@@ -210,3 +210,85 @@ export const zScoreToScore = (zScore) => {
   return zScoreToPercentile(zScore);
 };
 
+/**
+ * Calculate variance of an array of z-scores
+ * Variance = average of squared deviations from mean
+ * 
+ * Used for variance normalization to ensure all scoring categories
+ * contribute equally to final rankings regardless of natural variance.
+ * 
+ * @param {number[]} zScores - Array of z-score values
+ * @returns {number} Variance (σ²)
+ */
+export const calculateVariance = (zScores) => {
+  // Edge case: insufficient data
+  if (!zScores || zScores.length < 2) return 1.0;
+  
+  // Filter out invalid values
+  const validZScores = zScores.filter(z => isFinite(z) && !isNaN(z));
+  if (validZScores.length < 2) return 1.0;
+  
+  // Calculate mean
+  const mean = calculateMean(validZScores);
+  
+  // Calculate squared deviations
+  const squaredDiffs = validZScores.map(z => Math.pow(z - mean, 2));
+  const variance = calculateMean(squaredDiffs);
+  
+  // Edge case: zero or negative variance (all identical scores)
+  if (variance <= 0 || !isFinite(variance)) return 1.0;
+  
+  return variance;
+};
+
+/**
+ * Normalize z-score to target variance
+ * Scales z-score so the category has variance = targetVariance
+ * 
+ * Formula: z_normalized = z * sqrt(target_variance / actual_variance)
+ * 
+ * This ensures categories with naturally high variance (e.g., Win%)
+ * don't dominate categories with lower variance (e.g., passing yards)
+ * when combining scores with user-defined weights.
+ * 
+ * @param {number} zScore - Individual z-score to normalize
+ * @param {number} categoryVariance - Actual variance of this category across population
+ * @param {number} [targetVariance=1.0] - Desired variance (default: 1.0)
+ * @returns {number} Variance-normalized z-score
+ */
+export const normalizeZScoreVariance = (zScore, categoryVariance, targetVariance = 1.0) => {
+  // Handle invalid inputs
+  if (!isFinite(zScore) || isNaN(zScore)) return 0;
+  if (categoryVariance <= 0 || !isFinite(categoryVariance)) return zScore;
+  
+  // Calculate scaling factor: sqrt(target / actual)
+  const scalingFactor = Math.sqrt(targetVariance / categoryVariance);
+  
+  return zScore * scalingFactor;
+};
+
+/**
+ * Normalize all category z-scores to equal variance
+ * Returns normalized scores object with same structure as input
+ * 
+ * This is the key function for ensuring user weights work as intended.
+ * After normalization, a 35% weight on Team truly means 35% influence,
+ * not 70% influence due to high variance.
+ * 
+ * @param {Object} rawScores - Object with category names as keys, raw z-scores as values
+ * @param {Object} categoryVariances - Object with category names as keys, variances as values
+ * @param {number} [targetVariance=1.0] - Desired variance for all categories
+ * @returns {Object} Normalized scores with same structure as rawScores
+ */
+export const normalizeAllCategoryScores = (rawScores, categoryVariances, targetVariance = 1.0) => {
+  const normalized = {};
+  
+  Object.keys(rawScores).forEach(category => {
+    const rawZScore = rawScores[category] || 0;
+    const variance = categoryVariances[category] || 1.0;
+    normalized[category] = normalizeZScoreVariance(rawZScore, variance, targetVariance);
+  });
+  
+  return normalized;
+};
+

@@ -961,7 +961,19 @@ const DynamicQBRankings = () => {
     // Second pass: Calculate QEI scores (already percentiles 0-100) and sort
     const finalRankings = qbsWithBaseScores
       .map(qb => {
-        const qei = calculateQEI(qb.baseScores, qb, weights, includePlayoffs, allQBBaseScores, parseInt(yearMode));
+        // Use actualFilterYear from QB object if available (handles 2024 fallback for 2025 mode)
+        const filterYear = qb.actualFilterYear || parseInt(yearMode);
+        
+        const qei = calculateQEI(
+          qb.baseScores, 
+          qb, 
+          weights, 
+          includePlayoffs, 
+          allQBBaseScores, 
+          filterYear,
+          null, // allQBsRawQei
+          true  // isNormalized - scores are variance-normalized
+        );
         
         // DEBUG: Log QEI calculations for 2025
         if (yearMode === '2025') {
