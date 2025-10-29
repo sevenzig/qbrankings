@@ -135,8 +135,8 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
   screenshotContainer.style.top = '-9999px';
   screenshotContainer.style.left = '-9999px';
   screenshotContainer.style.width = '600px'; // Increased for better readability
-  screenshotContainer.style.backgroundColor = '#1e3a8a'; // Blue background similar to app
-  screenshotContainer.style.backgroundImage = 'linear-gradient(to bottom right, #1e3a8a, #1e40af, #3730a3)';
+  screenshotContainer.style.backgroundColor = '#020617'; // Slate-950 background to match homepage
+  screenshotContainer.style.backgroundImage = 'linear-gradient(to bottom right, rgb(2, 6, 23), rgb(15, 23, 42), rgb(30, 41, 59))';
   screenshotContainer.style.padding = '20px'; // More padding for better spacing
   screenshotContainer.style.fontFamily = 'system-ui, -apple-system, sans-serif';
   screenshotContainer.style.borderRadius = '12px'; // Add rounded corners
@@ -151,19 +151,19 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
           return `
         <tr style="${rowBg} border-bottom: 1px solid rgba(255, 255, 255, 0.08); height: 60px;">
         <td style="padding: 8px 12px; width: 60px; vertical-align: middle;">
-          <div style="font-size: 16px; font-weight: bold; color: white; text-align: center; line-height: 1;">#${index + 1}</div>
-        </td>
-        <td style="padding: 8px 12px; width: 200px; vertical-align: middle;">
-          <div style="font-weight: bold; color: white; font-size: 16px; line-height: 1.2; margin-bottom: 4px;">${qb.name}</div>
-          <div style="font-size: 12px; color: #93c5fd; line-height: 1;">${qb.experience}yr • ${qb.age}</div>
+          <div style="font-size: 16px; font-weight: bold; color: white; text-align: center; line-height: 1;">${index + 1}</div>
         </td>
         <td style="padding: 8px 12px; text-align: center; width: 100px; vertical-align: middle;">
           <div style="display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: nowrap; padding-top: 8px; overflow: hidden;">
             ${teamLogosHtml}
           </div>
         </td>
+        <td style="padding: 8px 12px; width: 200px; vertical-align: middle;">
+          <div style="font-weight: bold; color: white; font-size: 16px; line-height: 1.2; margin-bottom: 4px;">${qb.name}</div>
+          <div style="font-size: 12px; color: #93c5fd; line-height: 1;">${qb.experience}yr • ${qb.age}</div>
+        </td>
         <td style="padding: 8px 12px; text-align: center; width: 80px; vertical-align: middle;">
-          <div style="${qeiColor} display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px 8px; border-radius: 6px; text-align: center; width: 100%; box-sizing: border-box;">
+          <div style="${qeiColor} display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px 8px 16px 8px; border-radius: 6px; text-align: center; width: 100%; box-sizing: border-box;">
             <div style="font-size: 16px; font-weight: bold; line-height: 1; text-align: center; width: 100%;">${qb.qei.toFixed(2)}</div>
             <div style="font-size: 10px; opacity: 0.8; line-height: 1; margin-top: 4px; text-align: center; width: 100%;">
               ${qeiLabel}
@@ -197,8 +197,8 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
           <thead style="background: rgba(255, 255, 255, 0.08);">
             <tr>
               <th style="padding: 12px; text-align: center; color: #e5e7eb; font-weight: 600; font-size: 14px; width: 60px; letter-spacing: 0.3px;">RANK</th>
-              <th style="padding: 12px; text-align: left; color: #e5e7eb; font-weight: 600; font-size: 14px; width: 200px; letter-spacing: 0.3px;">QB</th>
               <th style="padding: 12px; text-align: center; color: #e5e7eb; font-weight: 600; font-size: 14px; width: 100px; letter-spacing: 0.3px;">TEAM</th>
+              <th style="padding: 12px; text-align: left; color: #e5e7eb; font-weight: 600; font-size: 14px; width: 200px; letter-spacing: 0.3px;">QB</th>
               <th style="padding: 12px; text-align: center; color: #e5e7eb; font-weight: 600; font-size: 14px; width: 80px; letter-spacing: 0.3px;">QEI</th>
             </tr>
           </thead>
@@ -233,7 +233,7 @@ export const captureTop10QBsScreenshot = async (rankedQBs, options = {}) => {
     try {
       console.log('📸 Calling html2canvas...');
       canvas = await html2canvas(screenshotContainer, {
-        backgroundColor: '#1e3a8a',
+        backgroundColor: '#020617', // Slate-950 to match homepage
         scale: 2, // Higher quality screenshots
         useCORS: true,
         allowTaint: false, // Changed to false for better CORS handling
@@ -303,7 +303,6 @@ function getRowBackgroundStyle(index) {
   if (index === 0) return 'background: linear-gradient(to right, rgba(234, 179, 8, 0.2), rgba(251, 146, 60, 0.2));';
   if (index === 1) return 'background: linear-gradient(to right, rgba(156, 163, 175, 0.2), rgba(107, 114, 128, 0.2));';
   if (index === 2) return 'background: linear-gradient(to right, rgba(217, 119, 6, 0.2), rgba(180, 83, 9, 0.2));';
-  if (index < 8) return 'background: rgba(34, 197, 94, 0.1);';
   return 'background: rgba(59, 130, 246, 0.05);';
 }
 

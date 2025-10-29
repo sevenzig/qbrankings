@@ -117,10 +117,10 @@ const QBRankingsTable = memo(({
   }, []);
 
   return (
-    <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 backdrop-blur-xl rounded-3xl overflow-hidden border border-slate-700/50 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)]">
+    <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 backdrop-blur-xl rounded-3xl overflow-hidden border border-slate-700/50 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] w-full">
       <div className="py-6 px-8 border-b border-slate-700/30 bg-gradient-to-r from-slate-800 to-slate-800/80">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-black text-slate-50 tracking-tight">QB Rankings ({rankedQBs.length} Active QBs)</h3>
+          <h3 className="text-lg font-black text-slate-50 tracking-tight">QB Rankings</h3>
           <GlobalSettings
             yearMode={yearMode}
             onYearModeChange={onYearModeChange}
@@ -139,9 +139,9 @@ const QBRankingsTable = memo(({
               <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Team</th>
               <th className="py-4 px-6 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">QB</th>
               <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">QEI</th>
-              <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Team Record</th>
-              <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Per-Game Averages</th>
-              <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Seasons</th>
+              <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider hidden md:table-cell">Team Record</th>
+              <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider hidden md:table-cell">Per-Game Averages</th>
+              <th className="py-4 px-6 text-center text-xs font-bold text-slate-400 uppercase tracking-wider hidden md:table-cell">Seasons</th>
             </tr>
           </thead>
           <tbody>
@@ -154,7 +154,7 @@ const QBRankingsTable = memo(({
                 <>
                   <tr key={qb.id} className={getRowClassName(index)}>
                     <td className="py-4 px-6 sticky left-0 bg-slate-800/95 backdrop-blur-sm z-10 border-r border-slate-700/30">
-                      <span className="text-base font-black text-slate-50 tabular-nums">#{index + 1}</span>
+                      <span className="text-base font-black text-slate-50 tabular-nums">{index + 1}</span>
                     </td>
                     <td className="py-4 px-6 text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -164,7 +164,7 @@ const QBRankingsTable = memo(({
                               <img 
                                 src={teamData.logo} 
                                 alt={teamData.team} 
-                                className="w-12 h-12 lg:w-16 lg:h-16 rounded-lg p-1 shadow-lg" 
+                                className="w-16 h-16 lg:w-16 lg:h-16 rounded-lg p-1 shadow-lg" 
                                 style={{
                                   filter: 'drop-shadow(0 0 0 2px white) drop-shadow(0 0 0 3px white)',
                                   objectFit: 'contain'
@@ -198,7 +198,7 @@ const QBRankingsTable = memo(({
                         </div>
                       </div>
                     </td>
-                    <td className="py-4 px-6 text-center text-slate-200">
+                    <td className="py-4 px-6 text-center text-slate-200 hidden md:table-cell">
                       <div className="font-bold tabular-nums">{qb.combinedRecord}</div>
                       {includePlayoffs && hasPlayoffRecord && (
                         <div className="text-xs text-amber-400 mt-1 font-bold">
@@ -206,11 +206,11 @@ const QBRankingsTable = memo(({
                         </div>
                       )}
                     </td>
-                    <td className="py-4 px-6 text-center text-slate-200">
+                    <td className="py-4 px-6 text-center text-slate-200 hidden md:table-cell">
                       <div className="font-bold tabular-nums">{qb.stats?.yardsPerGame?.toFixed(1) || '0.0'} yds/g</div>
                       <div className="text-sm text-slate-300 font-medium tabular-nums">{qb.stats?.tdsPerGame?.toFixed(2) || '0.00'} TD/g, {qb.stats?.turnoversPerGame?.toFixed(2) || '0.00'} TO/g</div>
                     </td>
-                    <td className="py-4 px-6 text-center text-slate-50">
+                    <td className="py-4 px-6 text-center text-slate-50 hidden md:table-cell">
                       <div className="font-black tabular-nums">{qb.experience}</div>
                       <div className="text-sm text-slate-300 font-medium tabular-nums">{qb.stats?.gamesStarted || 0} starts</div>
                       {includePlayoffs && playoffStarts > 0 && (

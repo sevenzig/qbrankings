@@ -167,7 +167,8 @@ const NavigationSlideMenu = memo(() => {
                      presetKey === 'context' ? '🎯' :
                      presetKey === 'volumeHero' ? '📈' :
                      presetKey === 'efficiencyPurist' ? '⚡' :
-                     presetKey === 'balancedAttack' ? '⚖️' : '🎯'}
+                     presetKey === 'balancedAttack' ? '⚖️' :
+                     presetKey === 'scottsPreset' ? '🎯' : '🎯'}
                   </span>
                   <div className="flex-1">
                     <div className="font-medium">
@@ -177,7 +178,8 @@ const NavigationSlideMenu = memo(() => {
                        presetKey === 'context' ? 'Context Matters' :
                        presetKey === 'volumeHero' ? 'Volume Hero' :
                        presetKey === 'efficiencyPurist' ? 'Efficiency Purist' :
-                       presetKey === 'balancedAttack' ? 'Balanced Attack' : presetKey}
+                       presetKey === 'balancedAttack' ? 'Balanced Attack' :
+                       presetKey === 'scottsPreset' ? 'Scott\'s Preset' : presetKey}
                     </div>
                     <div className="text-xs opacity-75 line-clamp-1">
                       {preset.description.split(' - ')[1] || preset.description}

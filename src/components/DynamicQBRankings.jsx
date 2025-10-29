@@ -1399,7 +1399,7 @@ const DynamicQBRankings = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-8">
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full md:max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">🏆 QB Rankings</h1>
@@ -1567,7 +1567,8 @@ const DynamicQBRankings = () => {
                          presetKey === 'context' ? 'Context Matters' :
                          presetKey === 'volumeHero' ? 'Volume Hero' :
                          presetKey === 'efficiencyPurist' ? 'Efficiency Purist' :
-                         presetKey === 'balancedAttack' ? 'Balanced Attack' : 'Custom Philosophy'}
+                         presetKey === 'balancedAttack' ? 'Balanced Attack' :
+                         presetKey === 'scottsPreset' ? 'Scott\'s Preset' : 'Custom Philosophy'}
                       </div>
                       <div className="text-xs text-slate-300 leading-relaxed">
                         {preset.description.split(' - ')[1] || preset.description}
@@ -1669,7 +1670,8 @@ const DynamicQBRankings = () => {
                            presetKey === 'context' ? 'Context Matters' :
                            presetKey === 'volumeHero' ? 'Volume Hero' :
                            presetKey === 'efficiencyPurist' ? 'Efficiency Purist' :
-                           presetKey === 'balancedAttack' ? 'Balanced Attack' : 'Custom Philosophy'}
+                           presetKey === 'balancedAttack' ? 'Balanced Attack' :
+                           presetKey === 'scottsPreset' ? 'Scott\'s Preset' : 'Custom Philosophy'}
                         </div>
                         <div className="text-xs text-slate-300 leading-relaxed">
                           {preset.description.split(' - ')[1] || preset.description}

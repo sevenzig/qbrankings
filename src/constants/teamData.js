@@ -213,6 +213,32 @@ export const PHILOSOPHY_PRESETS = {
       rushTDs: 15,          // Balanced - rushing TDs matter
       totalAttempts: 5      // Reduced - attempts don't measure quality
     }
+  },
+  
+  scottsPreset: {
+    team: 33, stats: 67, clutch: 0, durability: 0, support: 0,
+    description: "🎯 Scott's Preset - Balanced team success and statistical performance evaluation",
+    statsWeights: {
+      efficiency: 45,       // Core efficiency metrics
+      protection: 10,       // Minimal protection focus
+      volume: 45           // Strong volume emphasis
+    },
+    efficiencyWeights: {
+      anyA: 45,            // ANY/A as primary efficiency metric
+      tdPct: 40,           // Strong TD% emphasis
+      completionPct: 15    // Reduced completion% weight
+    },
+    protectionWeights: {
+      sackPct: 25,         // Moderate sack avoidance
+      turnoverRate: 75     // Strong emphasis on ball security
+    },
+    volumeWeights: {
+      passYards: 35,       // Strong passing yard production
+      passTDs: 35,         // Strong passing TD production
+      rushYards: 10,       // Moderate rushing yard production
+      rushTDs: 15,         // Moderate rushing TD production
+      totalAttempts: 5     // Minimal attempt weighting
+    }
   }
 };
 
