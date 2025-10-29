@@ -1,29 +1,29 @@
 // UI helper utility functions
 
 /**
- * Updated Tier System with New Percentile Thresholds
+ * Updated Tier System with Final Percentile Thresholds
  * 
- * Elite: 81st percentile and above (with orange tinge for 89th+)
- * Excellent: 73rd through 80th percentile  
- * Good: 65th through 72nd percentile
- * Average: 42nd through 64th percentile
- * Below Average: 25th through 41st percentile
+ * Elite: 88th percentile and above (with orange tinge for 89th+)
+ * Excellent: 83.25th through 87.99th percentile  
+ * Good: 77.25th through 83.24th percentile
+ * Average: 42nd through 77.24th percentile
+ * Below Average: 25th through 41.99th percentile
  * Poor: Below 25th percentile
  */
 const TIER_THRESHOLDS = {
-  // Elite: 81st percentile and above
-  elite: 81,
+  // Elite: 88th percentile and above
+  elite: 88,
   
-  // Excellent: 73rd through 80th percentile
-  excellent: 73,
+  // Excellent: 83.25th through 87.99th percentile
+  excellent: 83.25,
   
-  // Good: 65th through 72nd percentile  
-  good: 65,
+  // Good: 77.25th through 83.24th percentile  
+  good: 77.25,
   
-  // Average: 42nd through 64th percentile
+  // Average: 42nd through 77.24th percentile
   average: 42,
   
-  // Below Average: 25th through 41st percentile
+  // Below Average: 25th through 41.99th percentile
   belowAverage: 25
   
   // Poor: Below 25th percentile (implicitly < 25)
@@ -57,12 +57,12 @@ export const calculateDynamicTiers = (allQBsWithQEI) => {
   console.log(`   Mean: ${mean.toFixed(2)} | Median: ${median.toFixed(2)} | Std Dev: ${standardDeviation.toFixed(2)}`);
   console.log(`   Range: ${minScore.toFixed(2)} - ${maxScore.toFixed(2)}`);
   console.log('');
-  console.log('🎯 Updated Tier Thresholds:');
-  console.log(`   Elite      (≥81st %ile): ≥${tiers.elite} percentile`);
-  console.log(`   Excellent  (73-80th %ile): ${tiers.excellent}-80 percentile`);
-  console.log(`   Good       (65-72nd %ile): ${tiers.good}-72 percentile`);
-  console.log(`   Average    (42-64th %ile): ${tiers.average}-64 percentile`);
-  console.log(`   Below Avg  (25-41st %ile): ${tiers.belowAverage}-41 percentile`);
+  console.log('🎯 Final Tier Thresholds:');
+  console.log(`   Elite      (≥88th %ile): ≥${tiers.elite} percentile`);
+  console.log(`   Excellent  (83.25-87.99th %ile): ${tiers.excellent}-87.99 percentile`);
+  console.log(`   Good       (77.25-83.24th %ile): ${tiers.good}-83.24 percentile`);
+  console.log(`   Average    (42-77.24th %ile): ${tiers.average}-77.24 percentile`);
+  console.log(`   Below Avg  (25-41.99th %ile): ${tiers.belowAverage}-41.99 percentile`);
   console.log(`   Poor       (<25th %ile): <${tiers.belowAverage} percentile`);
   
   // Count how many QBs actually qualify for each tier
@@ -111,20 +111,20 @@ export const getQEIColor = (qb, allQBsWithQEI = null) => {
   if (qei >= 89) {
     return 'bg-gradient-to-r from-yellow-400/40 to-orange-400/40 text-yellow-200 border border-orange-300/30'; // Elite with orange enhancement (89th+)
   }
-  if (qei >= 81) {
-    return 'bg-gradient-to-r from-yellow-400/30 to-yellow-500/30 text-yellow-200'; // Elite - Gold (81-88th)
+  if (qei >= 88) {
+    return 'bg-gradient-to-r from-yellow-400/30 to-yellow-500/30 text-yellow-200'; // Elite - Gold (88th)
   }
-  if (qei >= 73) {
-    return 'bg-gradient-to-r from-gray-300/30 to-gray-400/30 text-gray-200'; // Excellent - Silver (73-80th)
+  if (qei >= 83.25) {
+    return 'bg-gradient-to-r from-gray-300/30 to-gray-400/30 text-gray-200'; // Excellent - Silver (83.25-87.99th)
   }
-  if (qei >= 65) {
-    return 'bg-gradient-to-r from-green-500/30 to-green-600/30 text-green-200'; // Good - Green (65-72nd)
+  if (qei >= 77.25) {
+    return 'bg-gradient-to-r from-green-500/30 to-green-600/30 text-green-200'; // Good - Green (77.25-83.24th)
   }
   if (qei >= 42) {
-    return 'bg-gradient-to-r from-blue-500/30 to-blue-600/30 text-blue-200'; // Average - Blue (42-64th)
+    return 'bg-gradient-to-r from-blue-500/30 to-blue-600/30 text-blue-200'; // Average - Blue (42-77.24th)
   }
   if (qei >= 25) {
-    return 'bg-white/15 text-gray-300'; // Below Average (25-41st)
+    return 'bg-white/15 text-gray-300'; // Below Average (25-41.99th)
   }
   return 'bg-white/10 text-gray-400'; // Poor (<25th)
 };
@@ -132,10 +132,10 @@ export const getQEIColor = (qb, allQBsWithQEI = null) => {
 export const getQEITier = (qb, allQBsWithQEI = null) => {
   const qei = qb.qei || 0;
   
-  // Use updated percentile thresholds
-  if (qei >= 81) return 'Elite';
-  if (qei >= 73) return 'Excellent';
-  if (qei >= 65) return 'Good';
+  // Use final percentile thresholds
+  if (qei >= 88) return 'Elite';
+  if (qei >= 83.25) return 'Excellent';
+  if (qei >= 77.25) return 'Good';
   if (qei >= 42) return 'Average';
   if (qei >= 25) return 'Below Avg';
   return 'Poor';

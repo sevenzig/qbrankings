@@ -310,13 +310,13 @@ function getRowBackgroundStyle(index) {
 function getQEIColorStyle(qb, allQBsWithBaseScores = null) {
   const qei = qb.qei || 0;
   
-  // Use updated tier thresholds with traditional colors
+  // Use final tier thresholds with traditional colors
   if (qei >= 89) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.4), rgba(251, 146, 60, 0.4)); color: #fef3c7; border: 1px solid rgba(251, 146, 60, 0.3);'; // Elite with orange enhancement (89th+)
-  if (qei >= 81) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.3), rgba(245, 158, 11, 0.3)); color: #fef3c7;'; // Elite - Gold (81-88th)
-  if (qei >= 73) return 'background: linear-gradient(to right, rgba(209, 213, 219, 0.3), rgba(156, 163, 175, 0.3)); color: #e5e7eb;'; // Excellent - Silver (73-80th)
-  if (qei >= 65) return 'background: linear-gradient(to right, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3)); color: #bbf7d0;'; // Good - Green (65-72nd)
-  if (qei >= 42) return 'background: linear-gradient(to right, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.3)); color: #dbeafe;'; // Average - Blue (42-64th)
-  if (qei >= 25) return 'background: rgba(255, 255, 255, 0.15); color: #d1d5db;'; // Below Average (25-41st)
+  if (qei >= 88) return 'background: linear-gradient(to right, rgba(251, 191, 36, 0.3), rgba(245, 158, 11, 0.3)); color: #fef3c7;'; // Elite - Gold (88th)
+  if (qei >= 83.25) return 'background: linear-gradient(to right, rgba(209, 213, 219, 0.3), rgba(156, 163, 175, 0.3)); color: #e5e7eb;'; // Excellent - Silver (83.25-87.99th)
+  if (qei >= 77.25) return 'background: linear-gradient(to right, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3)); color: #bbf7d0;'; // Good - Green (77.25-83.24th)
+  if (qei >= 42) return 'background: linear-gradient(to right, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.3)); color: #dbeafe;'; // Average - Blue (42-77.24th)
+  if (qei >= 25) return 'background: rgba(255, 255, 255, 0.15); color: #d1d5db;'; // Below Average (25-41.99th)
   return 'background: rgba(255, 255, 255, 0.1); color: #9ca3af;'; // Poor (<25th)
 }
 
@@ -324,10 +324,10 @@ function getQEILabel(qb, allQBsWithBaseScores = null) {
   // Use the dynamic tier function from uiHelpers
   const qei = qb.qei || 0;
   
-  // Use updated percentile thresholds
-  if (qei >= 81) return 'Elite';
-  if (qei >= 73) return 'Excellent';
-  if (qei >= 65) return 'Good';
+  // Use final percentile thresholds
+  if (qei >= 88) return 'Elite';
+  if (qei >= 83.25) return 'Excellent';
+  if (qei >= 77.25) return 'Good';
   if (qei >= 42) return 'Average';
   if (qei >= 25) return 'Below Avg';
   return 'Poor';

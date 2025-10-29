@@ -1501,16 +1501,82 @@ const DynamicQBRankings = () => {
         {/* Share Button Section */}
         <div className="text-center mb-12 text-slate-300">
           <div className="flex flex-wrap justify-center gap-4 mb-4">
+            {/* Primary CTA Button - Unified Design */}
             <button 
               onClick={() => {
                 console.log('📋 Share Your Custom QB Rankings button clicked!');
                 handleShare('full');
               }}
-              className="bg-accent-500/30 hover:bg-accent-500/40 backdrop-blur-lg border border-accent-400/50 px-8 py-4 rounded-xl font-medium transition-all duration-300 text-white hover:shadow-glow-blue-sm"
+              className="group relative bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg hover:shadow-xl hover:shadow-blue-500/25 px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 text-white hover:scale-[1.02] active:scale-[0.98] border border-blue-500/20 hover:border-blue-400/40 transform hover:-translate-y-0.5 min-w-[280px]"
               disabled={isQuickShareLoading || isFullShareLoading}
             >
-              {isFullShareLoading ? '⏳ Generating...' : '📋 Share Your Custom QB Rankings'}
+              <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg"></div>
+              <span className="relative z-10 drop-shadow-sm">
+                {isFullShareLoading ? 'Generating...' : 'Share Your Custom QB Rankings'}
+              </span>
             </button>
+            
+            {/* Preset Selector Dropdown - Unified Design */}
+            <div className="relative">
+              <button 
+                onClick={() => {
+                  const dropdown = document.getElementById('preset-dropdown');
+                  if (dropdown) {
+                    dropdown.classList.toggle('opacity-0');
+                    dropdown.classList.toggle('invisible');
+                  }
+                }}
+                className="group relative bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 shadow-lg hover:shadow-xl hover:shadow-slate-500/25 px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 text-white hover:scale-[1.02] active:scale-[0.98] border border-slate-500/20 hover:border-slate-400/40 transform hover:-translate-y-0.5 min-w-[280px] flex items-center justify-center gap-2"
+                title="Try different QB ranking philosophies"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg"></div>
+                <span className="relative z-10 drop-shadow-sm">Try Our QB Ranking Presets</span>
+                <svg className="w-4 h-4 relative z-10 transition-transform duration-300 group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              
+              {/* Dropdown Menu */}
+              <div 
+                id="preset-dropdown"
+                className="absolute top-full left-0 mt-2 w-full min-w-[300px] bg-slate-900/95 border border-slate-500/20 rounded-xl shadow-xl shadow-slate-900/50 z-50 opacity-0 invisible transition-all duration-300 backdrop-blur-xl"
+              >
+                <div className="p-2">
+                  <div className="text-xs text-slate-400 px-3 py-2 border-b border-slate-500/20 mb-2 font-medium">
+                    QB Philosophy Presets
+                  </div>
+                  {Object.entries(PHILOSOPHY_PRESETS).map(([presetKey, preset]) => (
+                    <button
+                      key={presetKey}
+                      onClick={() => {
+                        applyPreset(presetKey);
+                        const dropdown = document.getElementById('preset-dropdown');
+                        if (dropdown) {
+                          dropdown.classList.add('opacity-0', 'invisible');
+                        }
+                      }}
+                      className={`w-full px-4 py-3 text-left text-slate-200 hover:bg-slate-700/50 transition-all duration-300 rounded-lg font-medium ${
+                        currentPreset === presetKey ? 'bg-blue-500/20 text-blue-100' : ''
+                      }`}
+                      title={preset.description}
+                    >
+                      <div className="font-semibold text-sm mb-1">
+                        {presetKey === 'default' ? 'Pure QB Quality' :
+                         presetKey === 'winner' ? 'Winner Focus' :
+                         presetKey === 'analyst' ? 'Analyst View' :
+                         presetKey === 'context' ? 'Context Matters' :
+                         presetKey === 'volumeHero' ? 'Volume Hero' :
+                         presetKey === 'efficiencyPurist' ? 'Efficiency Purist' :
+                         presetKey === 'balancedAttack' ? 'Balanced Attack' : 'Custom Philosophy'}
+                      </div>
+                      <div className="text-xs text-slate-300 leading-relaxed">
+                        {preset.description.split(' - ')[1] || preset.description}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1537,16 +1603,82 @@ const DynamicQBRankings = () => {
           )}
           <div className="mt-8 space-y-4">
             <div className="flex flex-wrap justify-center gap-4 mb-4">
+              {/* Primary CTA Button - Unified Design */}
               <button 
                 onClick={() => {
                   console.log('📋 Bottom Share Your Custom QB Rankings button clicked!');
                   handleShare('full');
                 }}
-                className="bg-accent-500/30 hover:bg-accent-500/40 backdrop-blur-lg border border-accent-400/50 px-6 py-3 rounded-lg font-medium transition-all duration-300 text-white hover:shadow-glow-blue-sm"
+                className="group relative bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg hover:shadow-xl hover:shadow-blue-500/25 px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 text-white hover:scale-[1.02] active:scale-[0.98] border border-blue-500/20 hover:border-blue-400/40 transform hover:-translate-y-0.5 min-w-[280px]"
                 disabled={isQuickShareLoading || isFullShareLoading}
               >
-                {isFullShareLoading ? '⏳ Generating...' : '📋 Share Your Custom QB Rankings'}
+                <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg"></div>
+                <span className="relative z-10 drop-shadow-sm">
+                  {isFullShareLoading ? 'Generating...' : 'Share Your Custom QB Rankings'}
+                </span>
               </button>
+              
+              {/* Preset Selector Dropdown - Unified Design */}
+              <div className="relative">
+                <button 
+                  onClick={() => {
+                    const dropdown = document.getElementById('preset-dropdown-bottom');
+                    if (dropdown) {
+                      dropdown.classList.toggle('opacity-0');
+                      dropdown.classList.toggle('invisible');
+                    }
+                  }}
+                  className="group relative bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 shadow-lg hover:shadow-xl hover:shadow-slate-500/25 px-8 py-3 rounded-lg font-semibold text-sm transition-all duration-300 text-white hover:scale-[1.02] active:scale-[0.98] border border-slate-500/20 hover:border-slate-400/40 transform hover:-translate-y-0.5 min-w-[280px] flex items-center justify-center gap-2"
+                  title="Try different QB ranking philosophies"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg"></div>
+                  <span className="relative z-10 drop-shadow-sm">Try Our QB Ranking Presets</span>
+                  <svg className="w-4 h-4 relative z-10 transition-transform duration-300 group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {/* Dropdown Menu */}
+                <div 
+                  id="preset-dropdown-bottom"
+                  className="absolute top-full left-0 mt-2 w-full min-w-[300px] bg-slate-900/95 border border-slate-500/20 rounded-xl shadow-xl shadow-slate-900/50 z-50 opacity-0 invisible transition-all duration-300 backdrop-blur-xl"
+                >
+                  <div className="p-2">
+                    <div className="text-xs text-slate-400 px-3 py-2 border-b border-slate-500/20 mb-2 font-medium">
+                      QB Philosophy Presets
+                    </div>
+                    {Object.entries(PHILOSOPHY_PRESETS).map(([presetKey, preset]) => (
+                      <button
+                        key={presetKey}
+                        onClick={() => {
+                          applyPreset(presetKey);
+                          const dropdown = document.getElementById('preset-dropdown-bottom');
+                          if (dropdown) {
+                            dropdown.classList.add('opacity-0', 'invisible');
+                          }
+                        }}
+                        className={`w-full px-4 py-3 text-left text-slate-200 hover:bg-slate-700/50 transition-all duration-300 rounded-lg font-medium ${
+                          currentPreset === presetKey ? 'bg-blue-500/20 text-blue-100' : ''
+                        }`}
+                        title={preset.description}
+                      >
+                        <div className="font-semibold text-sm mb-1">
+                          {presetKey === 'default' ? 'Pure QB Quality' :
+                           presetKey === 'winner' ? 'Winner Focus' :
+                           presetKey === 'analyst' ? 'Analyst View' :
+                           presetKey === 'context' ? 'Context Matters' :
+                           presetKey === 'volumeHero' ? 'Volume Hero' :
+                           presetKey === 'efficiencyPurist' ? 'Efficiency Purist' :
+                           presetKey === 'balancedAttack' ? 'Balanced Attack' : 'Custom Philosophy'}
+                        </div>
+                        <div className="text-xs text-slate-300 leading-relaxed">
+                          {preset.description.split(' - ')[1] || preset.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="mt-8 pt-6 border-t border-glass-border">
               <div className="flex flex-wrap justify-center gap-4 mb-4">

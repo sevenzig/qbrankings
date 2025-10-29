@@ -75,6 +75,7 @@ export default {
         'elevation-4': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
         'glow-blue': '0 0 20px rgba(59, 130, 246, 0.3)',
         'glow-blue-sm': '0 0 10px rgba(59, 130, 246, 0.2)',
+        'glow-blue-md': '0 0 15px rgba(59, 130, 246, 0.25)',
       },
       letterSpacing: {
         'tight': '-0.025em',
